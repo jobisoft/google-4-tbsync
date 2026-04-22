@@ -1,0 +1,35 @@
+{
+  "extensionName": {
+    "message": "Google-4-TbSync"
+  },
+  "extensionDescription": {
+    "message": "Provider add-on for TbSync that synchronizes Google Contacts with Thunderbird."
+  },
+  "setup.title": {
+    "message": "Add a Google account"
+  },
+  "setup.intro": {
+    "message": "To connect a Google account, provide an OAuth client ID and secret you created in the Google Cloud console."
+  },
+  "setup.accountName": {
+    "message": "Account label"
+  },
+  "setup.clientID": {
+    "message": "Client ID"
+  },
+  "setup.clientSecret": {
+    "message": "Client secret"
+  },
+  "setup.authButton": {
+    "message": "Sign in with Google"
+  },
+  "setup.finishButton": {
+    "message": "Finish"
+  },
+  "setup.cancelButton": {
+    "message": "Cancel"
+  },
+  "config.title": {
+    "message": "Edit Google account"
+  }
+}
