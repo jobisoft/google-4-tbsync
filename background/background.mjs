@@ -1,6 +1,9 @@
 import { CURRENT_SCHEMA_VERSION, KEYS, TBSYNC_ID } from "../shared/storage-keys.mjs";
 import * as tbsync from "./tbsync-client.mjs";
 import * as commands from "./command-handler.mjs";
+import * as accounts from "./accounts.mjs";
+import * as folders from "./folders.mjs";
+import * as changelogWatcher from "./changelog-watcher.mjs";
 import { getRedirectURL } from "./google/oauth.mjs";
 
 /**
@@ -148,6 +151,7 @@ browser.runtime.onMessage.addListener(async msg => {
 await ensureSchema();
 tbsync.init();
 commands.init();
+changelogWatcher.init();
 watchHostAvailability();
 
 // Prime the host-available flag from current state. Inlined (instead of a
@@ -161,4 +165,20 @@ try {
   await setHostAvailable(available);
 } catch (err) {
   console.warn("[google-4-tbsync] management.getAll() failed at startup:", err);
+}
+
+// Re-attach the changelog watcher to every book owned by this provider.
+// WebExtension event listeners don't replay events across restarts, so we
+// walk every stored account's folders and register each existing book so
+// subsequent user edits are captured from this point forward.
+try {
+  for (const account of await accounts.list()) {
+    for (const folder of await folders.listForAccount(account.providerAccountId)) {
+      if (folder.targetAbId) {
+        await changelogWatcher.registerTarget(folder.targetAbId, account.providerAccountId);
+      }
+    }
+  }
+} catch (err) {
+  console.warn("[google-4-tbsync] changelog-watcher startup priming failed:", err);
 }

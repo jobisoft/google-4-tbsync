@@ -57,18 +57,46 @@ export async function bookExists(id) {
 // ── Contact-level ──────────────────────────────────────────────────────────
 
 /**
- * List all contacts in the given address book. Each ContactNode carries
- * `{ id, parentId, type, vCard, readOnly, ... }`; consumers typically only
- * care about `id` and `vCard`.
+ * List all contacts in the given address book. Each returned node carries
+ * `{ id, parentId, type, vCard, readOnly, ... }`.
+ *
+ * Every card we hand out is normalised so consumers can read `card.vCard`
+ * directly — TB's `messenger.contacts.list` / `get` return ContactNode
+ * instances with the vCard string nested at `properties.vCard`, and the
+ * address-book lifecycle of older versions puts it at the top level. We
+ * promote whichever one is present so downstream code doesn't care.
  */
 export async function listContacts(bookId) {
   if (!bookId) return [];
   try {
-    return await messenger.contacts.list(bookId);
+    const list = await messenger.contacts.list(bookId);
+    return list.map(normalizeCard);
   } catch (err) {
     if (isNotFoundError(err)) return [];
     throw err;
   }
+}
+
+/**
+ * Fetch a single contact by id with the same `.vCard` normalisation as
+ * `listContacts`. Returns null on "not found" so callers can distinguish
+ * "card vanished between event and push" from real failures.
+ */
+export async function getContact(id) {
+  if (!id) return null;
+  try {
+    const node = await messenger.contacts.get(id);
+    return node ? normalizeCard(node) : null;
+  } catch (err) {
+    if (isNotFoundError(err)) return null;
+    throw err;
+  }
+}
+
+function normalizeCard(node) {
+  if (!node) return node;
+  const vCard = node.vCard ?? node.properties?.vCard ?? null;
+  return { ...node, vCard };
 }
 
 /**

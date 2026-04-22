@@ -4,6 +4,7 @@ import { folderId as genFolderId, setupToken as genSetupToken, uuid } from "../s
 import * as accounts from "./accounts.mjs";
 import * as folders from "./folders.mjs";
 import * as changelog from "./changelog.mjs";
+import * as changelogWatcher from "./changelog-watcher.mjs";
 import * as tbsync from "./tbsync-client.mjs";
 import * as oauth from "./google/oauth.mjs";
 import * as addressBook from "./thunderbird/address-book.mjs";
@@ -93,6 +94,7 @@ async function handleSyncFolder(args) {
   if (!targetAbId || !(await addressBook.bookExists(targetAbId))) {
     const acc = await accounts.get(providerAccountId);
     if (!acc) throw withCode(new Error("account record missing"), ERR.UNKNOWN_ACCOUNT);
+    if (folder.targetAbId) changelogWatcher.unregisterTarget(folder.targetAbId);
     const bookName = computeBookName(acc.accountName, acc.authenticatedUserEmail);
     targetAbId = await addressBook.createBook(bookName);
     await folders.upsert(providerAccountId, {
@@ -100,6 +102,7 @@ async function handleSyncFolder(args) {
       targetAbId,
       targetAbName: bookName,
     });
+    await changelogWatcher.registerTarget(targetAbId, providerAccountId);
   }
 
   return await syncFolderContacts({
@@ -218,10 +221,15 @@ async function handleAccountDeleted(args) {
 }
 
 /** Delete every Thunderbird address book owned by this provider account,
- *  tolerating per-folder failures (log and continue). */
+ *  tolerating per-folder failures (log and continue). Also unregisters each
+ *  book from the changelog watcher so pending onDeleted events don't write
+ *  orphan entries for an account we're about to tear down. */
 async function deleteAccountTargets(providerAccountId) {
   for (const folder of await folders.listForAccount(providerAccountId)) {
-    if (folder.targetAbId) await safeDeleteBook(folder.targetAbId);
+    if (folder.targetAbId) {
+      changelogWatcher.unregisterTarget(folder.targetAbId);
+      await safeDeleteBook(folder.targetAbId);
+    }
   }
 }
 
@@ -243,8 +251,12 @@ async function handleFolderEnabled(args) {
   if (!providerAccountId) throw withCode(new Error("unknown account"), ERR.UNKNOWN_ACCOUNT);
   const folder = await folders.get(providerAccountId, args.folderId);
   if (!folder) throw withCode(new Error("unknown folder"), ERR.UNKNOWN_FOLDER);
-  // Idempotent: if the book is already present, nothing to do.
-  if (folder.targetAbId && await addressBook.bookExists(folder.targetAbId)) return null;
+  // Idempotent: if the book is already present, re-register it (no-op if
+  // already watched) and return.
+  if (folder.targetAbId && await addressBook.bookExists(folder.targetAbId)) {
+    await changelogWatcher.registerTarget(folder.targetAbId, providerAccountId);
+    return null;
+  }
 
   const acc = await accounts.get(providerAccountId);
   if (!acc) throw withCode(new Error("account record missing"), ERR.UNKNOWN_ACCOUNT);
@@ -255,6 +267,7 @@ async function handleFolderEnabled(args) {
     targetAbId,
     targetAbName: bookName,
   });
+  await changelogWatcher.registerTarget(targetAbId, providerAccountId);
   return null;
 }
 
@@ -263,7 +276,16 @@ async function handleFolderDisabled(args) {
   if (!providerAccountId) throw withCode(new Error("unknown account"), ERR.UNKNOWN_ACCOUNT);
   const folder = await folders.get(providerAccountId, args.folderId);
   if (!folder) throw withCode(new Error("unknown folder"), ERR.UNKNOWN_FOLDER);
-  if (folder.targetAbId) await safeDeleteBook(folder.targetAbId);
+  if (folder.targetAbId) {
+    // Unregister before deletion so the cascading onDeleted events fired by
+    // `deleteBook` don't log every card as a user-initiated delete.
+    changelogWatcher.unregisterTarget(folder.targetAbId);
+    await safeDeleteBook(folder.targetAbId);
+  }
+  // Dropping the book invalidates every pending changelog entry for this
+  // account — the resourceNames they reference no longer correspond to
+  // anything local. Clear so a re-enable starts from a clean slate.
+  await changelog.clearAccount(providerAccountId);
   await folders.upsert(providerAccountId, {
     folderId: folder.folderId,
     targetAbId: null,
