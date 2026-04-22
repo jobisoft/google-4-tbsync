@@ -10,8 +10,10 @@
  * not allow edits while it's live. The banner explains why; inputs render
  * disabled; Save is hidden; Cancel becomes Close.
  *
- * Re-authentication lives in a separate popup (reauth/reauth.html); this popup
- * has no Sign-in-again button by design.
+ * Re-authentication is a separate flow driven by the manager's "Sign in again"
+ * button; it runs Google's consent directly via launchWebAuthFlow with no
+ * intermediate provider UI. This popup therefore has no Sign-in-again button
+ * by design.
  */
 
 const params = new URLSearchParams(location.search);
