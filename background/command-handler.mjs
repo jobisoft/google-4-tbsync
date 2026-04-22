@@ -5,6 +5,7 @@ import * as accounts from "./accounts.mjs";
 import * as folders from "./folders.mjs";
 import * as changelog from "./changelog.mjs";
 import * as tbsync from "./tbsync-client.mjs";
+import * as oauth from "./google/oauth.mjs";
 
 /**
  * Provider side of the protocol. Each exported handler corresponds 1:1 to a
@@ -241,43 +242,59 @@ function stripSensitive(record) {
 
 
 /**
- * Used by setup.html during M1 to create a stub account record when the
- * "Create test account" button is clicked. Real OAuth lands in M2.
+ * Called from setup.html once the user has filled in client ID / secret and
+ * clicked "Sign in with Google". Launches the OAuth flow, persists the
+ * refresh token + authenticated email in the provider's account store, and
+ * seeds a single contacts folder.
+ *
+ * M2a: the Thunderbird address book is not yet created — targetAbId stays
+ * null. M2b wires messenger.addressBooks.create() and fills it in.
  */
-export async function createStubAccount({ accountName }) {
+export async function authenticateAndCreateAccount({ label, clientID, clientSecret }) {
+  const { refreshToken, authenticatedUserEmail, accessToken, expiresIn } =
+    await oauth.startAuth({ clientID, clientSecret });
+
+  const trimmedLabel = (label ?? "").trim();
+  if (!trimmedLabel) {
+    throw withCode(new Error("Account name is required"), ERR.UNKNOWN_ACCOUNT);
+  }
   const providerAccountId = `g-${uuid()}`;
+  const accountName = trimmedLabel;
+
   await accounts.upsert({
     providerAccountId,
     accountName,
-    clientID: "",
-    clientSecret: "",
-    refreshToken: "",
-    authenticatedUserEmail: accountName,
+    clientID,
+    clientSecret,
+    refreshToken,
+    authenticatedUserEmail,
     readOnlyMode: true,
     verboseLogging: false,
     createdAt: Date.now(),
   });
-  // M1 stub: create one fake folder of each supported type so the manager's
-  // folder list renders all three icons for UI testing. Real folders land in M2.
-  const specs = [
-    { type: "contacts",  name: "Contacts" },
-    { type: "calendars", name: "Calendar" },
-    { type: "tasks",     name: "Tasks" },
-  ];
-  const initialFolders = [];
-  for (const [i, spec] of specs.entries()) {
-    const folder = {
-      folderId: genFolderId(),
-      folderType: spec.type,
-      displayName: `${accountName} - ${spec.name}`,
-      UID: String(i + 1),
-      targetAbId: null,
-      readOnly: false,
-      selected: true,
-      orderIndex: i,
-    };
-    await folders.upsert(providerAccountId, folder);
-    initialFolders.push({
+
+  // Seed the just-minted access token into the cache to save a refresh on
+  // the very first sync.
+  if (accessToken) {
+    oauth.primeAccessToken(providerAccountId, accessToken, expiresIn);
+  }
+
+  const folder = {
+    folderId: genFolderId(),
+    folderType: "contacts",
+    displayName: `${accountName} - Contacts`,
+    UID: "1",
+    targetAbId: null,
+    readOnly: false,
+    selected: true,
+    orderIndex: 0,
+  };
+  await folders.upsert(providerAccountId, folder);
+
+  return {
+    providerAccountId,
+    accountName,
+    initialFolders: [{
       folderId: folder.folderId,
       folderType: folder.folderType,
       displayName: folder.displayName,
@@ -285,7 +302,6 @@ export async function createStubAccount({ accountName }) {
       selected: folder.selected,
       cached: false,
       extraProps: { UID: folder.UID },
-    });
-  }
-  return { providerAccountId, initialFolders };
+    }],
+  };
 }

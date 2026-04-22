@@ -1,9 +1,10 @@
 /**
- * Setup popup for adding a Google account.
+ * Setup popup.
  *
- * M1: no OAuth. Collects a display name, creates a stub account record via an
- * internal runtime message to the background, then posts back to the
- * setup-token pending promise so the host's openSetupPopup RPC resolves.
+ * Collects an optional account label, the Google OAuth client ID/secret, and
+ * initiates the OAuth flow by asking the background to call
+ * `google.authenticate`. On success, posts `tbsync-setup-completed` so the
+ * host's `openSetupPopup` RPC resolves with the canonical accountId.
  */
 
 const params = new URLSearchParams(location.search);
@@ -23,10 +24,44 @@ function showError(message) {
   el.classList.add("visible");
 }
 
-async function onFinish() {
-  const accountName = document.getElementById("account-name").value.trim();
-  if (!accountName) {
-    showError("Please enter an account label.");
+function clearError() {
+  document.getElementById("error").classList.remove("visible");
+}
+
+async function prefillCredentials() {
+  try {
+    const creds = await browser.runtime.sendMessage({ type: "google.getLastCredentials" });
+    if (!creds) return;
+    document.getElementById("client-id").value = creds.clientID ?? "";
+    document.getElementById("client-secret").value = creds.clientSecret ?? "";
+  } catch { /* ignore — fields stay blank */ }
+}
+
+async function onCopyRedirectURL() {
+  const btn = document.getElementById("btn-copy");
+  try {
+    const { redirectURL } = await browser.runtime.sendMessage({ type: "google.getRedirectURL" });
+    await navigator.clipboard.writeText(redirectURL);
+    const prior = btn.textContent;
+    btn.textContent = "Copied";
+    setTimeout(() => { btn.textContent = prior; }, 1200);
+  } catch (err) {
+    showError(`Copy failed: ${err.message ?? err}`);
+  }
+}
+
+async function onSignIn() {
+  clearError();
+  const label = document.getElementById("account-name").value.trim();
+  const clientID = document.getElementById("client-id").value.trim();
+  const clientSecret = document.getElementById("client-secret").value.trim();
+  if (!label) {
+    showError("Please enter an account name.");
+    document.getElementById("account-name").focus();
+    return;
+  }
+  if (!clientID || !clientSecret) {
+    showError("Please enter both the Client ID and the Client secret.");
     return;
   }
   if (!setupToken) {
@@ -34,30 +69,34 @@ async function onFinish() {
     return;
   }
 
-  const finishBtn = document.getElementById("btn-finish");
-  finishBtn.disabled = true;
-
+  const btn = document.getElementById("btn-sign-in");
+  btn.disabled = true;
   try {
-    const { providerAccountId, initialFolders } = await browser.runtime.sendMessage({
-      type: "google.createStubAccount",
-      accountName,
+    const reply = await browser.runtime.sendMessage({
+      type: "google.authenticate",
+      label, clientID, clientSecret,
     });
+    if (!reply?.ok) {
+      if (reply?.code === "E:CANCELLED") { btn.disabled = false; return; }
+      throw new Error(reply?.error ?? "Sign-in failed");
+    }
 
     await browser.runtime.sendMessage({
       type: "tbsync-setup-completed",
       setupToken,
-      providerAccountId,
-      accountName,
-      initialFolders,
+      providerAccountId: reply.result.providerAccountId,
+      accountName: reply.result.accountName,
+      initialFolders: reply.result.initialFolders,
     });
-
     window.close();
   } catch (err) {
-    finishBtn.disabled = false;
+    btn.disabled = false;
     showError(err.message ?? String(err));
   }
 }
 
 applyI18n();
+prefillCredentials();
+document.getElementById("btn-copy").addEventListener("click", onCopyRedirectURL);
 document.getElementById("btn-cancel").addEventListener("click", () => window.close());
-document.getElementById("btn-finish").addEventListener("click", onFinish);
+document.getElementById("btn-sign-in").addEventListener("click", onSignIn);

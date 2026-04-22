@@ -14,39 +14,52 @@
       }
       h2 { margin: 0 0 10px; font-size: 15px; font-weight: 600; }
       p.intro { color: #555; line-height: 1.5; margin: 0 0 16px; }
+
       .field { display: flex; flex-direction: column; margin-bottom: 10px; }
-      .field label { font-size: 11px; color: #555; text-transform: uppercase; letter-spacing: .04em; margin-bottom: 4px; }
-      .field input { padding: 5px 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 13px; }
-      .actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; }
-      button {
-        padding: 6px 14px;
-        background: #2a7fd4;
-        color: #fff;
+      .field label {
+        font-size: 11px; color: #555; text-transform: uppercase;
+        letter-spacing: .04em; margin-bottom: 4px;
+      }
+      .field input {
+        padding: 5px 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 13px;
+      }
+
+      .redirect-hint {
+        margin: 10px 0 0;
+        font-size: 11px;
+        color: #777;
+        line-height: 1.5;
+      }
+      .redirect-hint strong { color: #555; }
+      .redirect-copy-btn {
+        display: inline-block;
+        margin-left: 4px;
+        background: none;
         border: none;
-        border-radius: 4px;
+        padding: 0;
+        color: #2a7fd4;
         cursor: pointer;
-        font-size: 13px;
+        font-size: 11px;
+        text-decoration: underline;
       }
-      button.secondary { background: #e5e5e7; color: #222; }
-      button:disabled { opacity: .5; cursor: not-allowed; }
-      .note {
-        margin-top: 16px;
-        padding: 8px 12px;
-        background: #fff6d9;
-        border-left: 3px solid #e8b923;
-        font-size: 12px;
-        color: #5a4200;
-        border-radius: 3px;
+      .redirect-copy-btn:hover { color: #1a6fc4; }
+
+      .actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; }
+      button.primary {
+        padding: 6px 14px; background: #2a7fd4; color: #fff; border: none;
+        border-radius: 4px; cursor: pointer; font-size: 13px;
       }
+      button.primary:hover { background: #1a6fc4; }
+      button.primary:disabled { opacity: .5; cursor: not-allowed; }
+      button.secondary {
+        padding: 6px 14px; background: #e5e5e7; color: #222; border: none;
+        border-radius: 4px; cursor: pointer; font-size: 13px;
+      }
+
       .error {
-        margin-top: 10px;
-        padding: 8px 12px;
-        background: #ffe0e0;
-        border-left: 3px solid #c43b3b;
-        color: #7a2222;
-        font-size: 12px;
-        border-radius: 3px;
-        display: none;
+        margin-top: 10px; padding: 8px 12px; background: #ffe0e0;
+        border-left: 3px solid #c43b3b; color: #7a2222; font-size: 12px;
+        border-radius: 3px; display: none;
       }
       .error.visible { display: block; }
     </style>
@@ -57,27 +70,27 @@
 
     <div class="field">
       <label data-i18n="setup.accountName"></label>
-      <input id="account-name" type="text" placeholder="john@gmail.com" />
+      <input id="account-name" type="text" required />
     </div>
     <div class="field">
       <label data-i18n="setup.clientID"></label>
-      <input id="client-id" type="text" autocomplete="off" />
+      <input id="client-id" type="text" autocomplete="off" spellcheck="false" />
     </div>
     <div class="field">
       <label data-i18n="setup.clientSecret"></label>
-      <input id="client-secret" type="password" autocomplete="off" />
+      <input id="client-secret" type="password" autocomplete="off" spellcheck="false" />
     </div>
 
-    <div class="note">
-      M1 build: OAuth is stubbed. The "Finish" button creates a local
-      account record and registers it with TbSync. Real Google sign-in lands in M2.
-    </div>
+    <p class="redirect-hint">
+      <em>The Client ID must belong to an OAuth <strong>Web application</strong> client, and its Authorized redirect URIs must include this add-on's redirect URL.</em>
+      <button type="button" id="btn-copy" class="redirect-copy-btn">Copy redirect URL</button>
+    </p>
 
     <div id="error" class="error"></div>
 
     <div class="actions">
       <button id="btn-cancel" class="secondary" data-i18n="setup.cancelButton"></button>
-      <button id="btn-finish" data-i18n="setup.finishButton"></button>
+      <button id="btn-sign-in" class="primary" data-i18n="setup.authButton"></button>
     </div>
   </body>
 </html>
