@@ -74,8 +74,7 @@ export async function announce() {
     }
     return reply;
   } catch (err) {
-    // tbsync-new not installed, not enabled, or not listening yet.
-    console.debug("[google-4-tbsync] announce failed:", err.message);
+    // Host not listening yet — the caller's retry loop logs the outcome.
     return null;
   }
 }

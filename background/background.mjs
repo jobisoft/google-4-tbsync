@@ -1,6 +1,7 @@
 import { CURRENT_SCHEMA_VERSION, KEYS, TBSYNC_ID } from "../shared/storage-keys.mjs";
 import * as tbsync from "./tbsync-client.mjs";
 import * as commands from "./command-handler.mjs";
+import { getRedirectURL } from "./google/oauth.mjs";
 
 /**
  * Provider entry point.
@@ -109,10 +110,7 @@ browser.runtime.onMessage.addListener(async msg => {
     }
   }
   if (msg?.type === "google.getRedirectURL") {
-    // Must match google/oauth.mjs#getRedirectURL — loopback form.
-    const managed = new URL(browser.identity.getRedirectURL());
-    const subdomain = managed.hostname.split(".")[0];
-    return { redirectURL: `http://127.0.0.1/mozoauth2/${subdomain}` };
+    return { redirectURL: getRedirectURL() };
   }
   if (msg?.type === "google.getLastCredentials") {
     // Pre-populate the setup popup from the most-recently-created account.
