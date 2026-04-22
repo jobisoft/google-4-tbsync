@@ -6,6 +6,7 @@ import * as folders from "./folders.mjs";
 import * as changelog from "./changelog.mjs";
 import * as tbsync from "./tbsync-client.mjs";
 import * as oauth from "./google/oauth.mjs";
+import * as addressBook from "./thunderbird/address-book.mjs";
 
 /**
  * Provider side of the protocol. Each exported handler corresponds 1:1 to a
@@ -143,17 +144,32 @@ async function handleOpenConfigPopup(args) {
 
 // ── Account / folder lifecycle ────────────────────────────────────────────
 
-async function handleAccountEnabled(_args) { return null; }
+async function handleAccountEnabled(args) {
+  const providerAccountId = await accounts.getProviderAccountIdByTbsyncAccountId(args.accountId);
+  if (!providerAccountId) return null;
+  // If folders already exist (e.g. fresh install, not a re-enable), nothing
+  // to do; host already knows about them.
+  const existing = await folders.listForAccount(providerAccountId);
+  if (existing.length > 0) return null;
+  const acc = await accounts.get(providerAccountId);
+  if (!acc) return null;
+  // Re-enable after disable: disable cleared both the provider's folder list
+  // and the Thunderbird book. Recreate a fresh contacts folder + book and
+  // push the new list up to the host.
+  const folder = await seedContactsFolder(providerAccountId, acc.accountName, acc.authenticatedUserEmail);
+  await tbsync.pushFolderList({
+    accountId: args.accountId,
+    folders: [folderToDescriptor(folder)],
+  });
+  return null;
+}
 
 async function handleAccountDisabled(args) {
   const providerAccountId = await accounts.getProviderAccountIdByTbsyncAccountId(args.accountId);
   if (!providerAccountId) return null;
-  // In the new ownership model the provider owns Thunderbird resources, so
-  // disabling an account must release them. We clear the provider-side folder
-  // state now; target deletion against messenger.addressBooks.* lands in M2
-  // once real books exist.
-  // TODO(M2): for each folder with a targetAbId, call messenger.addressBooks.delete(targetAbId).
-  await simulateBusyWork();
+  // Provider owns Thunderbird resources — disable always releases them so
+  // re-enable starts from a clean slate (mirrors legacy TbSync behavior).
+  await deleteAccountTargets(providerAccountId);
   await folders.clearAccount(providerAccountId);
   await changelog.clearAccount(providerAccountId);
   return null;
@@ -162,12 +178,33 @@ async function handleAccountDisabled(args) {
 async function handleAccountDeleted(args) {
   const providerAccountId = await accounts.getProviderAccountIdByTbsyncAccountId(args.accountId);
   if (!providerAccountId) return null;
-  await simulateBusyWork();
+  // `purgeTargets` travels over the protocol from the host. Default to true:
+  // removing an account normally means the books go too. A future "detach
+  // only" escape hatch can set it false from the config popup.
+  if (args.purgeTargets !== false) {
+    await deleteAccountTargets(providerAccountId);
+  }
   await folders.clearAccount(providerAccountId);
   await changelog.clearAccount(providerAccountId);
   await accounts.remove(providerAccountId);
   await accounts.clearMapping(providerAccountId);
   return null;
+}
+
+/** Delete every Thunderbird address book owned by this provider account,
+ *  tolerating per-folder failures (log and continue). */
+async function deleteAccountTargets(providerAccountId) {
+  for (const folder of await folders.listForAccount(providerAccountId)) {
+    if (!folder.targetAbId) continue;
+    try {
+      await addressBook.deleteBook(folder.targetAbId);
+    } catch (err) {
+      console.warn(
+        `[google-4-tbsync] could not delete address book ${folder.targetAbId}:`,
+        err?.message ?? err
+      );
+    }
+  }
 }
 
 async function handleFolderEnabled(_args)  { return null; }
@@ -227,12 +264,6 @@ async function handleImportLegacyData(_args) {
 
 // ── Helpers ───────────────────────────────────────────────────────────────
 
-/** M1 testing aid: simulate a 2 s provider-side cleanup so the host's BUSY
- *  transition is visible. Remove when real cleanup lands in M2. */
-function simulateBusyWork() {
-  return new Promise(resolve => setTimeout(resolve, 2000));
-}
-
 
 /** Redact sensitive keys (clientSecret, refreshToken) before returning to host. */
 function stripSensitive(record) {
@@ -243,12 +274,13 @@ function stripSensitive(record) {
 
 /**
  * Called from setup.html once the user has filled in client ID / secret and
- * clicked "Sign in with Google". Launches the OAuth flow, persists the
- * refresh token + authenticated email in the provider's account store, and
- * seeds a single contacts folder.
+ * clicked "Sign in with Google". Launches the OAuth flow, creates a
+ * Thunderbird address book, persists the refresh token + authenticated email
+ * in the provider's account store, and seeds a single contacts folder
+ * pointing at the new book.
  *
- * M2a: the Thunderbird address book is not yet created — targetAbId stays
- * null. M2b wires messenger.addressBooks.create() and fills it in.
+ * Order matters: we create the TB book BEFORE we persist any provider state
+ * so a book-create failure leaves no half-configured account behind.
  */
 export async function authenticateAndCreateAccount({ label, clientID, clientSecret }) {
   const { refreshToken, authenticatedUserEmail, accessToken, expiresIn } =
@@ -260,6 +292,10 @@ export async function authenticateAndCreateAccount({ label, clientID, clientSecr
   }
   const providerAccountId = `g-${uuid()}`;
   const accountName = trimmedLabel;
+
+  // Book + folder first: a createBook failure here leaves nothing persisted,
+  // so the user can simply try again. Once this succeeds, we commit the rest.
+  const folder = await seedContactsFolder(providerAccountId, accountName, authenticatedUserEmail);
 
   await accounts.upsert({
     providerAccountId,
@@ -279,29 +315,53 @@ export async function authenticateAndCreateAccount({ label, clientID, clientSecr
     oauth.primeAccessToken(providerAccountId, accessToken, expiresIn);
   }
 
+  return {
+    providerAccountId,
+    accountName,
+    initialFolders: [folderToDescriptor(folder)],
+  };
+}
+
+/**
+ * Create a Thunderbird address book and the matching folder record. Used at
+ * setup time and on re-enable (when disable cleared the book + folder).
+ *
+ * Book name carries both the user's account label AND the authenticated
+ * Google email so multiple Google accounts with the same label (or a single
+ * label repurposed across Gmail addresses) are disambiguated in
+ * Thunderbird's address-book list. The folder's display name in the TbSync
+ * resource list is just the Google identifier — the account label already
+ * appears above the resource card, so repeating it per row is noise.
+ */
+async function seedContactsFolder(providerAccountId, accountName, authenticatedUserEmail) {
+  const email = authenticatedUserEmail?.trim() || null;
+  const bookName = email ? `${accountName} (${email})` : accountName;
+  const targetAbId = await addressBook.createBook(bookName);
   const folder = {
     folderId: genFolderId(),
     folderType: "contacts",
-    displayName: `${accountName} - Contacts`,
+    displayName: email ?? accountName,
     UID: "1",
-    targetAbId: null,
+    targetAbId,
+    targetAbName: bookName,
     readOnly: false,
     selected: true,
     orderIndex: 0,
   };
   await folders.upsert(providerAccountId, folder);
+  return folder;
+}
 
+/** Translate an internal folder record into the descriptor shape the host
+ *  expects for registerAccount / pushFolderList. */
+function folderToDescriptor(folder) {
   return {
-    providerAccountId,
-    accountName,
-    initialFolders: [{
-      folderId: folder.folderId,
-      folderType: folder.folderType,
-      displayName: folder.displayName,
-      readOnly: folder.readOnly,
-      selected: folder.selected,
-      cached: false,
-      extraProps: { UID: folder.UID },
-    }],
+    folderId: folder.folderId,
+    folderType: folder.folderType,
+    displayName: folder.displayName,
+    readOnly: folder.readOnly,
+    selected: folder.selected,
+    cached: false,
+    extraProps: { UID: folder.UID },
   };
 }
