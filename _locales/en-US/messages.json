@@ -30,6 +30,33 @@
     "message": "Cancel"
   },
   "config.title": {
-    "message": "Edit Google account"
+    "message": "Google account settings"
+  },
+  "config.label": {
+    "message": "Account label"
+  },
+  "config.email": {
+    "message": "Google account"
+  },
+  "config.clientId": {
+    "message": "OAuth Client ID"
+  },
+  "config.readOnlyMode": {
+    "message": "Read-only (do not push local changes to Google)"
+  },
+  "config.verboseLogging": {
+    "message": "Verbose logging"
+  },
+  "config.readOnlyBanner": {
+    "message": "To prevent synchronization errors, settings cannot be edited while the account is enabled."
+  },
+  "config.save": {
+    "message": "Save"
+  },
+  "config.cancel": {
+    "message": "Cancel"
+  },
+  "config.close": {
+    "message": "Close"
   }
 }

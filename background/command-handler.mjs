@@ -1,5 +1,5 @@
 import { ERR, HOST_CMD, withCode } from "../shared/protocol.mjs";
-import { ok } from "../shared/status.mjs";
+import { error, ok } from "../shared/status.mjs";
 import { folderId as genFolderId, setupToken as genSetupToken, uuid } from "../shared/ids.mjs";
 import * as accounts from "./accounts.mjs";
 import * as folders from "./folders.mjs";
@@ -20,7 +20,7 @@ import { syncFolderContacts } from "./google/sync-contacts.mjs";
 const SETUP_WIDTH = 520;
 const SETUP_HEIGHT = 640;
 const CONFIG_WIDTH = 520;
-const CONFIG_HEIGHT = 480;
+const CONFIG_HEIGHT = 580;
 
 const pendingSetups = new Map(); // setupToken -> { resolve, reject, windowId }
 
@@ -30,6 +30,7 @@ export function init() {
   tbsync.setHostCmdHandler(HOST_CMD.CANCEL_SYNC, handleCancelSync);
   tbsync.setHostCmdHandler(HOST_CMD.OPEN_SETUP_POPUP, handleOpenSetupPopup);
   tbsync.setHostCmdHandler(HOST_CMD.OPEN_CONFIG_POPUP, handleOpenConfigPopup);
+  tbsync.setHostCmdHandler(HOST_CMD.REAUTHENTICATE, handleReauthenticate);
   tbsync.setHostCmdHandler(HOST_CMD.ACCOUNT_ENABLED, handleAccountEnabled);
   tbsync.setHostCmdHandler(HOST_CMD.ACCOUNT_DISABLED, handleAccountDisabled);
   tbsync.setHostCmdHandler(HOST_CMD.ACCOUNT_DELETED, handleAccountDeleted);
@@ -156,6 +157,7 @@ async function handleOpenConfigPopup(args) {
   const url = new URL(browser.runtime.getURL("config/config.html"));
   url.searchParams.set("accountId", args.accountId);
   url.searchParams.set("providerAccountId", providerAccountId);
+  if (args.readOnly) url.searchParams.set("readOnly", "1");
   await browser.windows.create({
     url: url.toString(),
     type: "popup",
@@ -164,6 +166,7 @@ async function handleOpenConfigPopup(args) {
   });
   return null;
 }
+
 
 // ── Account / folder lifecycle ────────────────────────────────────────────
 
@@ -315,6 +318,94 @@ async function handleSetAccountEntry(args) {
   return null;
 }
 
+// ── Internal messages from config.html ───────────────────────────────────
+
+/** Returns a sanitized view of the account record for the config popup.
+ *  clientSecret and refreshToken never leave the background context. */
+export async function getAccountForConfig(tbsyncAccountId) {
+  const providerAccountId = await accounts.getProviderAccountIdByTbsyncAccountId(tbsyncAccountId);
+  if (!providerAccountId) throw withCode(new Error("Unknown account"), ERR.UNKNOWN_ACCOUNT);
+  const acc = await accounts.get(providerAccountId);
+  if (!acc) throw withCode(new Error("Account record missing"), ERR.UNKNOWN_ACCOUNT);
+  return {
+    accountId: tbsyncAccountId,
+    accountName: acc.accountName,
+    authenticatedUserEmail: acc.authenticatedUserEmail ?? null,
+    clientID: acc.clientID ?? "",
+    readOnlyMode: !!acc.readOnlyMode,
+    verboseLogging: !!acc.verboseLogging,
+  };
+}
+
+/** Write allow-listed fields from the config popup to the account record.
+ *  If `accountName` changed, propagate to the host via `updateAccount`. */
+export async function saveAccountFromConfig({ accountId, patch }) {
+  const providerAccountId = await accounts.getProviderAccountIdByTbsyncAccountId(accountId);
+  if (!providerAccountId) throw withCode(new Error("Unknown account"), ERR.UNKNOWN_ACCOUNT);
+
+  const allowed = ["accountName", "readOnlyMode", "verboseLogging"];
+  const clean = {};
+  for (const key of allowed) if (key in patch) clean[key] = patch[key];
+  if (clean.accountName != null) {
+    clean.accountName = String(clean.accountName).trim();
+    if (!clean.accountName) throw withCode(new Error("Account name is required"), ERR.UNKNOWN_ACCOUNT);
+  }
+
+  await accounts.upsert({ providerAccountId, ...clean });
+  if ("accountName" in clean) {
+    await tbsync.updateAccount({ accountId, patch: { accountName: clean.accountName } });
+  }
+  return null;
+}
+
+// ── Re-authentication ─────────────────────────────────────────────────────
+
+/**
+ * Provider-authored re-auth. Host calls this via `HOST_CMD.REAUTHENTICATE`
+ * when the account is in the authentication-failed state. For Google we just
+ * re-run `oauth.startAuth` — `launchWebAuthFlow` opens Google's consent
+ * screen directly, and the `loginHint` pre-selects the expected account.
+ *
+ * Guards against the user picking a different Gmail address than the one
+ * originally associated with this account — we refuse to overwrite the
+ * refresh token in that case. `login_hint` is a suggestion, not a lock.
+ */
+async function handleReauthenticate(args) {
+  const providerAccountId = await accounts.getProviderAccountIdByTbsyncAccountId(args.accountId);
+  if (!providerAccountId) {
+    return error("Unknown account", ERR.UNKNOWN_ACCOUNT);
+  }
+  const acc = await accounts.get(providerAccountId);
+  if (!acc) {
+    return error("Account record missing", ERR.UNKNOWN_ACCOUNT);
+  }
+  if (!acc.clientID || !acc.clientSecret) {
+    return error("Missing OAuth credentials", ERR.AUTH);
+  }
+  try {
+    const { refreshToken, authenticatedUserEmail, accessToken, expiresIn } =
+      await oauth.startAuth({
+        clientID: acc.clientID,
+        clientSecret: acc.clientSecret,
+        loginHint: acc.authenticatedUserEmail,
+      });
+    if (acc.authenticatedUserEmail && authenticatedUserEmail &&
+        acc.authenticatedUserEmail !== authenticatedUserEmail) {
+      // User signed in with a different Google account. Don't overwrite the
+      // refresh token; the caller's account is still broken.
+      return error(
+        `Signed-in user (${authenticatedUserEmail}) does not match the account's Google address (${acc.authenticatedUserEmail}).`,
+        ERR.AUTH
+      );
+    }
+    await accounts.upsert({ providerAccountId, refreshToken });
+    if (accessToken) oauth.primeAccessToken(providerAccountId, accessToken, expiresIn);
+    return ok();
+  } catch (err) {
+    return error(err.message ?? "Re-authentication failed", err.code ?? ERR.AUTH);
+  }
+}
+
 // ── Migration (deferred to M4) ────────────────────────────────────────────
 
 async function handleImportLegacyData(_args) {
@@ -333,13 +424,14 @@ function stripSensitive(record) {
 
 /**
  * Called from setup.html once the user has filled in client ID / secret and
- * clicked "Sign in with Google". Launches the OAuth flow, creates a
- * Thunderbird address book, persists the refresh token + authenticated email
- * in the provider's account store, and seeds a single contacts folder
- * pointing at the new book.
+ * clicked "Sign in with Google". Launches the OAuth flow, persists the
+ * refresh token + authenticated email in the provider's account store, and
+ * seeds a single contacts folder record.
  *
- * Order matters: we create the TB book BEFORE we persist any provider state
- * so a book-create failure leaves no half-configured account behind.
+ * Per the account-lifecycle contract, the folder starts unselected with no
+ * Thunderbird book — the user must tick it in the TbSync manager to
+ * actually activate sync, which is where the book gets created (via
+ * handleFolderEnabled).
  */
 export async function authenticateAndCreateAccount({ label, clientID, clientSecret }) {
   const { refreshToken, authenticatedUserEmail, accessToken, expiresIn } =
@@ -351,10 +443,6 @@ export async function authenticateAndCreateAccount({ label, clientID, clientSecr
   }
   const providerAccountId = `g-${uuid()}`;
   const accountName = trimmedLabel;
-
-  // Book + folder first: a createBook failure here leaves nothing persisted,
-  // so the user can simply try again. Once this succeeds, we commit the rest.
-  const folder = await seedContactsFolder(providerAccountId, accountName, authenticatedUserEmail);
 
   await accounts.upsert({
     providerAccountId,
@@ -374,6 +462,7 @@ export async function authenticateAndCreateAccount({ label, clientID, clientSecr
     oauth.primeAccessToken(providerAccountId, accessToken, expiresIn);
   }
 
+  const folder = await seedContactsFolder(providerAccountId, accountName, authenticatedUserEmail);
   return {
     providerAccountId,
     accountName,
@@ -382,29 +471,29 @@ export async function authenticateAndCreateAccount({ label, clientID, clientSecr
 }
 
 /**
- * Create a Thunderbird address book and the matching folder record. Used at
- * setup time and on re-enable (when disable cleared the book + folder).
+ * Create the resource record (no Thunderbird address book). Used at setup
+ * time and on account re-enable.
  *
- * Book name carries both the user's account label AND the authenticated
- * Google email so multiple Google accounts with the same label (or a single
- * label repurposed across Gmail addresses) are disambiguated in
- * Thunderbird's address-book list. The folder's display name in the TbSync
- * resource list is just the Google identifier — the account label already
- * appears above the resource card, so repeating it per row is noise.
+ * Per the account-lifecycle contract: enabling an account pulls the resource
+ * list but does NOT activate any resource. The user must tick a resource in
+ * the TbSync manager; that ticks triggers FOLDER_ENABLED on the provider,
+ * which is where the actual address book gets created.
+ *
+ * The folder's `displayName` in the TbSync resource list is the authenticated
+ * Google email (or the account label as a fallback) — the account label
+ * already appears above the resource card, so repeating it per row is noise.
  */
 async function seedContactsFolder(providerAccountId, accountName, authenticatedUserEmail) {
   const email = authenticatedUserEmail?.trim() || null;
-  const bookName = computeBookName(accountName, email);
-  const targetAbId = await addressBook.createBook(bookName);
   const folder = {
     folderId: genFolderId(),
     folderType: "contacts",
     displayName: email ?? accountName,
     UID: "1",
-    targetAbId,
-    targetAbName: bookName,
+    targetAbId: null,
+    targetAbName: null,
     readOnly: false,
-    selected: true,
+    selected: false,
     orderIndex: 0,
   };
   await folders.upsert(providerAccountId, folder);

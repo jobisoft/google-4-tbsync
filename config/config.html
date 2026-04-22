@@ -3,17 +3,116 @@
   <head>
     <meta charset="utf-8" />
     <title>Edit Google account</title>
+    <script type="module" src="config.mjs"></script>
     <style>
-      body { font-family: system-ui, sans-serif; font-size: 13px; margin: 0; padding: 20px 24px; }
-      h2 { margin: 0 0 16px; font-size: 15px; }
-      .note { padding: 10px 12px; background: #eef4ff; border-left: 3px solid #2a7fd4; color: #1a3a6b; border-radius: 3px; font-size: 12px; }
+      body {
+        font-family: system-ui, sans-serif;
+        font-size: 13px;
+        color: #222;
+        margin: 0;
+        padding: 20px 24px;
+      }
+      h2 { margin: 0 0 10px; font-size: 15px; font-weight: 600; }
+
+      .readonly-banner {
+        display: none;
+        background: #fff6d9;
+        border-left: 3px solid #e8b923;
+        padding: 8px 12px;
+        font-size: 12px;
+        color: #5a4200;
+        border-radius: 3px;
+        margin-bottom: 16px;
+      }
+      .readonly-banner.visible { display: block; }
+
+      .field { display: flex; flex-direction: column; margin-bottom: 10px; }
+      .field label {
+        font-size: 11px; color: #555; text-transform: uppercase;
+        letter-spacing: .04em; margin-bottom: 4px;
+      }
+      .field input[type="text"] {
+        padding: 5px 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 13px;
+      }
+      .field input:disabled { background: #f4f4f6; color: #666; }
+      .field .display {
+        padding: 5px 8px; border: 1px solid #ececee; background: #f8f8f9;
+        border-radius: 4px; font-size: 13px; color: #333;
+        font-family: ui-monospace, monospace;
+        word-break: break-all;
+      }
+
+      .checkbox-row { display: flex; align-items: center; gap: 8px; margin: 6px 0; }
+      .checkbox-row label { font-size: 13px; color: #333; text-transform: none; letter-spacing: 0; margin: 0; }
+
+      .actions { display: flex; align-items: center; gap: 8px; margin-top: 20px; }
+      .actions .right { display: flex; gap: 8px; margin-left: auto; }
+      button.primary {
+        padding: 6px 14px; background: #2a7fd4; color: #fff; border: none;
+        border-radius: 4px; cursor: pointer; font-size: 13px;
+      }
+      button.primary:hover { background: #1a6fc4; }
+      button.primary:disabled { opacity: .5; cursor: not-allowed; }
+      button.secondary {
+        padding: 6px 14px; background: #e5e5e7; color: #222; border: none;
+        border-radius: 4px; cursor: pointer; font-size: 13px;
+      }
+      button.ghost {
+        background: #fff; color: #2a7fd4; border: 1px solid #2a7fd4;
+        padding: 5px 14px; border-radius: 4px; cursor: pointer; font-size: 12px;
+      }
+      button.ghost:hover { background: #eaf3fc; }
+      button.ghost:disabled { opacity: .4; cursor: not-allowed; }
+      button[hidden] { display: none; }
+
+      .error {
+        margin-top: 10px; padding: 8px 12px; background: #ffe0e0;
+        border-left: 3px solid #c43b3b; color: #7a2222; font-size: 12px;
+        border-radius: 3px; display: none;
+      }
+      .error.visible { display: block; }
+      .info {
+        margin-top: 10px; padding: 8px 12px; background: #d7f5dd;
+        border-left: 3px solid #1b6e33; color: #0e4a20; font-size: 12px;
+        border-radius: 3px; display: none;
+      }
+      .info.visible { display: block; }
     </style>
   </head>
   <body>
-    <h2>Edit Google account</h2>
-    <div class="note">
-      M1 build: the config page is a placeholder. Account properties (client
-      ID / secret, flags, re-auth) land in M3.
+    <h2 id="title">Edit account</h2>
+
+    <div id="readonly-banner" class="readonly-banner"></div>
+
+    <div class="field">
+      <label data-i18n="config.label"></label>
+      <input id="account-name" type="text" />
+    </div>
+    <div class="field">
+      <label data-i18n="config.email"></label>
+      <div id="email" class="display"></div>
+    </div>
+    <div class="field">
+      <label data-i18n="config.clientId"></label>
+      <div id="client-id" class="display"></div>
+    </div>
+    <div class="checkbox-row">
+      <input id="read-only-mode" type="checkbox" />
+      <label for="read-only-mode" data-i18n="config.readOnlyMode"></label>
+    </div>
+    <div class="checkbox-row">
+      <input id="verbose-logging" type="checkbox" />
+      <label for="verbose-logging" data-i18n="config.verboseLogging"></label>
+    </div>
+
+    <div id="error" class="error"></div>
+    <div id="info"  class="info"></div>
+
+    <div class="actions">
+      <div class="right">
+        <button id="btn-save"   class="primary"   data-i18n="config.save"></button>
+        <button id="btn-cancel" class="secondary"></button>
+      </div>
     </div>
   </body>
 </html>

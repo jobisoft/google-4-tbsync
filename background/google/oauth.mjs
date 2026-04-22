@@ -59,8 +59,14 @@ export function getRedirectURL() {
 /**
  * Open the Google consent screen, exchange the resulting code for tokens,
  * and fetch the authenticated user's email.
+ *
+ * Pass `loginHint` to pre-select a specific Google account on the consent
+ * screen — useful for re-auth flows where we already know which address
+ * must be signed in. Google treats this as a hint, not a lock: if the user
+ * isn't currently signed in to that address they can still pick another,
+ * so the caller must still verify the returned email matches expectations.
  */
-export async function startAuth({ clientID, clientSecret }) {
+export async function startAuth({ clientID, clientSecret, loginHint }) {
   if (!clientID || !clientSecret) {
     throw withCode(new Error("Missing client ID or client secret"), ERR.AUTH);
   }
@@ -73,6 +79,7 @@ export async function startAuth({ clientID, clientSecret }) {
   authUrl.searchParams.set("access_type", "offline");
   authUrl.searchParams.set("prompt", "consent");
   authUrl.searchParams.set("scope", SCOPES.join(" "));
+  if (loginHint) authUrl.searchParams.set("login_hint", loginHint);
 
   let responseUrl;
   try {

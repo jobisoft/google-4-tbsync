@@ -123,6 +123,25 @@ browser.runtime.onMessage.addListener(async msg => {
       ? { clientID: last.clientID, clientSecret: last.clientSecret }
       : null;
   }
+  if (msg?.type === "google.getAccount") {
+    try {
+      const result = await commands.getAccountForConfig(msg.accountId);
+      return { ok: true, result };
+    } catch (err) {
+      return { ok: false, error: err.message ?? String(err), code: err.code ?? null };
+    }
+  }
+  if (msg?.type === "google.saveAccount") {
+    try {
+      const result = await commands.saveAccountFromConfig({
+        accountId: msg.accountId,
+        patch: msg.patch ?? {},
+      });
+      return { ok: true, result };
+    } catch (err) {
+      return { ok: false, error: err.message ?? String(err), code: err.code ?? null };
+    }
+  }
   return undefined;
 });
 

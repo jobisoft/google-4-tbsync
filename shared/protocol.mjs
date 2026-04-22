@@ -32,6 +32,7 @@ export const HOST_CMD = {
   CANCEL_SYNC: "cancelSync",
   OPEN_SETUP_POPUP: "openSetupPopup",
   OPEN_CONFIG_POPUP: "openConfigPopup",
+  REAUTHENTICATE: "reauthenticate",
   ACCOUNT_ENABLED: "accountEnabled",
   ACCOUNT_DISABLED: "accountDisabled",
   ACCOUNT_DELETED: "accountDeleted",
