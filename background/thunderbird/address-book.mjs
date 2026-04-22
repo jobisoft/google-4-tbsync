@@ -36,11 +36,7 @@ export async function deleteBook(id) {
   try {
     await messenger.addressBooks.delete(id);
   } catch (err) {
-    // messenger.addressBooks.delete throws a generic Error when the id is
-    // unknown; the message typically contains "No such address book" or
-    // similar. Swallow that shape; re-throw anything else.
-    const msg = String(err?.message ?? err ?? "");
-    if (/no such|not found|invalid id/i.test(msg)) return;
+    if (isNotFoundError(err)) return;
     throw err;
   }
 }
@@ -70,8 +66,7 @@ export async function listContacts(bookId) {
   try {
     return await messenger.contacts.list(bookId);
   } catch (err) {
-    const msg = String(err?.message ?? err ?? "");
-    if (/no such|not found|invalid id/i.test(msg)) return [];
+    if (isNotFoundError(err)) return [];
     throw err;
   }
 }
@@ -104,8 +99,15 @@ export async function deleteContact(contactId) {
   try {
     await messenger.contacts.delete(contactId);
   } catch (err) {
-    const msg = String(err?.message ?? err ?? "");
-    if (/no such|not found|invalid id/i.test(msg)) return;
+    if (isNotFoundError(err)) return;
     throw err;
   }
+}
+
+/** True when the underlying Thunderbird API throws because the given id is
+ *  unknown. The message wording varies ("No such address book", "not found",
+ *  "Invalid id"), so we match generously on all three. */
+function isNotFoundError(err) {
+  const msg = String(err?.message ?? err ?? "");
+  return /no such|not found|invalid id/i.test(msg);
 }

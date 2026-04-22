@@ -12,10 +12,9 @@ import { syncFolderContacts } from "./google/sync-contacts.mjs";
 /**
  * Provider side of the protocol. Each exported handler corresponds 1:1 to a
  * HOST_CMD name and is registered with tbsync-client's dispatcher in init().
- *
- * M1 scope: enough stubs to prove the wire protocol end-to-end. syncAccount /
- * syncFolder return success without doing real work. Setup popup does a full
- * token round-trip but creates a dummy account record (no OAuth yet — M2).
+ * Real contacts sync flows through `google/sync-contacts.mjs`; address-book
+ * lifecycle (create on enable, delete on disable/remove) flows through
+ * `thunderbird/address-book.mjs`.
  */
 
 const SETUP_WIDTH = 520;
@@ -93,8 +92,7 @@ async function handleSyncFolder(args) {
   if (!targetAbId || !(await addressBook.bookExists(targetAbId))) {
     const acc = await accounts.get(providerAccountId);
     if (!acc) throw withCode(new Error("account record missing"), ERR.UNKNOWN_ACCOUNT);
-    const email = acc.authenticatedUserEmail?.trim() || null;
-    const bookName = email ? `${acc.accountName} (${email})` : acc.accountName;
+    const bookName = computeBookName(acc.accountName, acc.authenticatedUserEmail);
     targetAbId = await addressBook.createBook(bookName);
     await folders.upsert(providerAccountId, {
       folderId: folder.folderId,
@@ -220,15 +218,20 @@ async function handleAccountDeleted(args) {
  *  tolerating per-folder failures (log and continue). */
 async function deleteAccountTargets(providerAccountId) {
   for (const folder of await folders.listForAccount(providerAccountId)) {
-    if (!folder.targetAbId) continue;
-    try {
-      await addressBook.deleteBook(folder.targetAbId);
-    } catch (err) {
-      console.warn(
-        `[google-4-tbsync] could not delete address book ${folder.targetAbId}:`,
-        err?.message ?? err
-      );
-    }
+    if (folder.targetAbId) await safeDeleteBook(folder.targetAbId);
+  }
+}
+
+/** `deleteBook` with a warn-and-continue catch. Used where we want cleanup
+ *  to proceed past a single book's failure rather than abort the whole op. */
+async function safeDeleteBook(targetAbId) {
+  try {
+    await addressBook.deleteBook(targetAbId);
+  } catch (err) {
+    console.warn(
+      `[google-4-tbsync] could not delete address book ${targetAbId}:`,
+      err?.message ?? err
+    );
   }
 }
 
@@ -242,8 +245,7 @@ async function handleFolderEnabled(args) {
 
   const acc = await accounts.get(providerAccountId);
   if (!acc) throw withCode(new Error("account record missing"), ERR.UNKNOWN_ACCOUNT);
-  const email = acc.authenticatedUserEmail?.trim() || null;
-  const bookName = email ? `${acc.accountName} (${email})` : acc.accountName;
+  const bookName = computeBookName(acc.accountName, acc.authenticatedUserEmail);
   const targetAbId = await addressBook.createBook(bookName);
   await folders.upsert(providerAccountId, {
     folderId: folder.folderId,
@@ -258,11 +260,7 @@ async function handleFolderDisabled(args) {
   if (!providerAccountId) throw withCode(new Error("unknown account"), ERR.UNKNOWN_ACCOUNT);
   const folder = await folders.get(providerAccountId, args.folderId);
   if (!folder) throw withCode(new Error("unknown folder"), ERR.UNKNOWN_FOLDER);
-  if (folder.targetAbId) {
-    await addressBook.deleteBook(folder.targetAbId).catch(err => {
-      console.warn(`[google-4-tbsync] could not delete address book ${folder.targetAbId}:`, err?.message ?? err);
-    });
-  }
+  if (folder.targetAbId) await safeDeleteBook(folder.targetAbId);
   await folders.upsert(providerAccountId, {
     folderId: folder.folderId,
     targetAbId: null,
@@ -317,7 +315,7 @@ async function handleSetAccountEntry(args) {
   return null;
 }
 
-// ── Migration (M4, stubbed for M1) ────────────────────────────────────────
+// ── Migration (deferred to M4) ────────────────────────────────────────────
 
 async function handleImportLegacyData(_args) {
   throw withCode(new Error("migration not implemented yet"), ERR.UNKNOWN_COMMAND);
@@ -396,7 +394,7 @@ export async function authenticateAndCreateAccount({ label, clientID, clientSecr
  */
 async function seedContactsFolder(providerAccountId, accountName, authenticatedUserEmail) {
   const email = authenticatedUserEmail?.trim() || null;
-  const bookName = email ? `${accountName} (${email})` : accountName;
+  const bookName = computeBookName(accountName, email);
   const targetAbId = await addressBook.createBook(bookName);
   const folder = {
     folderId: genFolderId(),
@@ -411,6 +409,16 @@ async function seedContactsFolder(providerAccountId, accountName, authenticatedU
   };
   await folders.upsert(providerAccountId, folder);
   return folder;
+}
+
+/**
+ * Build the Thunderbird address-book name for a Google account. The email
+ * disambiguates books in the TB sidebar when the user has multiple Google
+ * accounts with the same label.
+ */
+function computeBookName(accountName, authenticatedUserEmail) {
+  const email = authenticatedUserEmail?.trim?.() || null;
+  return email ? `${accountName} (${email})` : accountName;
 }
 
 /** Translate an internal folder record into the descriptor shape the host
