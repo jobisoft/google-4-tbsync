@@ -2,8 +2,14 @@
  * Wire protocol between TbSync (host) and provider add-ons.
  *
  * This module is the single source of truth for message names, port name, and
- * version numbers. Providers are expected to ship a copy of this file (or one
- * that matches it byte-for-byte on the constants below).
+ * version numbers.
+ *
+ * **THIS FILE IS MIRRORED INTO EVERY PROVIDER ADD-ON.** The copy in
+ * `tbsync-new/shared/protocol.mjs` is authoritative; the copies shipped by
+ * providers (e.g. `google-4-tbsync/shared/protocol.mjs`) MUST match it
+ * byte-for-byte. When you change this file, re-copy it to every provider
+ * and confirm with:
+ *     diff -q tbsync-new/shared/protocol.mjs google-4-tbsync/shared/protocol.mjs
  */
 
 export const PROTOCOL_VERSION = "1.0";
@@ -62,11 +68,24 @@ export const ERR = {
   NETWORK: "E:NETWORK",
   CANCELLED: "E:CANCELLED",
   QUOTA: "E:QUOTA",
+  PROVIDER_UNAVAILABLE: "E:PROVIDER_UNAVAILABLE",
   UNKNOWN_ACCOUNT: "E:UNKNOWN_ACCOUNT",
   UNKNOWN_FOLDER: "E:UNKNOWN_FOLDER",
   UNKNOWN_COMMAND: "E:UNKNOWN_COMMAND",
   TIMEOUT: "E:TIMEOUT",
 };
+
+/**
+ * Attach an error code (and optional details) to an Error object without
+ * clobbering any existing code. Returns the same Error for chaining.
+ * Every host↔provider-speaking module uses this to stamp the code that gets
+ * serialized onto the wire as `errorCode`.
+ */
+export function withCode(err, code, details = null) {
+  if (!err.code) err.code = code;
+  if (details != null && !err.details) err.details = details;
+  return err;
+}
 
 /** Default timeout for host→provider RPCs in milliseconds. */
 export const DEFAULT_RPC_TIMEOUT_MS = 30_000;

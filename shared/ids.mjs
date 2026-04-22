@@ -1,6 +1,9 @@
 /**
  * ID / token generators. Thin wrappers over crypto.randomUUID so tests and
  * migration paths have a single seam to patch.
+ *
+ * **MIRRORED INTO EVERY PROVIDER ADD-ON** — see the header of
+ * `shared/protocol.mjs` for the sync rule.
  */
 
 export function uuid() {

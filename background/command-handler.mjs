@@ -1,4 +1,4 @@
-import { ERR, HOST_CMD } from "../shared/protocol.mjs";
+import { ERR, HOST_CMD, withCode } from "../shared/protocol.mjs";
 import { ACCOUNT_STATUS, ok } from "../shared/status.mjs";
 import { folderId as genFolderId, setupToken as genSetupToken, uuid } from "../shared/ids.mjs";
 import * as accounts from "./accounts.mjs";
@@ -239,11 +239,6 @@ function stripSensitive(record) {
   return rest;
 }
 
-function withCode(err, code, details = null) {
-  err.code = code;
-  if (details != null) err.details = details;
-  return err;
-}
 
 /**
  * Used by setup.html during M1 to create a stub account record when the

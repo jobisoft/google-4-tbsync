@@ -1,7 +1,7 @@
 import {
   DISCOVERY, ERR, NO_TIMEOUT_CMDS,
   PORT_NAME, PROTOCOL_VERSION,
-  PROVIDER_CMD, PROVIDER_NOTIFY,
+  PROVIDER_CMD, PROVIDER_NOTIFY, withCode,
 } from "../shared/protocol.mjs";
 import { requestId as genRequestId } from "../shared/ids.mjs";
 import { TBSYNC_ID } from "../shared/storage-keys.mjs";
@@ -215,8 +215,3 @@ function rejectAllPending(code, message) {
   }
 }
 
-function withCode(err, code, details = null) {
-  if (!err.code) err.code = code;
-  if (details != null && !err.details) err.details = details;
-  return err;
-}
