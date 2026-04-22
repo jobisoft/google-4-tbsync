@@ -1,14 +1,15 @@
 /**
- * Thin wrapper over `messenger.addressBooks.*` for the Google provider.
+ * Thin wrapper over `messenger.addressBooks.*` and `messenger.contacts.*`
+ * for the Google provider.
  *
- * Responsibilities:
- *   - create a new AB when an account is set up
- *   - delete an AB when an account is disabled or removed (tolerating a
- *     previous manual deletion from Thunderbird's UI)
- *   - check whether a stored targetAbId still points to a real book
+ * Book-level: create / delete / exists with the "not found" tolerance we
+ * need when a user may have manually deleted the book from Thunderbird's UI.
  *
- * Contact CRUD (create/update/delete individual cards) lands in M2d and will
- * live in a sibling module; keep this file container-only.
+ * Contact-level: list / create / update / delete. All writes take a vCard
+ * string (the canonical modern representation) via `{ vCard }`.
+ *
+ * Every method here is a single-purpose async wrapper — the sync orchestrator
+ * in `google/sync-contacts.mjs` composes them.
  */
 
 /**
@@ -54,5 +55,57 @@ export async function bookExists(id) {
     return !!node;
   } catch {
     return false;
+  }
+}
+
+// ── Contact-level ──────────────────────────────────────────────────────────
+
+/**
+ * List all contacts in the given address book. Each ContactNode carries
+ * `{ id, parentId, type, vCard, readOnly, ... }`; consumers typically only
+ * care about `id` and `vCard`.
+ */
+export async function listContacts(bookId) {
+  if (!bookId) return [];
+  try {
+    return await messenger.contacts.list(bookId);
+  } catch (err) {
+    const msg = String(err?.message ?? err ?? "");
+    if (/no such|not found|invalid id/i.test(msg)) return [];
+    throw err;
+  }
+}
+
+/**
+ * Create a new contact from a vCard string. Returns the new contact's id.
+ */
+export async function createContact(bookId, vCard) {
+  if (!bookId) throw new Error("createContact requires a bookId");
+  if (!vCard) throw new Error("createContact requires a vCard string");
+  return await messenger.contacts.create(bookId, { vCard });
+}
+
+/**
+ * Replace an existing contact's vCard. Caller must have already matched the
+ * contact id via X-GOOGLE-RESOURCENAME on the existing vCard.
+ */
+export async function updateContact(contactId, vCard) {
+  if (!contactId) throw new Error("updateContact requires a contactId");
+  if (!vCard) throw new Error("updateContact requires a vCard string");
+  await messenger.contacts.update(contactId, { vCard });
+}
+
+/**
+ * Delete a contact by id. Tolerates "not found" — the card may have been
+ * removed manually in Thunderbird between our list() and delete() calls.
+ */
+export async function deleteContact(contactId) {
+  if (!contactId) return;
+  try {
+    await messenger.contacts.delete(contactId);
+  } catch (err) {
+    const msg = String(err?.message ?? err ?? "");
+    if (/no such|not found|invalid id/i.test(msg)) return;
+    throw err;
   }
 }

@@ -1,5 +1,5 @@
 import { ERR, HOST_CMD, withCode } from "../shared/protocol.mjs";
-import { ACCOUNT_STATUS, ok } from "../shared/status.mjs";
+import { ok } from "../shared/status.mjs";
 import { folderId as genFolderId, setupToken as genSetupToken, uuid } from "../shared/ids.mjs";
 import * as accounts from "./accounts.mjs";
 import * as folders from "./folders.mjs";
@@ -7,6 +7,7 @@ import * as changelog from "./changelog.mjs";
 import * as tbsync from "./tbsync-client.mjs";
 import * as oauth from "./google/oauth.mjs";
 import * as addressBook from "./thunderbird/address-book.mjs";
+import { syncFolderContacts } from "./google/sync-contacts.mjs";
 
 /**
  * Provider side of the protocol. Each exported handler corresponds 1:1 to a
@@ -66,24 +67,48 @@ export function init() {
   });
 }
 
-// ── Sync stubs ────────────────────────────────────────────────────────────
+// ── Sync ──────────────────────────────────────────────────────────────────
 
 async function handleSyncAccount(args) {
   const providerAccountId = await accounts.getProviderAccountIdByTbsyncAccountId(args.accountId);
   if (!providerAccountId) throw withCode(new Error("unknown account"), ERR.UNKNOWN_ACCOUNT);
+  // Google surfaces a single contacts container — no server-side folder
+  // discovery happens here. The host's sync-coordinator proceeds to call
+  // syncFolder for each selected folder.
   tbsync.reportSyncState({ accountId: args.accountId, syncState: "send.account-list" });
-  // M1 stub: always succeed.
   return ok();
 }
 
 async function handleSyncFolder(args) {
   const providerAccountId = await accounts.getProviderAccountIdByTbsyncAccountId(args.accountId);
   if (!providerAccountId) throw withCode(new Error("unknown account"), ERR.UNKNOWN_ACCOUNT);
-  tbsync.reportSyncState({
-    accountId: args.accountId, folderId: args.folderId,
-    syncState: "eval.done", message: "(M1 stub)",
+
+  const folder = await folders.get(providerAccountId, args.folderId);
+  if (!folder) throw withCode(new Error("unknown folder"), ERR.UNKNOWN_FOLDER);
+
+  // Defensive: the stored targetAbId may be stale if the user deleted the
+  // address book manually from Thunderbird's UI. Recreate on the fly so the
+  // sync can still proceed.
+  let targetAbId = folder.targetAbId;
+  if (!targetAbId || !(await addressBook.bookExists(targetAbId))) {
+    const acc = await accounts.get(providerAccountId);
+    if (!acc) throw withCode(new Error("account record missing"), ERR.UNKNOWN_ACCOUNT);
+    const email = acc.authenticatedUserEmail?.trim() || null;
+    const bookName = email ? `${acc.accountName} (${email})` : acc.accountName;
+    targetAbId = await addressBook.createBook(bookName);
+    await folders.upsert(providerAccountId, {
+      folderId: folder.folderId,
+      targetAbId,
+      targetAbName: bookName,
+    });
+  }
+
+  return await syncFolderContacts({
+    accountId: args.accountId,
+    providerAccountId,
+    folderId: args.folderId,
+    targetAbId,
   });
-  return ok();
 }
 
 async function handleCancelSync(_args) {
@@ -207,8 +232,44 @@ async function deleteAccountTargets(providerAccountId) {
   }
 }
 
-async function handleFolderEnabled(_args)  { return null; }
-async function handleFolderDisabled(_args) { return null; }
+async function handleFolderEnabled(args) {
+  const providerAccountId = await accounts.getProviderAccountIdByTbsyncAccountId(args.accountId);
+  if (!providerAccountId) throw withCode(new Error("unknown account"), ERR.UNKNOWN_ACCOUNT);
+  const folder = await folders.get(providerAccountId, args.folderId);
+  if (!folder) throw withCode(new Error("unknown folder"), ERR.UNKNOWN_FOLDER);
+  // Idempotent: if the book is already present, nothing to do.
+  if (folder.targetAbId && await addressBook.bookExists(folder.targetAbId)) return null;
+
+  const acc = await accounts.get(providerAccountId);
+  if (!acc) throw withCode(new Error("account record missing"), ERR.UNKNOWN_ACCOUNT);
+  const email = acc.authenticatedUserEmail?.trim() || null;
+  const bookName = email ? `${acc.accountName} (${email})` : acc.accountName;
+  const targetAbId = await addressBook.createBook(bookName);
+  await folders.upsert(providerAccountId, {
+    folderId: folder.folderId,
+    targetAbId,
+    targetAbName: bookName,
+  });
+  return null;
+}
+
+async function handleFolderDisabled(args) {
+  const providerAccountId = await accounts.getProviderAccountIdByTbsyncAccountId(args.accountId);
+  if (!providerAccountId) throw withCode(new Error("unknown account"), ERR.UNKNOWN_ACCOUNT);
+  const folder = await folders.get(providerAccountId, args.folderId);
+  if (!folder) throw withCode(new Error("unknown folder"), ERR.UNKNOWN_FOLDER);
+  if (folder.targetAbId) {
+    await addressBook.deleteBook(folder.targetAbId).catch(err => {
+      console.warn(`[google-4-tbsync] could not delete address book ${folder.targetAbId}:`, err?.message ?? err);
+    });
+  }
+  await folders.upsert(providerAccountId, {
+    folderId: folder.folderId,
+    targetAbId: null,
+    targetAbName: null,
+  });
+  return null;
+}
 
 async function handleGetAccountDisplayInfo(args) {
   const providerAccountId = await accounts.getProviderAccountIdByTbsyncAccountId(args.accountId);

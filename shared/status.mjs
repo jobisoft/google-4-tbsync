@@ -21,6 +21,7 @@ export const ACCOUNT_STATUS = {
 export const FOLDER_STATUS = {
   PENDING: "pending",
   SUCCESS: "success",
+  BUSY: "busy",
   WARNING: "warning",
   ERROR: "error",
   SKIPPED: "skipped",
