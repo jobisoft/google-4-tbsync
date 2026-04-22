@@ -142,12 +142,26 @@ async function handleOpenConfigPopup(args) {
 
 // ── Account / folder lifecycle ────────────────────────────────────────────
 
-async function handleAccountEnabled(_args)  { return null; }
-async function handleAccountDisabled(_args) { return null; }
+async function handleAccountEnabled(_args) { return null; }
+
+async function handleAccountDisabled(args) {
+  const providerAccountId = await accounts.getProviderAccountIdByTbsyncAccountId(args.accountId);
+  if (!providerAccountId) return null;
+  // In the new ownership model the provider owns Thunderbird resources, so
+  // disabling an account must release them. We clear the provider-side folder
+  // state now; target deletion against messenger.addressBooks.* lands in M2
+  // once real books exist.
+  // TODO(M2): for each folder with a targetAbId, call messenger.addressBooks.delete(targetAbId).
+  await simulateBusyWork();
+  await folders.clearAccount(providerAccountId);
+  await changelog.clearAccount(providerAccountId);
+  return null;
+}
 
 async function handleAccountDeleted(args) {
   const providerAccountId = await accounts.getProviderAccountIdByTbsyncAccountId(args.accountId);
   if (!providerAccountId) return null;
+  await simulateBusyWork();
   await folders.clearAccount(providerAccountId);
   await changelog.clearAccount(providerAccountId);
   await accounts.remove(providerAccountId);
@@ -212,6 +226,13 @@ async function handleImportLegacyData(_args) {
 
 // ── Helpers ───────────────────────────────────────────────────────────────
 
+/** M1 testing aid: simulate a 2 s provider-side cleanup so the host's BUSY
+ *  transition is visible. Remove when real cleanup lands in M2. */
+function simulateBusyWork() {
+  return new Promise(resolve => setTimeout(resolve, 2000));
+}
+
+
 /** Redact sensitive keys (clientSecret, refreshToken) before returning to host. */
 function stripSensitive(record) {
   const { clientSecret, refreshToken, ...rest } = record;
@@ -241,20 +262,27 @@ export async function createStubAccount({ accountName }) {
     verboseLogging: false,
     createdAt: Date.now(),
   });
-  const folder = {
-    folderId: genFolderId(),
-    folderType: "contacts",
-    displayName: `${accountName} - Contacts`,
-    UID: "1",
-    targetAbId: null,
-    readOnly: false,
-    selected: true,
-    orderIndex: 0,
-  };
-  await folders.upsert(providerAccountId, folder);
-  return {
-    providerAccountId,
-    initialFolders: [{
+  // M1 stub: create one fake folder of each supported type so the manager's
+  // folder list renders all three icons for UI testing. Real folders land in M2.
+  const specs = [
+    { type: "contacts",  name: "Contacts" },
+    { type: "calendars", name: "Calendar" },
+    { type: "tasks",     name: "Tasks" },
+  ];
+  const initialFolders = [];
+  for (const [i, spec] of specs.entries()) {
+    const folder = {
+      folderId: genFolderId(),
+      folderType: spec.type,
+      displayName: `${accountName} - ${spec.name}`,
+      UID: String(i + 1),
+      targetAbId: null,
+      readOnly: false,
+      selected: true,
+      orderIndex: i,
+    };
+    await folders.upsert(providerAccountId, folder);
+    initialFolders.push({
       folderId: folder.folderId,
       folderType: folder.folderType,
       displayName: folder.displayName,
@@ -262,6 +290,7 @@ export async function createStubAccount({ accountName }) {
       selected: folder.selected,
       cached: false,
       extraProps: { UID: folder.UID },
-    }],
-  };
+    });
+  }
+  return { providerAccountId, initialFolders };
 }

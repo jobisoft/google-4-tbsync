@@ -6,6 +6,7 @@
 export const ACCOUNT_STATUS = {
   SUCCESS: "success",
   SYNCING: "syncing",
+  BUSY: "busy",
   NOT_SYNCED: "notsyncronized",
   WARNING: "warning",
   ERROR: "error",
