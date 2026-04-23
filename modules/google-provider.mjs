@@ -244,8 +244,6 @@ export class GoogleProvider extends TbSyncProviderImplementation {
         displayName: f.displayName,
         readOnly: f.readOnly ?? false,
         selected: f.selected ?? false,
-        cached: f.cached ?? false,
-        extraProps: { UID: f.UID ?? null },
       }));
   }
 
@@ -423,7 +421,6 @@ async function seedContactsFolder(providerAccountId, accountName, authenticatedU
     folderId: `f-${crypto.randomUUID()}`,
     folderType: "contacts",
     displayName: email ?? accountName,
-    UID: "1",
     targetAbId: null,
     targetAbName: null,
     readOnly: false,
@@ -449,8 +446,6 @@ function folderToDescriptor(folder) {
     displayName: folder.displayName,
     readOnly: folder.readOnly,
     selected: folder.selected,
-    cached: false,
-    extraProps: { UID: folder.UID },
   };
 }
 
