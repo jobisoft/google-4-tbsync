@@ -1,4 +1,4 @@
-import { KEYS } from "../shared/storage-keys.mjs";
+import { KEYS } from "./storage-keys.mjs";
 
 /**
  * Provider-side folder store, keyed by providerAccountId. Carries the

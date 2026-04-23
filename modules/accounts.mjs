@@ -1,4 +1,4 @@
-import { KEYS } from "../shared/storage-keys.mjs";
+import { KEYS } from "./storage-keys.mjs";
 
 /**
  * Provider-side account store. Keyed by providerAccountId, which is the stable

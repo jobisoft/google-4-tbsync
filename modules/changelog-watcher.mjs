@@ -1,6 +1,6 @@
 import * as changelog from "./changelog.mjs";
 import * as mapper from "./google/contact-mapper.mjs";
-import * as addressBook from "./thunderbird/address-book.mjs";
+import * as addressBook from "./address-book.mjs";
 
 /**
  * Watches `messenger.contacts.onCreated/onUpdated/onDeleted` and records

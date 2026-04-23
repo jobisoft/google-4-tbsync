@@ -18,6 +18,3 @@ export const CURRENT_SCHEMA_VERSION = 1;
 export const DEFAULT_SETTINGS = {
   timeoutMs: 60_000,
 };
-
-/** TbSync host extension id (the other end of the port). */
-export const TBSYNC_ID = "tbsync@jobisoft.de";

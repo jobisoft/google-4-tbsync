@@ -15,10 +15,10 @@
  * Access tokens live in a module-level Map, keyed by providerAccountId. They
  * are NEVER persisted (they expire quickly; persisting them gains nothing and
  * widens the attack surface). Refresh tokens are persisted in the provider's
- * account record by command-handler / accounts.mjs.
+ * account record by accounts.mjs.
  */
 
-import { ERR, withCode } from "../../shared/protocol.mjs";
+import { ERR, withCode } from "../../vendor/tbsync/protocol.mjs";
 import * as accounts from "../accounts.mjs";
 
 const AUTH_ENDPOINT = "https://accounts.google.com/o/oauth2/v2/auth";

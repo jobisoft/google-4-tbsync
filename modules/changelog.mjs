@@ -1,4 +1,4 @@
-import { KEYS } from "../shared/storage-keys.mjs";
+import { KEYS } from "./storage-keys.mjs";
 
 /**
  * Per-account changelog of pending local mutations to push to Google. Entry

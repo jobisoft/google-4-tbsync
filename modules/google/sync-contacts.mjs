@@ -2,10 +2,13 @@
  * Orchestrates a bidirectional sync between a Thunderbird address book and
  * the authenticated user's Google Contacts.
  *
- * Inputs (from handleSyncFolder in command-handler.mjs):
+ * Inputs (from GoogleProvider.onSyncFolder):
  *   - providerAccountId  → for OAuth and storage lookups
  *   - accountId/folderId → tags for progress notifications to the host
  *   - targetAbId         → the Thunderbird address book to sync
+ *   - notify             → provider instance exposing reportSyncState /
+ *                          reportProgress; lets this module stay decoupled
+ *                          from the wire protocol
  *
  * Phase order: PUSH → PULL. Pushing first lets the common "only local edits"
  * case reach Google without being clobbered by the pull; in the rare dual-
@@ -33,17 +36,16 @@
  * too slow we can batch later.
  */
 
-import { ok, warning } from "../../shared/status.mjs";
-import * as tbsync from "../tbsync-client.mjs";
+import { ok, warning } from "../../vendor/tbsync/status.mjs";
 import * as peopleApi from "./people-api.mjs";
 import { PUSH_ERR } from "./people-api.mjs";
 import * as mapper from "./contact-mapper.mjs";
-import * as addressBook from "../thunderbird/address-book.mjs";
+import * as addressBook from "../address-book.mjs";
 import * as accounts from "../accounts.mjs";
 import * as changelog from "../changelog.mjs";
 import * as changelogWatcher from "../changelog-watcher.mjs";
 
-export async function syncFolderContacts({ accountId, providerAccountId, folderId, targetAbId }) {
+export async function syncFolderContacts({ accountId, providerAccountId, folderId, targetAbId, notify }) {
   const acc = await accounts.get(providerAccountId);
   const verbose = !!acc?.verboseLogging;
   const log = verbose
@@ -54,10 +56,10 @@ export async function syncFolderContacts({ accountId, providerAccountId, folderI
   let pushAdded = 0, pushUpdated = 0, pushDeleted = 0, pushConflicts = 0;
   const readOnly = !!acc?.readOnlyMode;
   if (readOnly) {
-    tbsync.reportSyncState({ accountId, folderId, syncState: "push.skipped-read-only" });
+    notify.reportSyncState({ accountId, folderId, syncState: "push.skipped-read-only" });
     log("push pass skipped — readOnlyMode");
   } else {
-    const result = await runPushPass({ accountId, folderId, providerAccountId, log });
+    const result = await runPushPass({ accountId, folderId, providerAccountId, notify, log });
     pushAdded = result.added;
     pushUpdated = result.updated;
     pushDeleted = result.deleted;
@@ -65,12 +67,12 @@ export async function syncFolderContacts({ accountId, providerAccountId, folderI
   }
 
   // ── Pull pass ──────────────────────────────────────────────────────────
-  tbsync.reportSyncState({ accountId, folderId, syncState: "send.people-list" });
+  notify.reportSyncState({ accountId, folderId, syncState: "send.people-list" });
   const people = await peopleApi.listAllConnections(providerAccountId);
   log(`pull: server returned ${people.length} contact(s)`);
   if (verbose && people.length > 0) log("pull: first server contact =", people[0]);
 
-  tbsync.reportSyncState({ accountId, folderId, syncState: "eval.diff" });
+  notify.reportSyncState({ accountId, folderId, syncState: "eval.diff" });
   const local = await addressBook.listContacts(targetAbId);
   log(`pull: local book has ${local.length} card(s)`);
   const byResourceName = new Map();
@@ -85,7 +87,7 @@ export async function syncFolderContacts({ accountId, providerAccountId, folderI
   let itemsDone = 0;
   let pullAdded = 0, pullUpdated = 0, pullSkipped = 0, pullDeleted = 0;
 
-  tbsync.reportProgress({ accountId, folderId, itemsDone, itemsTotal });
+  notify.reportProgress({ accountId, folderId, itemsDone, itemsTotal });
 
   const seenResourceNames = new Set();
   await changelogWatcher.suppressDuringSelfWrite(async () => {
@@ -109,7 +111,7 @@ export async function syncFolderContacts({ accountId, providerAccountId, folderI
       }
 
       itemsDone++;
-      tbsync.reportProgress({ accountId, folderId, itemsDone, itemsTotal });
+      notify.reportProgress({ accountId, folderId, itemsDone, itemsTotal });
     }
 
     // Delete local contacts that no longer exist on the server.
@@ -120,7 +122,7 @@ export async function syncFolderContacts({ accountId, providerAccountId, folderI
     }
   });
 
-  tbsync.reportSyncState({ accountId, folderId, syncState: "eval.done" });
+  notify.reportSyncState({ accountId, folderId, syncState: "eval.done" });
 
   const pushSummary = readOnly
     ? "push skipped (read-only)"
@@ -142,8 +144,8 @@ export async function syncFolderContacts({ accountId, providerAccountId, folderI
  * never needed pushing, NOT_FOUND on delete → already gone) are removed.
  * Entries that fail for transient reasons are re-queued.
  */
-async function runPushPass({ accountId, folderId, providerAccountId, log = () => {} }) {
-  tbsync.reportSyncState({ accountId, folderId, syncState: "push.updates" });
+async function runPushPass({ accountId, folderId, providerAccountId, notify, log = () => {} }) {
+  notify.reportSyncState({ accountId, folderId, syncState: "push.updates" });
 
   const rawEntries = await changelog.listForAccount(providerAccountId);
   const entries = changelog.consolidate(rawEntries);
@@ -155,7 +157,7 @@ async function runPushPass({ accountId, folderId, providerAccountId, log = () =>
   const total = entries.length;
   let done = 0;
   if (total > 0) {
-    tbsync.reportProgress({ accountId, folderId, itemsDone: 0, itemsTotal: total });
+    notify.reportProgress({ accountId, folderId, itemsDone: 0, itemsTotal: total });
   }
 
   for (const entry of entries) {
@@ -183,7 +185,7 @@ async function runPushPass({ accountId, folderId, providerAccountId, log = () =>
       unresolved.push(entry);
     }
     done++;
-    tbsync.reportProgress({ accountId, folderId, itemsDone: done, itemsTotal: total });
+    notify.reportProgress({ accountId, folderId, itemsDone: done, itemsTotal: total });
   }
 
   await changelog.setForAccount(providerAccountId, unresolved);

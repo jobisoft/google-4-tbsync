@@ -3,7 +3,7 @@
  * migration paths have a single seam to patch.
  *
  * **MIRRORED INTO EVERY PROVIDER ADD-ON** — see the header of
- * `shared/protocol.mjs` for the sync rule.
+ * `./protocol.mjs` for the sync rule.
  */
 
 export function uuid() {

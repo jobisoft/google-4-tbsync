@@ -3,7 +3,7 @@
  * providers must use when responding to syncAccount/syncFolder RPCs.
  *
  * **MIRRORED INTO EVERY PROVIDER ADD-ON** — see the header of
- * `shared/protocol.mjs` for the sync rule.
+ * `./protocol.mjs` for the sync rule.
  */
 
 export const ACCOUNT_STATUS = {

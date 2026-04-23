@@ -5,11 +5,11 @@
  * version numbers.
  *
  * **THIS FILE IS MIRRORED INTO EVERY PROVIDER ADD-ON.** The copy in
- * `tbsync-new/shared/protocol.mjs` is authoritative; the copies shipped by
- * providers (e.g. `google-4-tbsync/shared/protocol.mjs`) MUST match it
- * byte-for-byte. When you change this file, re-copy it to every provider
+ * `tbsync-new/tbsync/protocol.mjs` is authoritative; the copies shipped by
+ * providers (e.g. `google-4-tbsync/vendor/tbsync/protocol.mjs`) MUST match
+ * it byte-for-byte. When you change this file, re-copy it to every provider
  * and confirm with:
- *     diff -q tbsync-new/shared/protocol.mjs google-4-tbsync/shared/protocol.mjs
+ *     diff -q tbsync-new/tbsync/protocol.mjs google-4-tbsync/vendor/tbsync/protocol.mjs
  */
 
 export const PROTOCOL_VERSION = "1.0";
