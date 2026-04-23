@@ -29,7 +29,6 @@ import {
   PORT_NAME, PROTOCOL_VERSION,
   PROVIDER_CMD, PROVIDER_NOTIFY, withCode,
 } from "./protocol.mjs";
-import { requestId as genRequestId, setupToken as genSetupToken } from "./ids.mjs";
 
 /**
  * Extension id of the TbSync host — the other end of the port. Exported so
@@ -38,6 +37,7 @@ import { requestId as genRequestId, setupToken as genSetupToken } from "./ids.mj
  * from the same place it gets the base class.
  */
 export const TBSYNC_ID = "tbsync@jobisoft.de";
+
 
 const DEFAULT_SETUP_WIDTH = 520;
 const DEFAULT_SETUP_HEIGHT = 640;
@@ -61,6 +61,7 @@ export class TbSyncProviderImplementation {
   #announceInFlight = false;
 
   #name;
+  #shortName;
   #icons;
   #capabilities;
   #defaultAccountEntries;
@@ -78,6 +79,10 @@ export class TbSyncProviderImplementation {
   constructor(options = {}) {
     const manifest = browser.runtime.getManifest();
     this.#name = options.name ?? manifest.name;
+    // Short provider id, used as the prefix for outbound RPC-correlation
+    // tokens so log lines from different providers are telleable apart.
+    // Falls back to the extension id if the subclass doesn't set one.
+    this.#shortName = options.shortName ?? browser.runtime.id;
     this.#icons = options.icons ?? manifest.icons ?? {};
     this.#capabilities = options.capabilities ?? {};
     this.#defaultAccountEntries = options.defaultAccountEntries ?? {};
@@ -206,7 +211,10 @@ export class TbSyncProviderImplementation {
    */
   async onOpenSetupPopup(args) {
     if (!this.#setupPath) throw this.#notImplemented("onOpenSetupPopup (no setupPath)");
-    const setupToken = args.setupToken ?? genSetupToken();
+    const { setupToken } = args;
+    if (!setupToken) {
+      throw withCode(new Error("openSetupPopup: args.setupToken is required"), ERR.UNKNOWN_COMMAND);
+    }
     const url = new URL(browser.runtime.getURL(this.#setupPath));
     url.searchParams.set("setupToken", setupToken);
     if (args.locale) url.searchParams.set("locale", args.locale);
@@ -383,7 +391,10 @@ export class TbSyncProviderImplementation {
     if (!this.#port) {
       return Promise.reject(withCode(new Error("host not connected"), ERR.PORT_CLOSED));
     }
-    const requestId = genRequestId();
+    // Opaque RPC-correlation token; the host just echoes it back on the
+    // response. Prefixing with the provider's shortName keeps log lines
+    // distinguishable when multiple providers are running.
+    const requestId = `${this.#shortName}-request-${crypto.randomUUID()}`;
     const activePort = this.#port;
     return new Promise((resolve, reject) => {
       const entry = { resolve, reject, timer: null };

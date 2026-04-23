@@ -26,34 +26,33 @@ scaffold. Provider code imports from here; nothing here imports from
 
 ## tbsync/
 
-Reusable base class for TbSync provider add-ons, plus the three
-wire-protocol modules the base class and its consumers depend on.
-Modelled on webext-support's VfsProviderImplementation:
+Reusable base class for TbSync provider add-ons, plus the two wire-protocol
+modules the base class and its consumers depend on. Modelled on
+webext-support's VfsProviderImplementation:
 [/home/john/Documents/GitHub/webext-support/modules/vfs-toolkit/vfs-provider/vfs-provider.mjs](/home/john/Documents/GitHub/webext-support/modules/vfs-toolkit/vfs-provider/vfs-provider.mjs).
 
 Contents:
 
 | File | Role |
 |---|---|
-| [tbsync/provider.mjs](./tbsync/provider.mjs) | `TbSyncProviderImplementation` — owns the port, handshake, RPC dispatch, setup/config popup machinery. Provider subclasses override `on*` virtual hooks. |
-| [tbsync/protocol.mjs](./tbsync/protocol.mjs) | Wire-protocol constants: port name, command/notification enums, error codes. **Mirror-synced with the host's copy** — see file header. |
-| [tbsync/status.mjs](./tbsync/status.mjs) | `ACCOUNT_STATUS` / `FOLDER_STATUS` / `STATUS_TYPES` enums plus `ok()`/`warning()`/`error()` builders for RPC return values. Mirror-synced. |
-| [tbsync/ids.mjs](./tbsync/ids.mjs) | UUID / request-id / setup-token / folder-id generators. Mirror-synced. |
+| [tbsync/provider.mjs](./tbsync/provider.mjs) | `TbSyncProviderImplementation` — owns the port, handshake, RPC dispatch, setup/config popup machinery. Provider subclasses override `on*` virtual hooks. Also exports `TBSYNC_ID`. |
+| [tbsync/protocol.mjs](./tbsync/protocol.mjs) | Wire-protocol constants: port name, command/notification enums, error codes, `withCode` helper. **Mirror-synced with the host's copy** — see file header. |
+| [tbsync/status.mjs](./tbsync/status.mjs) | `STATUS_TYPES` enum plus `ok()`/`warning()`/`error()` builders for RPC return values. **Mirror-synced** — same contract as `protocol.mjs`. (`ACCOUNT_STATUS` / `FOLDER_STATUS` are host-only UI values and stay on the host side.) |
 
 ### Mirror-sync contract
 
-The three non-`provider.mjs` files are byte-identical to their
-counterparts in [../../tbsync-new/shared/](../../tbsync-new/shared/).
-Changes originate in the host copy; re-copy into this directory and
-verify with:
+The two non-`provider.mjs` files are byte-identical to their counterparts
+in [../../tbsync-new/tbsync/](../../tbsync-new/tbsync/). Changes originate
+in the host copy; re-copy into this directory and verify with:
 
 ```
-diff -q ../../tbsync-new/shared/protocol.mjs ./tbsync/protocol.mjs
-diff -q ../../tbsync-new/shared/status.mjs   ./tbsync/status.mjs
-diff -q ../../tbsync-new/shared/ids.mjs      ./tbsync/ids.mjs
+diff -q ../../tbsync-new/tbsync/protocol.mjs ./tbsync/protocol.mjs
+diff -q ../../tbsync-new/tbsync/status.mjs   ./tbsync/status.mjs
 ```
 
-`provider.mjs` is provider-side only — no mirrored host counterpart.
+`provider.mjs` is provider-side only — no mirrored host counterpart. RPC
+correlation tokens (request ids, setup tokens) are generated inside
+`provider.mjs` and are opaque to both the subclass and the host.
 
 ### Future extraction
 

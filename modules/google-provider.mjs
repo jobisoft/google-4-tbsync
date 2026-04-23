@@ -14,7 +14,6 @@
 
 import { ERR, withCode } from "../vendor/tbsync/protocol.mjs";
 import { error, ok } from "../vendor/tbsync/status.mjs";
-import { folderId as genFolderId, uuid } from "../vendor/tbsync/ids.mjs";
 import { TbSyncProviderImplementation } from "../vendor/tbsync/provider.mjs";
 import * as accounts from "./accounts.mjs";
 import * as folders from "./folders.mjs";
@@ -28,6 +27,7 @@ export class GoogleProvider extends TbSyncProviderImplementation {
   constructor() {
     super({
       name: "Google Contacts",
+      shortName: "google4tbsync",
       setupPath: "dialogs/setup/setup.html",
       setupWidth: 520,
       setupHeight: 640,
@@ -341,7 +341,7 @@ export class GoogleProvider extends TbSyncProviderImplementation {
     if (!trimmedLabel) {
       throw withCode(new Error("Account name is required"), ERR.UNKNOWN_ACCOUNT);
     }
-    const providerAccountId = `g-${uuid()}`;
+    const providerAccountId = `g-${crypto.randomUUID()}`;
     const accountName = trimmedLabel;
 
     await accounts.upsert({
@@ -449,7 +449,7 @@ function stripSensitive(record) {
 async function seedContactsFolder(providerAccountId, accountName, authenticatedUserEmail) {
   const email = authenticatedUserEmail?.trim() || null;
   const folder = {
-    folderId: genFolderId(),
+    folderId: `f-${crypto.randomUUID()}`,
     folderType: "contacts",
     displayName: email ?? accountName,
     UID: "1",
