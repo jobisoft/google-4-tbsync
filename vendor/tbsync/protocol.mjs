@@ -91,9 +91,11 @@ export function withCode(err, code, details = null) {
 /** Default timeout for host→provider RPCs in milliseconds. */
 export const DEFAULT_RPC_TIMEOUT_MS = 30_000;
 
-/** Long-running RPCs (sync) that should not be timed out. */
+/** Long-running RPCs (sync, popups) that should not be timed out. */
 export const NO_TIMEOUT_CMDS = new Set([
   HOST_CMD.SYNC_ACCOUNT,
   HOST_CMD.SYNC_FOLDER,
   HOST_CMD.OPEN_SETUP_POPUP,
+  HOST_CMD.OPEN_CONFIG_POPUP,
+  HOST_CMD.REAUTHENTICATE,
 ]);

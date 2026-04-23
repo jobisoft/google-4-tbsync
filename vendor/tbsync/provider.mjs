@@ -229,7 +229,7 @@ export class TbSyncProviderImplementation {
   async onRegisterSuccessful({ accountEntries }) { return accountEntries ?? {}; }
 
   /** Open the config popup with `accountId`, optional `providerAccountId`,
-   *  `readOnly`, and `mode` URL params. Fire-and-forget. */
+   *  `readOnly`, and `mode` URL params. Resolves when the popup closes. */
   async onOpenConfigPopup(args) {
     if (!this.#configPath) throw this.#notImplemented("onOpenConfigPopup (no configPath)");
     const providerAccountId = await this.onResolveProviderAccountId(args.accountId);
@@ -238,12 +238,13 @@ export class TbSyncProviderImplementation {
     if (providerAccountId) url.searchParams.set("providerAccountId", providerAccountId);
     if (args.readOnly) url.searchParams.set("readOnly", "1");
     if (args.mode) url.searchParams.set("mode", args.mode);
-    await browser.windows.create({
+    const win = await browser.windows.create({
       url: url.toString(),
       type: "popup",
       width: this.#configWidth,
       height: this.#configHeight,
     });
+    await waitForWindowClose(win.id);
     return null;
   }
 
@@ -493,4 +494,16 @@ export class TbSyncProviderImplementation {
       ERR.UNKNOWN_COMMAND
     );
   }
+}
+
+/** Resolve when `windows.onRemoved` fires for `windowId`. */
+function waitForWindowClose(windowId) {
+  return new Promise(resolve => {
+    const listener = closedId => {
+      if (closedId !== windowId) return;
+      browser.windows.onRemoved.removeListener(listener);
+      resolve();
+    };
+    browser.windows.onRemoved.addListener(listener);
+  });
 }
