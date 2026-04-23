@@ -9,6 +9,7 @@ export const KEYS = {
   ACCOUNTS: "google.accounts",
   FOLDERS: "google.folders",
   CHANGELOG: "google.changelog",
+  GROUP_MAP: "google.groupMap",
   ACCOUNT_ID_MAP: "google.accountIdMap",
   SETTINGS: "google.settings",
 };

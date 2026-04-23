@@ -2,10 +2,17 @@ import { KEYS } from "./storage-keys.mjs";
 
 /**
  * Per-account changelog of pending local mutations. Entry shape:
- *   { parentId, itemId, timestamp, status, resourceName? }
- * `resourceName` is captured at event time so `deleted_by_user` entries
- * survive after the local card is gone.
+ *   { kind, parentId, itemId, timestamp, status, resourceName? }
+ * `kind` is "contact" or "group"; entries without it default to "contact"
+ * so pre-M3c changelogs upgrade transparently. `resourceName` is captured
+ * at event time so `deleted_by_user` entries survive after the local
+ * object is gone.
  */
+
+export const KIND = {
+  CONTACT: "contact",
+  GROUP: "group",
+};
 
 export const STATUS = {
   ADDED_BY_USER: "added_by_user",
@@ -15,6 +22,10 @@ export const STATUS = {
   MODIFIED_BY_SERVER: "modified_by_server",
   DELETED_BY_SERVER: "deleted_by_server",
 };
+
+function kindOf(entry) {
+  return entry?.kind ?? KIND.CONTACT;
+}
 
 async function read() {
   const rv = await browser.storage.local.get({ [KEYS.CHANGELOG]: {} });
@@ -52,24 +63,25 @@ export async function clearAccount(providerAccountId) {
 }
 
 /**
- * Collapse entries to at most one per `itemId`:
+ * Collapse entries to at most one per `(kind, itemId)`:
  *   - add + delete (any order) → drop
  *   - any delete  → single delete (carry the earliest resourceName forward)
- *   - any add     → single add (latest card state is pushed)
+ *   - any add     → single add (latest state is pushed)
  *   - modify only → single modify (latest timestamp wins)
  */
 export function consolidate(entries) {
   if (!Array.isArray(entries) || entries.length === 0) return [];
 
-  const byItem = new Map();
+  const byKey = new Map();
   for (const entry of entries) {
     if (!entry?.itemId) continue;
-    if (!byItem.has(entry.itemId)) byItem.set(entry.itemId, []);
-    byItem.get(entry.itemId).push(entry);
+    const key = `${kindOf(entry)}:${entry.itemId}`;
+    if (!byKey.has(key)) byKey.set(key, []);
+    byKey.get(key).push(entry);
   }
 
   const out = [];
-  for (const list of byItem.values()) {
+  for (const list of byKey.values()) {
     list.sort((a, b) => (a.timestamp ?? 0) - (b.timestamp ?? 0));
     const hasAdd = list.some(e => e.status === STATUS.ADDED_BY_USER);
     const hasDelete = list.some(e => e.status === STATUS.DELETED_BY_USER);

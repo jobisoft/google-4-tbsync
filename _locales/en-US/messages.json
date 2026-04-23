@@ -44,6 +44,9 @@
   "config.readOnlyMode": {
     "message": "Read-only (do not push local changes to Google)"
   },
+  "config.includeSystemContactGroups": {
+    "message": "Include system groups (Starred, Most Contacted, …)"
+  },
   "config.verboseLogging": {
     "message": "Verbose logging"
   },

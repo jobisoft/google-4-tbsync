@@ -1,19 +1,26 @@
 import * as changelog from "./changelog.mjs";
 import * as mapper from "./google/contact-mapper.mjs";
 import * as addressBook from "./address-book.mjs";
+import * as groupMap from "./group-map.mjs";
 
 /**
- * Record user-initiated contact changes into the provider's changelog.
+ * Record user-initiated contact and mailing-list changes into the changelog.
  *
  * Only watches books the provider owns (tracked via register/unregister).
  * `suppressDuringSelfWrite` mutes the watcher during server→local writes
  * so our own events don't echo back; concurrent user edits during a sync
  * are also dropped (next pull reconciles).
  *
- * Delete events don't carry a vCard, so we keep an in-memory
- * `contactId → resourceName` cache populated on create/update / at
- * registerTarget time, and stamp it onto `deleted_by_user` changelog
- * entries so the push pass knows which server record to remove.
+ * Identity for deleted items:
+ *   - Contacts: delete events carry no vCard, so we keep an in-memory
+ *     `contactId → resourceName` cache populated at register time and on
+ *     every create/update.
+ *   - Mailing lists: we look up `resourceName` via the group-map at event
+ *     time. If the map entry is gone (e.g. list never synced), the delete
+ *     changelog entry carries `resourceName: null` and the push pass drops it.
+ *
+ * Membership changes (onMemberAdded / onMemberRemoved) are intentionally
+ * not tracked: memberships are server→local only.
  */
 
 const registeredBooks = new Map();   // targetAbId → providerAccountId
@@ -56,15 +63,16 @@ export function rememberIdentity(contactId, resourceName) {
 }
 
 export function init() {
-  messenger.contacts.onCreated.addListener(node => {
-    onContactEvent("added", node);
-  });
-  messenger.contacts.onUpdated.addListener(node => {
-    onContactEvent("modified", node);
-  });
-  messenger.contacts.onDeleted.addListener((parentId, id) => {
-    onContactEvent("deleted", { parentId, id, vCard: null });
-  });
+  messenger.contacts.onCreated.addListener(node => onContactEvent("added", node));
+  messenger.contacts.onUpdated.addListener(node => onContactEvent("modified", node));
+  messenger.contacts.onDeleted.addListener((parentId, id) =>
+    onContactEvent("deleted", { parentId, id, vCard: null })
+  );
+  messenger.mailingLists.onCreated.addListener(node => onMailingListEvent("added", node));
+  messenger.mailingLists.onUpdated.addListener(node => onMailingListEvent("modified", node));
+  messenger.mailingLists.onDeleted.addListener((parentId, id) =>
+    onMailingListEvent("deleted", { parentId, id })
+  );
 }
 
 function onContactEvent(op, node) {
@@ -90,6 +98,7 @@ function onContactEvent(op, node) {
     changelog.STATUS.DELETED_BY_USER;
 
   changelog.append(providerAccountId, {
+    kind: changelog.KIND.CONTACT,
     parentId: node.parentId,
     itemId: node.id,
     status,
@@ -97,4 +106,35 @@ function onContactEvent(op, node) {
   }).catch(err =>
     console.warn("[google-4-tbsync] changelog append failed:", err?.message ?? err)
   );
+}
+
+function onMailingListEvent(op, node) {
+  const providerAccountId = registeredBooks.get(node.parentId);
+  if (!providerAccountId) return;
+  if (selfWriteDepth > 0) return;
+
+  const status =
+    op === "added" ? changelog.STATUS.ADDED_BY_USER :
+    op === "modified" ? changelog.STATUS.MODIFIED_BY_USER :
+    changelog.STATUS.DELETED_BY_USER;
+
+  resolveGroupIdentity(providerAccountId, node.id, op).then(resourceName =>
+    changelog.append(providerAccountId, {
+      kind: changelog.KIND.GROUP,
+      parentId: node.parentId,
+      itemId: node.id,
+      status,
+      resourceName,
+    })
+  ).catch(err =>
+    console.warn("[google-4-tbsync] changelog append failed:", err?.message ?? err)
+  );
+}
+
+async function resolveGroupIdentity(providerAccountId, mailingListId, op) {
+  const entry = await groupMap.getByListId(providerAccountId, mailingListId);
+  if (op === "deleted" && entry) {
+    await groupMap.remove(providerAccountId, entry.resourceName);
+  }
+  return entry?.resourceName ?? null;
 }

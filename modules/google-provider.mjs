@@ -15,6 +15,7 @@ import * as accounts from "./accounts.mjs";
 import * as folders from "./folders.mjs";
 import * as changelog from "./changelog.mjs";
 import * as changelogWatcher from "./changelog-watcher.mjs";
+import * as groupMap from "./group-map.mjs";
 import * as oauth from "./google/oauth.mjs";
 import * as addressBook from "./address-book.mjs";
 import { syncFolderContacts } from "./google/sync-contacts.mjs";
@@ -147,6 +148,7 @@ export class GoogleProvider extends TbSyncProviderImplementation {
     await this.#deleteAccountTargets(providerAccountId);
     await folders.clearAccount(providerAccountId);
     await changelog.clearAccount(providerAccountId);
+    await groupMap.clearAccount(providerAccountId);
     return null;
   }
 
@@ -161,6 +163,7 @@ export class GoogleProvider extends TbSyncProviderImplementation {
     }
     await folders.clearAccount(providerAccountId);
     await changelog.clearAccount(providerAccountId);
+    await groupMap.clearAccount(providerAccountId);
     await accounts.remove(providerAccountId);
     await accounts.clearMapping(providerAccountId);
     return null;
@@ -206,6 +209,7 @@ export class GoogleProvider extends TbSyncProviderImplementation {
     // account — the resourceNames they reference no longer correspond to
     // anything local. Clear so a re-enable starts from a clean slate.
     await changelog.clearAccount(providerAccountId);
+    await groupMap.clearAccount(providerAccountId);
     await folders.upsert(providerAccountId, {
       folderId: folder.folderId,
       targetAbId: null,
@@ -359,6 +363,7 @@ export class GoogleProvider extends TbSyncProviderImplementation {
       authenticatedUserEmail: acc.authenticatedUserEmail ?? null,
       clientID: acc.clientID ?? "",
       readOnlyMode: !!acc.readOnlyMode,
+      includeSystemContactGroups: !!acc.includeSystemContactGroups,
       verboseLogging: !!acc.verboseLogging,
     };
   }
@@ -369,7 +374,7 @@ export class GoogleProvider extends TbSyncProviderImplementation {
     const providerAccountId = await accounts.getProviderAccountIdByTbsyncAccountId(accountId);
     if (!providerAccountId) throw withCode(new Error("Unknown account"), ERR.UNKNOWN_ACCOUNT);
 
-    const allowed = ["accountName", "readOnlyMode", "verboseLogging"];
+    const allowed = ["accountName", "readOnlyMode", "includeSystemContactGroups", "verboseLogging"];
     const clean = {};
     for (const key of allowed) if (key in patch) clean[key] = patch[key];
     if (clean.accountName != null) {

@@ -91,6 +91,87 @@ export async function deleteContact(contactId) {
   }
 }
 
+// ── Mailing-list-level ────────────────────────────────────────────────────
+
+/** List all mailing lists in a book. */
+export async function listMailingLists(bookId) {
+  if (!bookId) return [];
+  try {
+    return await messenger.mailingLists.list(bookId);
+  } catch (err) {
+    if (isNotFoundError(err)) return [];
+    throw err;
+  }
+}
+
+/** Fetch a mailing list by id; null on "not found". */
+export async function getMailingList(id) {
+  if (!id) return null;
+  try {
+    return await messenger.mailingLists.get(id);
+  } catch (err) {
+    if (isNotFoundError(err)) return null;
+    throw err;
+  }
+}
+
+/** Create a mailing list. Returns the new id. */
+export async function createMailingList(bookId, { name }) {
+  if (!bookId) throw new Error("createMailingList requires a bookId");
+  if (!name) throw new Error("createMailingList requires a name");
+  return await messenger.mailingLists.create(bookId, { name });
+}
+
+/** Rename / update a mailing list. */
+export async function updateMailingList(id, { name }) {
+  if (!id) throw new Error("updateMailingList requires an id");
+  await messenger.mailingLists.update(id, { name });
+}
+
+/** Delete a mailing list, tolerating "not found". */
+export async function deleteMailingList(id) {
+  if (!id) return;
+  try {
+    await messenger.mailingLists.delete(id);
+  } catch (err) {
+    if (isNotFoundError(err)) return;
+    throw err;
+  }
+}
+
+/** List the contacts in a mailing list, tolerating "not found". */
+export async function listMailingListMembers(listId) {
+  if (!listId) return [];
+  try {
+    return await messenger.mailingLists.listMembers(listId);
+  } catch (err) {
+    if (isNotFoundError(err)) return [];
+    throw err;
+  }
+}
+
+/** Add a contact to a mailing list, tolerating "not found". */
+export async function addMailingListMember(listId, contactId) {
+  if (!listId || !contactId) return;
+  try {
+    await messenger.mailingLists.addMember(listId, contactId);
+  } catch (err) {
+    if (isNotFoundError(err)) return;
+    throw err;
+  }
+}
+
+/** Remove a contact from a mailing list, tolerating "not found". */
+export async function removeMailingListMember(listId, contactId) {
+  if (!listId || !contactId) return;
+  try {
+    await messenger.mailingLists.removeMember(listId, contactId);
+  } catch (err) {
+    if (isNotFoundError(err)) return;
+    throw err;
+  }
+}
+
 /** Match TB's "unknown id" errors — wording varies across versions. */
 function isNotFoundError(err) {
   const msg = String(err?.message ?? err ?? "");

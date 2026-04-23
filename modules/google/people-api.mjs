@@ -30,8 +30,7 @@ const PULL_FIELDS = [
   "memberships",
 ].join(",");
 
-// Push mask excludes `memberships` — sending the mask would wipe
-// server-side group assignments and groups aren't supported yet.
+// Push mask excludes `memberships` — memberships are server→local only.
 const PUSH_FIELDS = [
   "names",
   "nicknames",
@@ -45,6 +44,12 @@ const PUSH_FIELDS = [
   "imClients",
   "biographies",
 ].join(",");
+
+// Group members are NOT derived from here — they come from each Person's
+// `memberships` field on the connections list. `memberResourceNames` isn't
+// a valid groupFields value anyway (only batchGet returns it).
+const GROUP_PULL_FIELDS = "name,groupType";
+const GROUP_PUSH_FIELDS = "name";
 
 const PAGE_SIZE = 1000;
 
@@ -102,6 +107,55 @@ export async function updateContact(providerAccountId, resourceName, person, eta
  */
 export async function deleteContact(providerAccountId, resourceName) {
   const url = `${BASE}/${resourceName}:deleteContact`;
+  await fetchWithAuthRetry(providerAccountId, url, { method: "DELETE" });
+}
+
+// ── Contact groups ────────────────────────────────────────────────────────
+
+/** Fetch all contact groups, following pagination. */
+export async function listAllContactGroups(providerAccountId) {
+  const all = [];
+  let pageToken = null;
+  while (true) {
+    const params = new URLSearchParams({
+      groupFields: GROUP_PULL_FIELDS,
+      pageSize: String(PAGE_SIZE),
+    });
+    if (pageToken) params.set("pageToken", pageToken);
+    const data = await fetchWithAuthRetry(providerAccountId, `${BASE}/contactGroups?${params}`);
+    if (Array.isArray(data.contactGroups)) all.push(...data.contactGroups);
+    if (!data.nextPageToken) break;
+    pageToken = data.nextPageToken;
+  }
+  return all;
+}
+
+/** Create a user contact group. Returns the stored group with `resourceName` + `etag`. */
+export async function createContactGroup(providerAccountId, { name }) {
+  const params = new URLSearchParams({ readGroupFields: GROUP_PULL_FIELDS });
+  const url = `${BASE}/contactGroups?${params}`;
+  return await fetchWithAuthRetry(providerAccountId, url, {
+    method: "POST",
+    body: JSON.stringify({ contactGroup: { name } }),
+  });
+}
+
+/** Rename a user contact group. Etag required for optimistic locking. */
+export async function updateContactGroup(providerAccountId, resourceName, { name, etag }) {
+  const url = `${BASE}/${resourceName}`;
+  return await fetchWithAuthRetry(providerAccountId, url, {
+    method: "PUT",
+    body: JSON.stringify({
+      contactGroup: { etag, name },
+      updateGroupFields: GROUP_PUSH_FIELDS,
+      readGroupFields: GROUP_PULL_FIELDS,
+    }),
+  });
+}
+
+/** Delete a user contact group. 404 → PUSH_ERR.NOT_FOUND. */
+export async function deleteContactGroup(providerAccountId, resourceName) {
+  const url = `${BASE}/${resourceName}`;
   await fetchWithAuthRetry(providerAccountId, url, { method: "DELETE" });
 }
 

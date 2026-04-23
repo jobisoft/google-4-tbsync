@@ -52,6 +52,7 @@ async function load() {
   document.getElementById("email").textContent = account.authenticatedUserEmail ?? "—";
   document.getElementById("client-id").textContent = account.clientID ?? "—";
   document.getElementById("read-only-mode").checked = !!account.readOnlyMode;
+  document.getElementById("include-system-groups").checked = !!account.includeSystemContactGroups;
   document.getElementById("verbose-logging").checked = !!account.verboseLogging;
 
   applyReadOnly();
@@ -66,7 +67,7 @@ function applyReadOnly() {
   } else {
     banner.classList.remove("visible");
   }
-  for (const id of ["account-name", "read-only-mode", "verbose-logging"]) {
+  for (const id of ["account-name", "read-only-mode", "include-system-groups", "verbose-logging"]) {
     document.getElementById(id).disabled = readOnly;
   }
   document.getElementById("btn-save").hidden = readOnly;
@@ -84,6 +85,7 @@ async function onSave() {
   const patch = {
     accountName: document.getElementById("account-name").value.trim(),
     readOnlyMode: document.getElementById("read-only-mode").checked,
+    includeSystemContactGroups: document.getElementById("include-system-groups").checked,
     verboseLogging: document.getElementById("verbose-logging").checked,
   };
   if (!patch.accountName) {
