@@ -18,7 +18,7 @@
  * account record by accounts.mjs.
  */
 
-import { ERR, withCode } from "../../vendor/tbsync/protocol.mjs";
+import { ERR, withCode } from "../../vendor/tbsync/provider.mjs";
 import * as accounts from "../accounts.mjs";
 
 const AUTH_ENDPOINT = "https://accounts.google.com/o/oauth2/v2/auth";

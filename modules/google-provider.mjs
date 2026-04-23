@@ -12,9 +12,10 @@
  * setup.html / config.html rather than host RPCs.
  */
 
-import { ERR, withCode } from "../vendor/tbsync/protocol.mjs";
-import { error, ok } from "../vendor/tbsync/status.mjs";
-import { TbSyncProviderImplementation } from "../vendor/tbsync/provider.mjs";
+import {
+  ERR, withCode, error, ok,
+  TbSyncProviderImplementation,
+} from "../vendor/tbsync/provider.mjs";
 import * as accounts from "./accounts.mjs";
 import * as folders from "./folders.mjs";
 import * as changelog from "./changelog.mjs";

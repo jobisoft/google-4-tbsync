@@ -16,7 +16,7 @@
  *       ERR.CONFLICT for the push pass's etag-mismatch handling.
  */
 
-import { ERR, withCode } from "../../vendor/tbsync/protocol.mjs";
+import { ERR, withCode } from "../../vendor/tbsync/provider.mjs";
 import * as oauth from "./oauth.mjs";
 
 const BASE = "https://people.googleapis.com/v1";

@@ -36,7 +36,7 @@
  * too slow we can batch later.
  */
 
-import { ok, warning } from "../../vendor/tbsync/status.mjs";
+import { ok, warning } from "../../vendor/tbsync/provider.mjs";
 import * as peopleApi from "./people-api.mjs";
 import { PUSH_ERR } from "./people-api.mjs";
 import * as mapper from "./contact-mapper.mjs";

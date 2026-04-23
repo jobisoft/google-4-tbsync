@@ -30,6 +30,22 @@ import {
   PROVIDER_CMD, PROVIDER_NOTIFY, withCode,
 } from "./protocol.mjs";
 
+// ── Public re-exports ────────────────────────────────────────────────────
+//
+// Subclass code (the provider's own modules) imports everything it needs
+// from this single file — never directly from protocol.mjs or status.mjs.
+// Those stay as mirror-synced contract files; consumers see one vendor
+// surface. Keep this list narrow: only symbols a subclass legitimately
+// needs.
+//
+//   ERR            error codes for `throw withCode(new Error(...), ERR.X)`
+//   withCode       helper that stamps err.code / err.details
+//   ok / warning / error   StatusData envelope builders for on* return values
+//   accountRerun / folderRerun   rerun-directive builders (M3+)
+
+export { ERR, withCode } from "./protocol.mjs";
+export { ok, warning, error, accountRerun, folderRerun } from "./status.mjs";
+
 /**
  * Extension id of the TbSync host — the other end of the port. Exported so
  * provider-side code that needs to address the host directly (e.g. for
