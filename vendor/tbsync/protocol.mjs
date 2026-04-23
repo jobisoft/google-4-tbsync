@@ -97,28 +97,3 @@ export const NO_TIMEOUT_CMDS = new Set([
   HOST_CMD.SYNC_FOLDER,
   HOST_CMD.OPEN_SETUP_POPUP,
 ]);
-
-/** Helper: is this a valid folder type? */
-export function isKnownFolderType(type) {
-  return type === "contacts" || type === "calendars" || type === "tasks";
-}
-
-/** Helper: build an RPC request envelope. */
-export function buildRequest(requestId, cmd, args = {}) {
-  return { requestId, cmd, args };
-}
-
-/** Helper: build a successful RPC response envelope. */
-export function buildOk(requestId, result = null) {
-  return { requestId, ok: true, result };
-}
-
-/** Helper: build an error RPC response envelope. */
-export function buildErr(requestId, error, errorCode = ERR.UNKNOWN_COMMAND, details = null) {
-  return { requestId, ok: false, error, errorCode, errorDetails: details };
-}
-
-/** Helper: build a notification envelope. */
-export function buildNotification(type, payload = {}) {
-  return { type, payload };
-}

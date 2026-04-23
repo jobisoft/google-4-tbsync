@@ -1,15 +1,10 @@
 import { KEYS } from "./storage-keys.mjs";
 
 /**
- * Per-account changelog of pending local mutations to push to Google. Entry
- * shape mirrors the legacy TbSync changelog plus a `resourceName` snapshot
- * (captured at event time so `deleted_by_user` entries survive after the
- * local card is gone):
- *
+ * Per-account changelog of pending local mutations. Entry shape:
  *   { parentId, itemId, timestamp, status, resourceName? }
- *
- * `status` values: see `STATUS` below. `_by_server` variants stay in the
- * enum for M3c's group-membership tracking but are not produced in M3b.
+ * `resourceName` is captured at event time so `deleted_by_user` entries
+ * survive after the local card is gone.
  */
 
 export const STATUS = {
@@ -57,14 +52,11 @@ export async function clearAccount(providerAccountId) {
 }
 
 /**
- * Collapse a changelog entry list to at most one entry per `itemId`, applying
- * the standard dedup rules:
- *   - add + delete (any order) → drop (item never reached the server)
- *   - any delete           → single delete (carry forward any known resourceName)
- *   - any add (no delete)  → single add (current card state will be pushed)
- *   - modify only          → single modify (latest timestamp wins)
- *
- * Pure function; does not touch storage.
+ * Collapse entries to at most one per `itemId`:
+ *   - add + delete (any order) → drop
+ *   - any delete  → single delete (carry the earliest resourceName forward)
+ *   - any add     → single add (latest card state is pushed)
+ *   - modify only → single modify (latest timestamp wins)
  */
 export function consolidate(entries) {
   if (!Array.isArray(entries) || entries.length === 0) return [];
@@ -85,9 +77,6 @@ export function consolidate(entries) {
     if (hasAdd && hasDelete) continue;
 
     if (hasDelete) {
-      // Keep the most recent delete; carry forward the earliest recorded
-      // resourceName so deletions of items that were synced pre-install still
-      // have something to DELETE against.
       const latestDelete = [...list].reverse().find(e => e.status === STATUS.DELETED_BY_USER);
       const resourceName = list.find(e => e.resourceName)?.resourceName ?? latestDelete.resourceName ?? null;
       out.push({ ...latestDelete, resourceName });

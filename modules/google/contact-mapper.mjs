@@ -1,20 +1,13 @@
 /**
  * Translate Google People API `Person` resources ↔ vCard 4.0 strings.
  *
- * `personToVCard` and `vCardToPerson` handle the server↔local direction.
- * `readIdentity` and `stampIdentity` read/write the two bookkeeping
- * X-properties the pull+push passes use to correlate local cards with
- * server records:
+ * Local cards carry two X-properties that correlate them with server
+ * records:
+ *   X-GOOGLE-RESOURCENAME:people/c...   primary key
+ *   X-GOOGLE-ETAG:<string>               change detector
  *
- *   X-GOOGLE-RESOURCENAME:people/c...   ← primary key (matches legacy)
- *   X-GOOGLE-ETAG:<string>               ← change detector
- *
- * All vCard parsing/serialisation goes through the vendored ICAL.js library
- * (see `../../vendor/ical.min.js`), per the Thunderbird WebExtension vCard
- * guide: https://webextension-api.thunderbird.net/en/mv2/guides/vcard.html
- * Hand-rolling either direction was a dead end — TB's vCard output carries
- * details (parameter casing, line folding, value escaping, X-* preservation)
- * that the library already handles correctly.
+ * All parsing/serialisation goes through ICAL.js (Thunderbird's own vCard
+ * library, per https://webextension-api.thunderbird.net/en/mv2/guides/vcard.html).
  */
 
 import ICAL from "../../vendor/ical.min.js";
@@ -44,11 +37,8 @@ export function personToVCard(person) {
   return comp.toString();
 }
 
-/**
- * Parse a vCard string back into a Google-shaped Person. X-GOOGLE-* lines
- * are ignored here — the push path has the identity separately via
- * `readIdentity`.
- */
+/** Parse a vCard string into a Google-shaped Person. X-GOOGLE-* lines
+ *  are handled separately by `readIdentity`. */
 export function vCardToPerson(vCard) {
   const comp = parseVCard(vCard);
   if (!comp) return {};
@@ -104,11 +94,8 @@ export function readIdentity(vCard) {
   };
 }
 
-/**
- * Replace (or insert) the X-GOOGLE-RESOURCENAME / X-GOOGLE-ETAG lines in an
- * existing vCard. Used after a successful push to stamp the local card with
- * the server's latest etag so the next sync's conflict check is accurate.
- */
+/** Set X-GOOGLE-RESOURCENAME / X-GOOGLE-ETAG on the vCard, replacing any
+ *  existing values. */
 export function stampIdentity(vCard, { resourceName, etag }) {
   const comp = parseVCard(vCard) ?? newVCard();
   comp.removeAllProperties(X_RESOURCENAME);
@@ -135,8 +122,7 @@ function parseVCard(vCardString) {
   }
 }
 
-/** ICAL sometimes returns a typed value object (e.g. VCardTime) for dates;
- *  coerce anything non-string to string for plain reads. */
+/** Coerce ICAL typed values (like VCardTime) to strings. */
 function stringOf(v) {
   return typeof v === "string" ? v : String(v);
 }
@@ -146,8 +132,6 @@ function stringOf(v) {
 function writeNames(comp, person) {
   const name = person.names?.[0];
   if (!name) return;
-  // N is a 5-component structured text property; FN is the free-form
-  // display form. Google's Person gives us both independently.
   const n = new ICAL.Property("n", comp);
   n.setValue([
     name.familyName ?? "",
@@ -157,8 +141,7 @@ function writeNames(comp, person) {
     name.honorificSuffix ?? "",
   ]);
   comp.addProperty(n);
-  // FN is required in vCard 4.0 — synthesize one if Google didn't give a
-  // displayName so we never emit an invalid card.
+  // FN is required in vCard 4.0; synthesise one if the Person lacks a displayName.
   const display =
     name.displayName ??
     person.emailAddresses?.[0]?.value ??
@@ -361,8 +344,7 @@ function readOrganization(comp) {
   if (!orgValue && !title) return null;
   const out = {};
   if (orgValue) {
-    // ORG in vCard 4.0 is a semicolon-separated list (unit components);
-    // Google's Person.organizations[].name is a single string.
+    // vCard ORG is a semicolon-separated unit list; Google wants a single string.
     out.name = Array.isArray(orgValue) ? orgValue.filter(Boolean).join(" ") : stringOf(orgValue);
   }
   if (title) out.title = stringOf(title);
@@ -375,8 +357,7 @@ function writeDate(comp, propName, date) {
   if (!date) return;
   const s = formatPartialDate(date);
   if (!s) return;
-  // VALUE=text handles partial dates (no year / no month) that the default
-  // date-and-or-time type won't serialise cleanly.
+  // VALUE=text handles partial dates the default type can't serialise cleanly.
   const p = new ICAL.Property(propName, comp);
   p.resetType("text");
   p.setValue(s);
@@ -392,9 +373,7 @@ function readDate(comp, propName) {
   return parsePartialDate(s);
 }
 
-/** Google Person dates have optional year/month/day; vCard 4.0 allows
- *  partial dates via `--MM-DD` / `YYYY----`. Emit with explicit placeholders
- *  so the value remains round-trippable. */
+/** Emit a vCard 4.0 partial date (`YYYY-MM-DD`, `--MM-DD`, `YYYY----`). */
 function formatPartialDate(date) {
   const y = date.year ? String(date.year).padStart(4, "0") : "--";
   const m = date.month ? String(date.month).padStart(2, "0") : "--";
@@ -422,9 +401,7 @@ function parsePartialDate(s) {
 
 // ── Parameter helpers ────────────────────────────────────────────────────
 
-/** Read a single TYPE parameter value, normalising the array form
- *  (`TYPE=home,work`) down to a single string for consumers that only care
- *  about the first. */
+/** Read a parameter's first value (flattens `TYPE=home,work`). */
 function paramValue(prop, name) {
   const v = prop.getParameter(name);
   if (Array.isArray(v)) return v[0] ?? null;

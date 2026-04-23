@@ -1,19 +1,12 @@
 /**
- * Minimal Google People API client.
+ * Google People API client. List + create/update/delete contacts.
  *
- * List + push entry points — enough for the bidirectional contacts sync in
- * M3b. Incremental sync via `syncToken` is a later milestone.
- *
- * Transparent retry semantics:
- *   - On 401 (expired/invalid access token), call oauth.invalidateAccessToken
- *     and retry the request once with a freshly-issued token.
- *   - invalid_grant on refresh (refresh token revoked) bubbles up from
- *     oauth.getAccessToken as ERR.AUTH.
- *   - Any other non-2xx response throws ERR.NETWORK, except:
- *     - 404 on updateContact / deleteContact → throws ERR.NOT_FOUND so
- *       callers can distinguish "server-side deleted" from network trouble.
- *     - 409/412 (or 400 with FAILED_PRECONDITION) on updateContact → throws
- *       ERR.CONFLICT for the push pass's etag-mismatch handling.
+ * Error mapping:
+ *   - 401 retries once with a refreshed access token; persistent 401 → ERR.AUTH.
+ *   - 404 on update/delete → PUSH_ERR.NOT_FOUND.
+ *   - 409/412 (or 400 FAILED_PRECONDITION) on update → PUSH_ERR.CONFLICT.
+ *   - Anything else non-2xx → ERR.NETWORK.
+ *   - invalid_grant on token refresh bubbles up from oauth as ERR.AUTH.
  */
 
 import { ERR, withCode } from "../../vendor/tbsync/provider.mjs";
@@ -37,10 +30,8 @@ const PULL_FIELDS = [
   "memberships",
 ].join(",");
 
-// Push field mask: same as pull minus `memberships` (group-membership
-// mutation is M3c; sending the mask here would wipe server-side group
-// assignments). Matches legacy `CONTACT_UPDATE_PERSON_FIELDS` in intent,
-// with `events` added because M2c's mapper round-trips anniversaries.
+// Push mask excludes `memberships` — sending the mask would wipe
+// server-side group assignments and groups aren't supported yet.
 const PUSH_FIELDS = [
   "names",
   "nicknames",
@@ -57,11 +48,7 @@ const PUSH_FIELDS = [
 
 const PAGE_SIZE = 1000;
 
-/**
- * Fetch every Person resource the authenticated user can see via
- * `people.connections.list`, following `nextPageToken` until exhaustion.
- * Returns a flat array.
- */
+/** Fetch all of the user's contacts, following pagination. */
 export async function listAllConnections(providerAccountId) {
   const all = [];
   let pageToken = null;
@@ -86,11 +73,7 @@ export async function listAllConnections(providerAccountId) {
   return all;
 }
 
-/**
- * POST /v1/people:createContact — create a new contact. Returns the Person
- * the server stored, from which the caller reads `resourceName` and `etag`
- * to stamp on the local card.
- */
+/** Create a contact. Returns the stored Person with `resourceName` and `etag`. */
 export async function createContact(providerAccountId, person) {
   const params = new URLSearchParams({ personFields: PULL_FIELDS });
   const url = `${BASE}/people:createContact?${params}`;
@@ -100,12 +83,7 @@ export async function createContact(providerAccountId, person) {
   });
 }
 
-/**
- * PATCH /v1/<resourceName>:updateContact — replace the listed field groups.
- * The body must carry the server's last-known `etag` for optimistic locking
- * — if the server has a newer version, the call throws ERR.CONFLICT and the
- * push pass drops the entry so the pull phase can reconcile.
- */
+/** Update a contact with optimistic locking on `etag`. Mismatch → PUSH_ERR.CONFLICT. */
 export async function updateContact(providerAccountId, resourceName, person, etag) {
   const params = new URLSearchParams({
     updatePersonFields: PUSH_FIELDS,
@@ -127,25 +105,15 @@ export async function deleteContact(providerAccountId, resourceName) {
   await fetchWithAuthRetry(providerAccountId, url, { method: "DELETE" });
 }
 
-/**
- * Internal error codes the push pass uses to branch on specific API outcomes.
- * Kept module-local because they never reach the host over the wire — the
- * push-pass catch translates them to control flow, not RPC responses.
- */
+/** Internal error codes used by the push pass for control flow. These never
+ *  cross the wire. */
 export const PUSH_ERR = {
-  CONFLICT: "E:CONFLICT",    // etag mismatch on update — reconcile via next pull
-  NOT_FOUND: "E:NOT_FOUND",  // server-side resource is gone
+  CONFLICT: "E:CONFLICT",
+  NOT_FOUND: "E:NOT_FOUND",
 };
 
-/**
- * Issue an authenticated request against the People API. On 401, invalidate
- * the cached token once, refresh, and retry. Any other non-2xx is classified
- * into a shared or push-pass error code and thrown.
- *
- * `opts.method` defaults to GET; `opts.body` (stringified JSON) is sent with
- * `Content-Type: application/json`. DELETE responses (204 No Content) return
- * `null`.
- */
+/** Authenticated People API fetch. Retries once on 401 with a fresh token.
+ *  DELETE and empty bodies return null. */
 async function fetchWithAuthRetry(providerAccountId, url, opts = {}) {
   const method = opts.method ?? "GET";
   for (let attempt = 1; attempt <= 2; attempt++) {
@@ -166,15 +134,13 @@ async function fetchWithAuthRetry(providerAccountId, url, opts = {}) {
     }
 
     if (resp.status === 401 && attempt === 1) {
-      // Access token rejected — force a refresh and retry once.
       oauth.invalidateAccessToken(providerAccountId);
       continue;
     }
 
     const body = await resp.text().catch(() => "");
-    // 400 with FAILED_PRECONDITION is how People API reports etag mismatches
-    // on updateContact; 409/412 are the canonical HTTP forms. Treat all three
-    // as conflict so the push pass can drop the entry consistently.
+    // People API reports etag mismatches as 400 FAILED_PRECONDITION or
+    // 409/412.
     if (
       (resp.status === 409 || resp.status === 412) ||
       (resp.status === 400 && /FAILED_PRECONDITION/.test(body))
@@ -196,6 +162,5 @@ async function fetchWithAuthRetry(providerAccountId, url, opts = {}) {
       code
     );
   }
-  // Unreachable — the loop either returns or throws.
   throw withCode(new Error("People API retry fell through"), ERR.NETWORK);
 }

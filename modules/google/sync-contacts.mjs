@@ -1,39 +1,9 @@
 /**
- * Orchestrates a bidirectional sync between a Thunderbird address book and
- * the authenticated user's Google Contacts.
- *
- * Inputs (from GoogleProvider.onSyncFolder):
- *   - providerAccountId  → for OAuth and storage lookups
- *   - accountId/folderId → tags for progress notifications to the host
- *   - targetAbId         → the Thunderbird address book to sync
- *   - notify             → provider instance exposing reportSyncState /
- *                          reportProgress; lets this module stay decoupled
- *                          from the wire protocol
- *
- * Phase order: PUSH → PULL. Pushing first lets the common "only local edits"
- * case reach Google without being clobbered by the pull; in the rare dual-
- * change case the push's etag check throws CONFLICT, the entry is dropped,
- * and the subsequent pull reconciles by overwriting local (server wins).
- *
- * Push pass (skipped when `readOnlyMode` is on):
- *   1. Load the account's changelog, dedup via `changelog.consolidate`.
- *   2. Dispatch each entry: ADD → create + stamp; MODIFY → update + stamp
- *      (CONFLICT → drop, NOT_FOUND → delete local); DELETE → deleteContact.
- *   3. Persist any unresolved entries for the next sync attempt.
- *
- * Pull pass:
- *   1. Fetch every Person (paginated) from People API.
- *   2. List TB contacts; build `resourceName → {id, etag}` map.
- *   3. For each Person: create if new, update if etag differs, skip if same.
- *   4. Delete local contacts whose resourceName isn't in the server set.
- *
- * All local writes are wrapped in `suppressDuringSelfWrite` so the watcher's
- * onCreated/onUpdated/onDeleted listeners don't echo our server→local writes
- * back into the changelog.
- *
- * Writes are serial — the TB contacts DB doesn't love concurrent writes and
- * serial keeps the progress stream monotonic. If very large books turn out
- * too slow we can batch later.
+ * Bidirectional sync between a Thunderbird address book and the
+ * authenticated user's Google Contacts. Push first (local edits reach the
+ * server before pull clobbers them), then pull (server wins on conflict).
+ * Local writes run inside `suppressDuringSelfWrite` so the watcher ignores
+ * our own events. Writes are serial for monotonic progress.
  */
 
 import { ok, warning } from "../../vendor/tbsync/provider.mjs";
@@ -138,12 +108,8 @@ export async function syncFolderContacts({ accountId, providerAccountId, folderI
 
 // ── Push pass ────────────────────────────────────────────────────────────
 
-/**
- * Process the account's changelog against Google. Entries that succeed or are
- * dropped by policy (CONFLICT → reconciled by pull, create-then-delete →
- * never needed pushing, NOT_FOUND on delete → already gone) are removed.
- * Entries that fail for transient reasons are re-queued.
- */
+/** Push the account's changelog. Successful / policy-dropped entries are
+ *  removed; transient failures are re-queued for the next run. */
 async function runPushPass({ accountId, folderId, providerAccountId, notify, log = () => {} }) {
   notify.reportSyncState({ accountId, folderId, syncState: "push.updates" });
 
@@ -195,7 +161,7 @@ async function runPushPass({ accountId, folderId, providerAccountId, notify, log
 /** Create on server, then stamp the local card with the server's identity. */
 async function pushAddEntry(providerAccountId, entry, log) {
   const local = await getContactSafe(entry.itemId);
-  if (!local) return "dropped";  // user deleted before sync — nothing to push
+  if (!local) return "dropped";
   const person = mapper.vCardToPerson(local.vCard);
   log(`push.add ${entry.itemId} — sending to Google:`, person);
   const serverPerson = await peopleApi.createContact(providerAccountId, person);
@@ -211,8 +177,7 @@ async function pushModifyEntry(providerAccountId, entry, log) {
   if (!local) return "dropped";
   const identity = mapper.readIdentity(local.vCard);
   if (!identity?.resourceName) {
-    // Local card has no server identity — treat as a brand-new add. Rare
-    // edge case: modified event fired before the prior add's stamp landed.
+    // No server identity yet — treat as a new add.
     const person = mapper.vCardToPerson(local.vCard);
     log(`push.modify ${entry.itemId} — no server identity, creating instead:`, person);
     const serverPerson = await peopleApi.createContact(providerAccountId, person);
@@ -260,10 +225,7 @@ async function pushDeleteEntry(providerAccountId, entry, log) {
   }
 }
 
-/** Fetch a contact with vCard-field normalisation; null on "not found".
- *  Separates the "card vanished between event and push" case from real
- *  failures, and delegates the `properties.vCard` → `.vCard` promotion to
- *  the address-book wrapper so this module never sees TB's dual shape. */
+/** Fetch a contact; null on "not found". */
 async function getContactSafe(id) {
   return await addressBook.getContact(id);
 }

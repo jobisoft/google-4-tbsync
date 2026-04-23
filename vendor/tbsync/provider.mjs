@@ -1,27 +1,10 @@
 /**
- * Base class for TbSync provider add-ons.
+ * Base class for TbSync provider add-ons. Owns the handshake, port
+ * lifecycle, RPC dispatch, and setup/config popup windowing. Subclasses
+ * override `on*` virtual hooks — one per HOST_CMD. Required overrides
+ * throw `E:UNKNOWN_COMMAND`; safe-no-op hooks return `null`.
  *
- * Owns the boring plumbing that every provider needs:
- *   - Announce handshake (runtime.onMessageExternal + runtime.sendMessage)
- *   - Port lifecycle (runtime.onConnectExternal) + RPC envelope dispatch
- *   - Host-availability tracking + announce-with-retry on host enable
- *   - Setup popup windowing + setupToken round-trip + window-close cancel
- *   - Config popup windowing (fire-and-forget)
- *   - Outbound RPC wrappers (registerAccount / updateAccount / pushFolderList)
- *   - Outbound notifications (reportSyncState / reportProgress / …)
- *
- * Provider-specific logic lives in the subclass, which overrides the `on*`
- * virtual hook methods (one per HOST_CMD.*). Required overrides throw
- * `E:UNKNOWN_COMMAND` by default; safe-no-op hooks return `null`.
- *
- * Startup is a single line: `new MyProvider(options); provider.init();`.
- *
- * The wire protocol is unchanged from the hand-wired implementation that
- * preceded this class (see `./protocol.mjs`). This file is a structural
- * refactor only — every byte on the port looks identical.
- *
- * Modelled on webext-support's VfsProviderImplementation:
- * /home/john/Documents/GitHub/webext-support/modules/vfs-toolkit/vfs-provider/vfs-provider.mjs
+ * Startup: `new MyProvider(options); provider.init();`.
  */
 
 import {
@@ -30,28 +13,12 @@ import {
   PROVIDER_CMD, PROVIDER_NOTIFY, withCode,
 } from "./protocol.mjs";
 
-// ── Public re-exports ────────────────────────────────────────────────────
-//
-// Subclass code (the provider's own modules) imports everything it needs
-// from this single file — never directly from protocol.mjs or status.mjs.
-// Those stay as mirror-synced contract files; consumers see one vendor
-// surface. Keep this list narrow: only symbols a subclass legitimately
-// needs.
-//
-//   ERR            error codes for `throw withCode(new Error(...), ERR.X)`
-//   withCode       helper that stamps err.code / err.details
-//   ok / warning / error   StatusData envelope builders for on* return values
-//   accountRerun / folderRerun   rerun-directive builders (M3+)
-
+// Subclass-facing surface. Subclass code imports only from this file;
+// protocol.mjs and status.mjs stay as mirror-synced contract files.
 export { ERR, withCode } from "./protocol.mjs";
 export { ok, warning, error, accountRerun, folderRerun } from "./status.mjs";
 
-/**
- * Extension id of the TbSync host — the other end of the port. Exported so
- * provider-side code that needs to address the host directly (e.g. for
- * out-of-band runtime.sendMessage traffic during discovery) can import it
- * from the same place it gets the base class.
- */
+/** Extension id of the TbSync host. */
 export const TBSYNC_ID = "tbsync@jobisoft.de";
 
 
@@ -95,9 +62,8 @@ export class TbSyncProviderImplementation {
   constructor(options = {}) {
     const manifest = browser.runtime.getManifest();
     this.#name = options.name ?? manifest.name;
-    // Short provider id, used as the prefix for outbound RPC-correlation
-    // tokens so log lines from different providers are telleable apart.
-    // Falls back to the extension id if the subclass doesn't set one.
+    // Prefix for outbound RPC-correlation tokens; makes log lines from
+    // different providers easy to tell apart.
     this.#shortName = options.shortName ?? browser.runtime.id;
     this.#icons = options.icons ?? manifest.icons ?? {};
     this.#capabilities = options.capabilities ?? {};
@@ -119,19 +85,14 @@ export class TbSyncProviderImplementation {
 
   // ── Entry point ─────────────────────────────────────────────────────────
 
-  /**
-   * Wire up every listener this provider needs. Idempotent-ish: calling
-   * `init()` twice will double-register, so don't. Call once from the
-   * background script after constructing the subclass.
-   */
+  /** Attach every listener. Call once, after constructing the subclass.
+   *  Calling twice double-registers. */
   init() {
     this.#attachPort();
     this.#attachProbeListener();
     this.#attachSetupCompletedListener();
     this.#attachSetupCancelListener();
     this.#watchHostAvailability();
-    // Prime the host-availability flag from current state. Fire-and-forget;
-    // announce will happen via the storage-onChanged listener if host is on.
     this.#primeHostAvailability().catch(err =>
       console.warn(`${this.#logPrefix} management.getAll() failed at startup:`, err)
     );
@@ -139,8 +100,7 @@ export class TbSyncProviderImplementation {
 
   // ── Outbound: handshake ─────────────────────────────────────────────────
 
-  /** Build and send an announce to TbSync. Returns the handshake reply, or
-   *  null if the host didn't respond or rejected us. */
+  /** Send an announce. Returns the host's reply, or null on rejection / no response. */
   async announce() {
     const manifest = browser.runtime.getManifest();
     const payload = {
@@ -165,12 +125,11 @@ export class TbSyncProviderImplementation {
       }
       return reply;
     } catch {
-      // Host not listening yet — caller's retry loop logs the outcome.
       return null;
     }
   }
 
-  /** Best-effort unannounce before being disabled ourselves. */
+  /** Best-effort unannounce. */
   async unannounce() {
     try {
       await browser.runtime.sendMessage(TBSYNC_ID, {
@@ -200,7 +159,7 @@ export class TbSyncProviderImplementation {
   async onSyncAccount(_args)           { throw this.#notImplemented("onSyncAccount"); }
   /** Sync one folder. Host calls this per selected folder after onSyncAccount. */
   async onSyncFolder(_args)            { throw this.#notImplemented("onSyncFolder"); }
-  /** Cooperative cancellation for an in-flight sync. Safe default: no-op. */
+  /** Cooperative cancel for an in-flight sync. */
   async onCancelSync(_args)            { return null; }
 
   async onAccountEnabled(_args)        { return null; }
@@ -217,14 +176,8 @@ export class TbSyncProviderImplementation {
   async onReauthenticate(_args)        { throw this.#notImplemented("onReauthenticate"); }
   async onImportLegacyData(_args)      { throw this.#notImplemented("onImportLegacyData"); }
 
-  /**
-   * Setup popup. Base implementation opens `setupPath` as a popup window,
-   * waits for the in-extension `tbsync-setup-completed` message carrying the
-   * freshly-minted account, forwards that via PROVIDER_CMD.REGISTER_ACCOUNT,
-   * and returns `{accountId, accountName, accountEntries}` to the host.
-   * Override only if the subclass needs to transform accountEntries or do
-   * work beyond register; the common case is to leave it alone.
-   */
+  /** Open the setup popup, wait for `tbsync-setup-completed`, register the
+   *  account with the host, and return `{accountId, accountName, accountEntries}`. */
   async onOpenSetupPopup(args) {
     if (!this.#setupPath) throw this.#notImplemented("onOpenSetupPopup (no setupPath)");
     const { setupToken } = args;
@@ -270,17 +223,13 @@ export class TbSyncProviderImplementation {
     };
   }
 
-  /** Called after registerAccount returns from the host. Subclass should
-   *  persist the providerAccountId ↔ accountId mapping and may return a
-   *  sanitized accountEntries object. Default: pass-through. */
+  /** Called after registerAccount returns. Subclass persists the
+   *  providerAccountId ↔ accountId mapping and may return sanitized
+   *  accountEntries. */
   async onRegisterSuccessful({ accountEntries }) { return accountEntries ?? {}; }
 
-  /**
-   * Config popup. Base implementation opens `configPath` with `accountId`,
-   * `providerAccountId` (if the subclass supplies it via `onResolveProviderAccountId`),
-   * and optional `readOnly` / `mode` URL params, fire-and-forget. Override
-   * for custom popups.
-   */
+  /** Open the config popup with `accountId`, optional `providerAccountId`,
+   *  `readOnly`, and `mode` URL params. Fire-and-forget. */
   async onOpenConfigPopup(args) {
     if (!this.#configPath) throw this.#notImplemented("onOpenConfigPopup (no configPath)");
     const providerAccountId = await this.onResolveProviderAccountId(args.accountId);
@@ -298,8 +247,7 @@ export class TbSyncProviderImplementation {
     return null;
   }
 
-  /** Subclass hook: map host's accountId to the subclass-owned
-   *  providerAccountId. Default returns null (no mapping surfaced to the popup). */
+  /** Map host's accountId to the subclass's providerAccountId, or null. */
   async onResolveProviderAccountId(_tbsyncAccountId) { return null; }
 
   // ── Private: port + dispatch ────────────────────────────────────────────
@@ -320,9 +268,7 @@ export class TbSyncProviderImplementation {
     });
   }
 
-  /** Respond to DISCOVERY.PROBE messages the host sends after its own
-   *  restart to re-establish the port. We re-announce and return a short
-   *  acknowledgement. */
+  /** Re-announce when the host probes us (after its own restart). */
   #attachProbeListener() {
     browser.runtime.onMessageExternal.addListener((msg, sender) => {
       if (sender?.id !== TBSYNC_ID) return;
@@ -335,7 +281,7 @@ export class TbSyncProviderImplementation {
   #onPortMessage(msg) {
     if (!msg || typeof msg !== "object") return;
 
-    // Response to a provider→host RPC we initiated.
+    // Response to a provider→host RPC.
     if (msg.requestId && (msg.ok === true || msg.ok === false) && !msg.cmd) {
       const entry = this.#pending.get(msg.requestId);
       if (!entry) return;
@@ -350,7 +296,7 @@ export class TbSyncProviderImplementation {
       return;
     }
 
-    // Incoming host→provider RPC we must dispatch.
+    // Incoming host→provider RPC.
     if (msg.requestId && msg.cmd) {
       this.#dispatchHostCmd(msg);
     }
@@ -377,9 +323,8 @@ export class TbSyncProviderImplementation {
     }
   }
 
-  /** Big switch mapping the wire-protocol command name to the on* hook.
-   *  Keeping every HOST_CMD value in one place here means adding a new
-   *  command just requires adding a line here and an on* override. */
+  /** Map HOST_CMD to the on* hook. Adding a new command = one case here
+   *  plus one override in the subclass. */
   #callHostCmdHandler(cmd, args) {
     switch (cmd) {
       case HOST_CMD.SYNC_ACCOUNT:             return this.onSyncAccount(args);
@@ -407,9 +352,6 @@ export class TbSyncProviderImplementation {
     if (!this.#port) {
       return Promise.reject(withCode(new Error("host not connected"), ERR.PORT_CLOSED));
     }
-    // Opaque RPC-correlation token; the host just echoes it back on the
-    // response. Prefixing with the provider's shortName keeps log lines
-    // distinguishable when multiple providers are running.
     const requestId = `${this.#shortName}-request-${crypto.randomUUID()}`;
     const activePort = this.#port;
     return new Promise((resolve, reject) => {
@@ -463,10 +405,8 @@ export class TbSyncProviderImplementation {
     });
   }
 
-  /** If the user closes the setup window without completing, reject the
-   *  pending promise. The 500 ms grace period is there because "setup
-   *  completed → window.close()" races: the completion message may still
-   *  arrive after onRemoved fires. */
+  /** Reject the pending setup promise when the window is closed. 500 ms
+   *  grace period because the completion message races window.close(). */
   #attachSetupCancelListener() {
     browser.windows.onRemoved.addListener(winId => {
       for (const [token, entry] of this.#pendingSetups) {
@@ -483,13 +423,9 @@ export class TbSyncProviderImplementation {
 
   // ── Private: host-availability tracking ─────────────────────────────────
 
-  /**
-   * Model: a session-storage boolean `host-available` holds the current host
-   * state. `management.*` events update it; a storage.onChanged observer
-   * reacts to transitions to `true` by kicking announce-with-retry. That
-   * single observer is the only place announce() is called so every code
-   * path (startup / install / enable) funnels through one log site.
-   */
+  /** Track host state in session storage. `management.*` events update it;
+   *  a storage.onChanged observer kicks announce-with-retry on transition
+   *  to true so every path funnels through one log site. */
   #watchHostAvailability() {
     browser.storage.onChanged.addListener(async (changes, areaName) => {
       if (areaName !== "session" || !changes[HOST_AVAILABLE_KEY]) return;

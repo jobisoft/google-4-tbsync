@@ -1,10 +1,9 @@
 import { KEYS } from "./storage-keys.mjs";
 
 /**
- * Provider-side account store. Keyed by providerAccountId, which is the stable
- * identifier the provider assigns before TbSync knows about the account. Maps
- * of providerAccountId ↔ tbsyncAccountId live in a separate KEYS.ACCOUNT_ID_MAP
- * entry to avoid coupling the account-record shape to host numbering.
+ * Account store, keyed by providerAccountId (the stable id the provider
+ * assigns at setup time). The providerAccountId ↔ tbsyncAccountId mapping
+ * lives separately under KEYS.ACCOUNT_ID_MAP.
  */
 
 async function read() {

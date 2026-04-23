@@ -1,9 +1,7 @@
 import { KEYS } from "./storage-keys.mjs";
 
-/**
- * Provider-side folder store, keyed by providerAccountId. Carries the
- * sync-cursor bits (pageToken, syncToken) and the Thunderbird target AB id.
- */
+/** Folder store, keyed by providerAccountId. Carries sync cursors and the
+ *  Thunderbird address-book id for each folder. */
 
 async function read() {
   const rv = await browser.storage.local.get({ [KEYS.FOLDERS]: {} });

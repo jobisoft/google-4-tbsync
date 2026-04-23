@@ -1,21 +1,8 @@
 /**
- * Google OAuth 2.0 for the provider.
+ * Google OAuth 2.0.
  *
- *   startAuth(clientID, clientSecret)
- *     Launch identity.launchWebAuthFlow against Google's consent screen.
- *     Returns { refreshToken, authenticatedUserEmail } on success.
- *
- *   getAccessToken(providerAccountId)
- *     Returns a cached access token, refreshing via the stored refresh token
- *     when needed. Throws with ERR.AUTH on invalid_grant (user must re-consent).
- *
- *   invalidateAccessToken(providerAccountId)
- *     Drops the in-memory cache entry; next getAccessToken will force a refresh.
- *
- * Access tokens live in a module-level Map, keyed by providerAccountId. They
- * are NEVER persisted (they expire quickly; persisting them gains nothing and
- * widens the attack surface). Refresh tokens are persisted in the provider's
- * account record by accounts.mjs.
+ * Access tokens are cached in-memory per providerAccountId, never
+ * persisted. Refresh tokens live in the account record.
  */
 
 import { ERR, withCode } from "../../vendor/tbsync/provider.mjs";
@@ -37,18 +24,10 @@ const accessTokenCache = new Map();
 const REFRESH_SKEW_MS = 30_000;
 
 /**
- * Redirect URI used by `identity.launchWebAuthFlow`. Stable per-install. The
- * user has to paste this into the Authorized redirect URIs field of their
- * Google Cloud OAuth client (of type "Web application" — Desktop-app clients
- * aren't compatible with the identity API).
- *
- * We use the loopback form (`http://127.0.0.1/mozoauth2/<subdomain>`, supported
- * by launchWebAuthFlow since Firefox 86) rather than the managed URL that
- * `identity.getRedirectURL()` returns directly (`https://<subdomain>.extensions.allizom.org/`).
- * Both require registration on a Web-application client, but the loopback is
- * less alarming to users who might worry about "allizom.org" appearing in their
- * GCP authorized-redirect list. The local loopback URL uses the name of the client
- * picked by the user in the google cloud console.
+ * Redirect URI the user pastes into their Google Cloud OAuth client's
+ * Authorized redirect URIs (Web-application client type). The loopback form
+ * (`http://127.0.0.1/mozoauth2/<subdomain>`) is equivalent to the managed
+ * `.extensions.allizom.org` URL but looks less alarming in the GCP console.
  */
 export function getRedirectURL() {
   const managed = new URL(browser.identity.getRedirectURL());
@@ -57,14 +36,12 @@ export function getRedirectURL() {
 }
 
 /**
- * Open the Google consent screen, exchange the resulting code for tokens,
- * and fetch the authenticated user's email.
+ * Open the Google consent screen, exchange the code for tokens, and fetch
+ * the authenticated user's email.
  *
- * Pass `loginHint` to pre-select a specific Google account on the consent
- * screen — useful for re-auth flows where we already know which address
- * must be signed in. Google treats this as a hint, not a lock: if the user
- * isn't currently signed in to that address they can still pick another,
- * so the caller must still verify the returned email matches expectations.
+ * `loginHint` pre-selects a Google account on the consent screen. Google
+ * treats it as a hint, not a lock — the caller must still verify the
+ * returned email matches.
  */
 export async function startAuth({ clientID, clientSecret, loginHint }) {
   if (!clientID || !clientSecret) {
@@ -198,8 +175,7 @@ export function invalidateAccessToken(providerAccountId) {
   accessTokenCache.delete(providerAccountId);
 }
 
-/** Seed the in-memory cache after a fresh exchange (saves a refresh on the
- *  first sync immediately following account creation). */
+/** Seed the access-token cache from a fresh exchange. */
 export function primeAccessToken(providerAccountId, token, expiresIn) {
   accessTokenCache.set(providerAccountId, {
     token,

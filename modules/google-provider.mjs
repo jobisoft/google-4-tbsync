@@ -1,15 +1,10 @@
 /**
- * Google provider — concrete TbSyncProviderImplementation.
+ * Google provider. Overrides every on* hook with Google-specific logic
+ * (account/folder storage, address-book lifecycle, OAuth, contacts sync).
  *
- * Every on* method below is provider-specific logic: account/folder storage
- * via `accounts.mjs` / `folders.mjs`, Thunderbird address-book lifecycle via
- * `address-book.mjs`, contacts sync via `google/sync-contacts.mjs`,
- * OAuth via `google/oauth.mjs`. The base class owns the wire protocol and
- * popup windowing — see [../vendor/tbsync/provider.mjs](../vendor/tbsync/provider.mjs).
- *
- * Authentication flows live here too as plain methods (not on* hooks),
- * because they're triggered by internal `runtime.onMessage` calls from
- * setup.html / config.html rather than host RPCs.
+ * `authenticateAndCreateAccount`, `getAccountForConfig`, and
+ * `saveAccountFromConfig` are plain methods (not on* hooks) — they're
+ * triggered by runtime.onMessage from setup.html / config.html.
  */
 
 import {
@@ -147,8 +142,8 @@ export class GoogleProvider extends TbSyncProviderImplementation {
   async onAccountDisabled({ accountId }) {
     const providerAccountId = await accounts.getProviderAccountIdByTbsyncAccountId(accountId);
     if (!providerAccountId) return null;
-    // Provider owns Thunderbird resources — disable always releases them so
-    // re-enable starts from a clean slate (mirrors legacy TbSync behavior).
+    // Disable always releases Thunderbird resources so re-enable starts
+    // from a clean slate.
     await this.#deleteAccountTargets(providerAccountId);
     await folders.clearAccount(providerAccountId);
     await changelog.clearAccount(providerAccountId);
@@ -269,16 +264,8 @@ export class GoogleProvider extends TbSyncProviderImplementation {
 
   // ── Re-authentication ──────────────────────────────────────────────────
 
-  /**
-   * Provider-authored re-auth. Host calls this via HOST_CMD.REAUTHENTICATE
-   * when the account is in the authentication-failed state. For Google we
-   * just re-run `oauth.startAuth` — launchWebAuthFlow opens Google's consent
-   * screen directly, and `loginHint` pre-selects the expected account.
-   *
-   * Guards against the user picking a different Gmail address than the one
-   * originally associated with this account — we refuse to overwrite the
-   * refresh token in that case. `login_hint` is a suggestion, not a lock.
-   */
+  /** Re-run OAuth against the authenticated email. Rejects with ERR.AUTH
+   *  if the user signs in with a different Gmail address. */
   async onReauthenticate({ accountId }) {
     const providerAccountId = await accounts.getProviderAccountIdByTbsyncAccountId(accountId);
     if (!providerAccountId) {
@@ -300,8 +287,6 @@ export class GoogleProvider extends TbSyncProviderImplementation {
         });
       if (acc.authenticatedUserEmail && authenticatedUserEmail &&
           acc.authenticatedUserEmail !== authenticatedUserEmail) {
-        // User signed in with a different Google account. Don't overwrite
-        // the refresh token; the caller's account is still broken.
         return error(
           `Signed-in user (${authenticatedUserEmail}) does not match the account's Google address (${acc.authenticatedUserEmail}).`,
           ERR.AUTH
@@ -315,25 +300,17 @@ export class GoogleProvider extends TbSyncProviderImplementation {
     }
   }
 
-  // ── Migration (deferred to M4) ─────────────────────────────────────────
+  // ── Migration ──────────────────────────────────────────────────────────
 
   async onImportLegacyData(_args) {
     throw withCode(new Error("migration not implemented yet"), ERR.UNKNOWN_COMMAND);
   }
 
-  // ── Internal-message entry points (called from background.mjs) ─────────
+  // ── Internal-message entry points ──────────────────────────────────────
 
-  /**
-   * Called from setup.html once the user has filled in client ID / secret
-   * and clicked "Sign in with Google". Launches the OAuth flow, persists
-   * the refresh token + authenticated email in the provider's account store,
-   * and seeds a single contacts folder record.
-   *
-   * Per the account-lifecycle contract, the folder starts unselected with
-   * no Thunderbird book — the user must tick it in the TbSync manager to
-   * actually activate sync, which is where the book gets created (via
-   * onFolderEnabled).
-   */
+  /** Launch OAuth, persist the account, and seed an unselected contacts
+   *  folder. The book is created when the user ticks the folder
+   *  (onFolderEnabled), not here. */
   async authenticateAndCreateAccount({ label, clientID, clientSecret }) {
     const { refreshToken, authenticatedUserEmail, accessToken, expiresIn } =
       await oauth.startAuth({ clientID, clientSecret });
@@ -357,8 +334,6 @@ export class GoogleProvider extends TbSyncProviderImplementation {
       createdAt: Date.now(),
     });
 
-    // Seed the just-minted access token into the cache to save a refresh
-    // on the very first sync.
     if (accessToken) {
       oauth.primeAccessToken(providerAccountId, accessToken, expiresIn);
     }
@@ -433,20 +408,10 @@ function stripSensitive(record) {
   return rest;
 }
 
-/**
- * Create the resource record (no Thunderbird address book). Used at setup
- * time and on account re-enable.
- *
- * Per the account-lifecycle contract: enabling an account pulls the resource
- * list but does NOT activate any resource. The user must tick a resource
- * in the TbSync manager; that tick triggers FOLDER_ENABLED on the provider,
- * which is where the actual address book gets created.
- *
- * The folder's `displayName` in the TbSync resource list is the
- * authenticated Google email (or the account label as a fallback) — the
- * account label already appears above the resource card, so repeating it
- * per row is noise.
- */
+/** Create a contacts folder record with no address book. The book is
+ *  created on folder-enable, not here. `displayName` shows the Google
+ *  email (or the account label as fallback) — the account label is
+ *  already above the resource card. */
 async function seedContactsFolder(providerAccountId, accountName, authenticatedUserEmail) {
   const email = authenticatedUserEmail?.trim() || null;
   const folder = {
@@ -464,18 +429,14 @@ async function seedContactsFolder(providerAccountId, accountName, authenticatedU
   return folder;
 }
 
-/**
- * Build the Thunderbird address-book name for a Google account. The email
- * disambiguates books in the TB sidebar when the user has multiple Google
- * accounts with the same label.
- */
+/** Book name includes the email so users with multiple Google accounts
+ *  under the same label can tell them apart in the TB sidebar. */
 function computeBookName(accountName, authenticatedUserEmail) {
   const email = authenticatedUserEmail?.trim?.() || null;
   return email ? `${accountName} (${email})` : accountName;
 }
 
-/** Translate an internal folder record into the descriptor shape the host
- *  expects for registerAccount / pushFolderList. */
+/** Flatten a folder record into the descriptor shape the host expects. */
 function folderToDescriptor(folder) {
   return {
     folderId: folder.folderId,
