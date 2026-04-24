@@ -31,14 +31,23 @@ const SYSTEM_GROUP = "SYSTEM_CONTACT_GROUP";
 
 // ── Entry point ─────────────────────────────────────────────────────────
 
+/** Push a debug-level entry into the host's session event log. Verbosity is
+ *  now driven by the host-level capture gate (settings.logLevel); the provider
+ *  always emits, the host decides whether to retain. */
+function logDebug(ctx, message, details) {
+  ctx.notify.reportEventLog({
+    level: "debug",
+    accountId: ctx.accountId,
+    folderId: ctx.folderId,
+    message,
+    ...(details !== undefined ? { details } : {}),
+  });
+}
+
 export async function syncFolderContacts({ accountId, providerAccountId, folderId, folder, account, notify }) {
   const targetID = folder?.targetID;
-  const verbose = !!account?.custom?.verboseLogging;
   const readOnly = !!account?.custom?.readOnlyMode;
   const includeSystemGroups = !!account?.custom?.includeSystemContactGroups;
-  const log = verbose
-    ? (msg, data) => console.log(`[google-4-tbsync] ${msg}`, data ?? "")
-    : () => {};
 
   // Host-owned changelog and the in-memory provider maps (flushed at end).
   const changelog = Array.isArray(folder?.custom?.changelog) ? folder.custom.changelog : [];
@@ -50,7 +59,7 @@ export async function syncFolderContacts({ accountId, providerAccountId, folderI
   // observer drops the resulting TB event as self-inflicted.
   const ctx = {
     accountId, providerAccountId, folderId, targetID,
-    notify, log, verbose, readOnly, includeSystemGroups,
+    notify, readOnly, includeSystemGroups,
     gMap, cMap, changelog,
     markServer: (parentId, itemId, status) =>
       notify.changelogMarkServerWrite({ accountId, folderId, parentId, itemId, status }),
@@ -103,23 +112,22 @@ async function flushMaps(notify, accountId, folderId, gMap, cMap) {
 // ── Main flow ────────────────────────────────────────────────────────────
 
 async function runFolderSync(ctx) {
-  const { notify, accountId, folderId, readOnly, log, changelog } = ctx;
+  const { notify, accountId, folderId, readOnly, changelog } = ctx;
 
   const userEntries = changelog.filter(e =>
     e.status === STATUS.ADDED_BY_USER ||
     e.status === STATUS.MODIFIED_BY_USER ||
     e.status === STATUS.DELETED_BY_USER
   );
-  log(`changelog: ${userEntries.length} pending user entries`);
+  logDebug(ctx, `changelog: ${userEntries.length} pending user entries`);
 
   // 1. Push adds + modifies (deletes handled by reconciliation after pull).
   let pushCounts = { added: 0, updated: 0, deleted: 0, conflicts: 0 };
   if (readOnly) {
     notify.reportEventLog({
-      accountId, folderId, level: "debug",
+      accountId, folderId, level: "warning",
       message: "Push skipped (read-only mode)",
     });
-    log("push: skipped (read-only)");
   } else {
     pushCounts = await runPushAddModifyPass(ctx, userEntries);
   }
@@ -169,7 +177,7 @@ async function runFolderSync(ctx) {
 // ── Push pass (adds + modifies) ──────────────────────────────────────────
 
 async function runPushAddModifyPass(ctx, userEntries) {
-  const { notify, accountId, folderId, providerAccountId, cMap, log } = ctx;
+  const { notify, accountId, folderId } = ctx;
   notify.reportSyncState({ accountId, folderId, syncState: "sync" });
   await new Promise(r => setTimeout(r, DEBUG_STATUS_DELAY_MS));
 
@@ -206,12 +214,11 @@ async function runPushAddModifyPass(ctx, userEntries) {
     notify.reportProgress({ accountId, folderId, itemsDone: done, itemsTotal: total });
     await new Promise(r => setTimeout(r, DEBUG_STATUS_DELAY_MS));
   }
-  void providerAccountId; void log;
   return { added, updated, deleted: 0, conflicts };
 }
 
 async function pushAdd(ctx, entry) {
-  const { providerAccountId, targetID, cMap, log } = ctx;
+  const { providerAccountId, cMap } = ctx;
   const local = await addressBook.getContact(entry.itemId);
   if (!local) {
     // Card gone before we got to push it — add+del cancelled or something
@@ -220,9 +227,9 @@ async function pushAdd(ctx, entry) {
     return "dropped";
   }
   const person = mapper.vCardToPerson(local.vCard);
-  log(`push.add ${entry.itemId} — creating on Google`);
+  logDebug(ctx, `push.add ${entry.itemId} — creating on Google`);
   const serverPerson = await peopleApi.createContact(providerAccountId, person);
-  log(`push.add ${entry.itemId} — server resourceName=${serverPerson.resourceName}`);
+  logDebug(ctx, `push.add ${entry.itemId} — server resourceName=${serverPerson.resourceName}`);
   await stampLocalCard(ctx, entry.itemId, local.vCard, serverPerson);
   cMap.set(entry.itemId, serverPerson.resourceName);
   await ctx.removeEntry(entry.parentId, entry.itemId);
@@ -230,7 +237,7 @@ async function pushAdd(ctx, entry) {
 }
 
 async function pushModify(ctx, entry) {
-  const { providerAccountId, cMap, log } = ctx;
+  const { providerAccountId, cMap } = ctx;
   const local = await addressBook.getContact(entry.itemId);
   if (!local) {
     await ctx.removeEntry(entry.parentId, entry.itemId);
@@ -240,7 +247,7 @@ async function pushModify(ctx, entry) {
   if (!identity?.resourceName) {
     // No server identity yet — treat as a late add.
     const person = mapper.vCardToPerson(local.vCard);
-    log(`push.modify ${entry.itemId} — no server identity, creating instead`);
+    logDebug(ctx, `push.modify ${entry.itemId} — no server identity, creating instead`);
     const serverPerson = await peopleApi.createContact(providerAccountId, person);
     await stampLocalCard(ctx, entry.itemId, local.vCard, serverPerson);
     cMap.set(entry.itemId, serverPerson.resourceName);
@@ -248,7 +255,7 @@ async function pushModify(ctx, entry) {
     return "added";
   }
   const person = mapper.vCardToPerson(local.vCard);
-  log(`push.modify ${identity.resourceName}`);
+  logDebug(ctx, `push.modify ${identity.resourceName}`);
   try {
     const serverPerson = await peopleApi.updateContact(
       providerAccountId, identity.resourceName, person, identity.etag
@@ -259,12 +266,12 @@ async function pushModify(ctx, entry) {
     return "updated";
   } catch (err) {
     if (err?.code === PUSH_ERR.CONFLICT) {
-      log(`push.modify ${identity.resourceName} — CONFLICT, dropping (pull will reconcile)`);
+      logDebug(ctx, `push.modify ${identity.resourceName} — CONFLICT, dropping (pull will reconcile)`);
       await ctx.removeEntry(entry.parentId, entry.itemId);
       return "conflict";
     }
     if (err?.code === PUSH_ERR.NOT_FOUND) {
-      log(`push.modify ${identity.resourceName} — server contact gone, deleting local`);
+      logDebug(ctx, `push.modify ${identity.resourceName} — server contact gone, deleting local`);
       await ctx.markServer(entry.parentId, entry.itemId, "deleted_by_server");
       await addressBook.deleteContact(entry.itemId);
       cMap.remove(entry.itemId);
@@ -290,17 +297,17 @@ async function stampLocalCard(ctx, contactId, originalVCard, serverPerson) {
 // ── Pull pass ────────────────────────────────────────────────────────────
 
 async function runPullPass(ctx) {
-  const { notify, accountId, folderId, providerAccountId, targetID, cMap, log } = ctx;
+  const { notify, accountId, folderId, providerAccountId, targetID, cMap } = ctx;
 
   notify.reportSyncState({ accountId, folderId, syncState: "sync" });
   await new Promise(r => setTimeout(r, DEBUG_STATUS_DELAY_MS));
   const people = await peopleApi.listAllConnections(providerAccountId);
-  log(`pull: server returned ${people.length} contact(s)`);
+  logDebug(ctx, `pull: server returned ${people.length} contact(s)`);
 
   notify.reportSyncState({ accountId, folderId, syncState: "sync" });
   await new Promise(r => setTimeout(r, DEBUG_STATUS_DELAY_MS));
   const local = await addressBook.listContacts(targetID);
-  log(`pull: local book has ${local.length} card(s)`);
+  logDebug(ctx, `pull: local book has ${local.length} card(s)`);
 
   // byResourceName: snapshot of pre-pull local state, keyed by stamped
   // resourceName. Used to decide create-vs-update and (after the pass)
@@ -380,7 +387,7 @@ function indexMemberships(memberMap, contactResourceName, memberships) {
 // ── Push-delete reconciliation ───────────────────────────────────────────
 
 async function runPushDeletePass(ctx, userEntries, serverResourceNames) {
-  const { providerAccountId, cMap, log } = ctx;
+  const { providerAccountId, cMap } = ctx;
   const deletions = userEntries.filter(
     e => isContactEntry(e) && e.status === STATUS.DELETED_BY_USER
   );
@@ -391,19 +398,19 @@ async function runPushDeletePass(ctx, userEntries, serverResourceNames) {
     const resourceName = cMap.get(entry.itemId);
     if (!resourceName) {
       // Never-synced-or-already-gone → just drop the entry.
-      log(`push.delete ${entry.itemId} — no resourceName on file, dropping`);
+      logDebug(ctx, `push.delete ${entry.itemId} — no resourceName on file, dropping`);
       await ctx.removeEntry(entry.parentId, entry.itemId);
       continue;
     }
     if (!serverResourceNames.has(resourceName)) {
       // Server already dropped it; nothing to push.
-      log(`push.delete ${resourceName} — already gone on server`);
+      logDebug(ctx, `push.delete ${resourceName} — already gone on server`);
       cMap.remove(entry.itemId);
       await ctx.removeEntry(entry.parentId, entry.itemId);
       continue;
     }
     try {
-      log(`push.delete ${resourceName}`);
+      logDebug(ctx, `push.delete ${resourceName}`);
       await peopleApi.deleteContact(providerAccountId, resourceName);
       cMap.remove(entry.itemId);
       await ctx.removeEntry(entry.parentId, entry.itemId);
@@ -428,7 +435,7 @@ async function runPushDeletePass(ctx, userEntries, serverResourceNames) {
 // ── Groups: pull + apply memberships ─────────────────────────────────────
 
 async function runGroupPullPass(ctx, byResourceName, memberMap) {
-  const { notify, accountId, folderId, providerAccountId, targetID, gMap, includeSystemGroups, log } = ctx;
+  const { notify, accountId, folderId, providerAccountId, targetID, gMap, includeSystemGroups } = ctx;
   notify.reportSyncState({ accountId, folderId, syncState: "sync" });
   await new Promise(r => setTimeout(r, DEBUG_STATUS_DELAY_MS));
 
@@ -436,7 +443,7 @@ async function runGroupPullPass(ctx, byResourceName, memberMap) {
   const eligible = serverGroups.filter(g =>
     includeSystemGroups || g.groupType !== SYSTEM_GROUP
   );
-  log(`groups: server returned ${serverGroups.length} (${eligible.length} after system-group filter)`);
+  logDebug(ctx, `groups: server returned ${serverGroups.length} (${eligible.length} after system-group filter)`);
 
   const localLists = await addressBook.listMailingLists(targetID);
   const localByListId = new Map(localLists.map(l => [l.id, l]));
@@ -492,7 +499,7 @@ async function runGroupPullPass(ctx, byResourceName, memberMap) {
 }
 
 async function applyMemberships(ctx, byResourceName, memberMap) {
-  const { gMap, log } = ctx;
+  const { gMap } = ctx;
   let membersAdded = 0, membersRemoved = 0;
   const mappings = gMap.listAll();
 
@@ -528,14 +535,14 @@ async function applyMemberships(ctx, byResourceName, memberMap) {
       }
     }
   }
-  log(`memberships: +${membersAdded} -${membersRemoved}`);
+  logDebug(ctx, `memberships: +${membersAdded} -${membersRemoved}`);
   return { membersAdded, membersRemoved };
 }
 
 // ── Group push-deletes ───────────────────────────────────────────────────
 
 async function runGroupPushDeletePass(ctx, userEntries) {
-  const { providerAccountId, gMap, log } = ctx;
+  const { providerAccountId, gMap } = ctx;
   const deletions = userEntries.filter(
     e => !isContactEntry(e) && e.status === STATUS.DELETED_BY_USER
   );
@@ -555,7 +562,7 @@ async function runGroupPushDeletePass(ctx, userEntries) {
       continue;
     }
     try {
-      log(`push.group.delete ${mapping.resourceName}`);
+      logDebug(ctx, `push.group.delete ${mapping.resourceName}`);
       await peopleApi.deleteContactGroup(providerAccountId, mapping.resourceName);
       gMap.remove(mapping.resourceName);
       await ctx.removeEntry(entry.parentId, entry.itemId);

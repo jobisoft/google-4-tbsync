@@ -51,7 +51,6 @@ async function load() {
   document.getElementById("client-id").textContent = account.clientID ?? "—";
   document.getElementById("read-only-mode").checked = !!account.readOnlyMode;
   document.getElementById("include-system-groups").checked = !!account.includeSystemContactGroups;
-  document.getElementById("verbose-logging").checked = !!account.verboseLogging;
 
   applyReadOnly();
 }
@@ -65,7 +64,7 @@ function applyReadOnly() {
   } else {
     banner.classList.remove("visible");
   }
-  for (const id of ["account-name", "read-only-mode", "include-system-groups", "verbose-logging"]) {
+  for (const id of ["account-name", "read-only-mode", "include-system-groups"]) {
     document.getElementById(id).disabled = readOnly;
   }
   document.getElementById("btn-save").hidden = readOnly;
@@ -84,7 +83,6 @@ async function onSave() {
     accountName: document.getElementById("account-name").value.trim(),
     readOnlyMode: document.getElementById("read-only-mode").checked,
     includeSystemContactGroups: document.getElementById("include-system-groups").checked,
-    verboseLogging: document.getElementById("verbose-logging").checked,
   };
   if (!patch.accountName) {
     showError(browser.i18n.getMessage("config.error.accountNameRequired") ?? "Account name is required.");

@@ -74,9 +74,6 @@
   "config.includeSystemContactGroups": {
     "message": "Include system groups (Starred, Most Contacted, …)"
   },
-  "config.verboseLogging": {
-    "message": "Verbose logging"
-  },
   "config.readOnlyBanner": {
     "message": "To prevent synchronization errors, settings cannot be edited while the account is enabled."
   },

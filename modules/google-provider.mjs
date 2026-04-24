@@ -363,7 +363,6 @@ export class GoogleProvider extends TbSyncProviderImplementation {
         authenticatedUserEmail: authenticatedUserEmail ?? null,
         readOnlyMode: true,
         includeSystemContactGroups: false,
-        verboseLogging: false,
       },
     };
   }
@@ -393,7 +392,6 @@ export class GoogleProvider extends TbSyncProviderImplementation {
       clientID: ctx.account.custom.clientID ?? "",
       readOnlyMode: !!ctx.account.custom.readOnlyMode,
       includeSystemContactGroups: !!ctx.account.custom.includeSystemContactGroups,
-      verboseLogging: !!ctx.account.custom.verboseLogging,
     };
   }
 
@@ -411,7 +409,7 @@ export class GoogleProvider extends TbSyncProviderImplementation {
       if (!trimmed) throw withCode(new Error("Account name is required"), ERR.UNKNOWN_ACCOUNT);
       topLevelPatch.accountName = trimmed;
     }
-    for (const key of ["readOnlyMode", "includeSystemContactGroups", "verboseLogging"]) {
+    for (const key of ["readOnlyMode", "includeSystemContactGroups"]) {
       if (key in patch) customPatch[key] = !!patch[key];
     }
 
