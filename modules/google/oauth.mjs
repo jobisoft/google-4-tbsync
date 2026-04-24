@@ -2,11 +2,12 @@
  * Google OAuth 2.0.
  *
  * Access tokens are cached in-memory per providerAccountId, never
- * persisted. Refresh tokens live in the account record.
+ * persisted. Refresh tokens live in oauth-tokens.mjs (provider-side
+ * secret storage, keyed by providerAccountId).
  */
 
 import { ERR, withCode } from "../../vendor/tbsync/provider.mjs";
-import * as accounts from "../accounts.mjs";
+import * as oauthTokens from "../oauth-tokens.mjs";
 
 const AUTH_ENDPOINT = "https://accounts.google.com/o/oauth2/v2/auth";
 const TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token";
@@ -20,8 +21,24 @@ const SCOPES = [
 /** accessTokenCache: providerAccountId -> { token, expiresAt } */
 const accessTokenCache = new Map();
 
+/** credentialsCache: providerAccountId -> { clientID, clientSecret }.
+ *  Kept in-memory only. Callers (provider hooks, sync flow) prime this
+ *  from the host-supplied account row before invoking people-api so the
+ *  API layer can refresh tokens without re-reading host state. Cleared on
+ *  account-disabled/deleted. */
+const credentialsCache = new Map();
+
 /** Access-token safety margin: refresh 30 s before expiry. */
 const REFRESH_SKEW_MS = 30_000;
+
+export function primeCredentials(providerAccountId, { clientID, clientSecret }) {
+  if (!clientID || !clientSecret) return;
+  credentialsCache.set(providerAccountId, { clientID, clientSecret });
+}
+
+export function forgetCredentials(providerAccountId) {
+  credentialsCache.delete(providerAccountId);
+}
 
 /**
  * Redirect URI the user pastes into their Google Cloud OAuth client's
@@ -149,20 +166,27 @@ export async function refreshAccessToken({ clientID, clientSecret, refreshToken 
 }
 
 /** Returns a valid access token for the given provider account, refreshing
- *  transparently when needed. */
+ *  transparently when needed. Requires `primeCredentials(providerAccountId,
+ *  {clientID, clientSecret})` to have been called first — callers (provider
+ *  on* hooks, sync flow) seed that at the top of any work that hits the
+ *  People API. The refresh token comes from provider storage. */
 export async function getAccessToken(providerAccountId) {
   const cached = accessTokenCache.get(providerAccountId);
   if (cached && cached.expiresAt > Date.now() + REFRESH_SKEW_MS) {
     return cached.token;
   }
-  const acc = await accounts.get(providerAccountId);
-  if (!acc?.refreshToken) {
+  const tokens = await oauthTokens.get(providerAccountId);
+  if (!tokens?.refreshToken) {
     throw withCode(new Error("No refresh token on file"), ERR.AUTH);
   }
+  const creds = credentialsCache.get(providerAccountId);
+  if (!creds?.clientID || !creds?.clientSecret) {
+    throw withCode(new Error("OAuth credentials not primed — call primeCredentials first"), ERR.AUTH);
+  }
   const fresh = await refreshAccessToken({
-    clientID: acc.clientID,
-    clientSecret: acc.clientSecret,
-    refreshToken: acc.refreshToken,
+    clientID: creds.clientID,
+    clientSecret: creds.clientSecret,
+    refreshToken: tokens.refreshToken,
   });
   accessTokenCache.set(providerAccountId, {
     token: fresh.access_token,

@@ -1,24 +1,18 @@
-import { CURRENT_SCHEMA_VERSION, KEYS } from "./modules/storage-keys.mjs";
-import * as accounts from "./modules/accounts.mjs";
-import * as folders from "./modules/folders.mjs";
 import * as changelogWatcher from "./modules/changelog-watcher.mjs";
 import { getRedirectURL } from "./modules/google/oauth.mjs";
 import { GoogleProvider } from "./modules/google-provider.mjs";
 
 /**
- * Provider entry point. All the port/handshake plumbing lives inside the
- * TbSyncProviderImplementation base class — this file just constructs the
+ * Provider entry point. All port / handshake plumbing lives inside the
+ * TbSyncProviderImplementation base class — this file constructs the
  * concrete GoogleProvider, calls its init(), and routes internal
  * runtime.onMessage traffic (from setup.html / config.html) to the
  * appropriate provider method.
+ *
+ * Provider-local storage is limited to OAuth refresh tokens, the pending
+ * changelog, and the group map — all transient or secret. The host owns
+ * the authoritative account + folder rows.
  */
-
-async function ensureSchema() {
-  const rv = await browser.storage.local.get({ [KEYS.SCHEMA_VERSION]: 0 });
-  if (rv[KEYS.SCHEMA_VERSION] !== CURRENT_SCHEMA_VERSION) {
-    await browser.storage.local.set({ [KEYS.SCHEMA_VERSION]: CURRENT_SCHEMA_VERSION });
-  }
-}
 
 const provider = new GoogleProvider();
 
@@ -44,15 +38,11 @@ browser.runtime.onMessage.addListener(async msg => {
     return { redirectURL: getRedirectURL() };
   }
   if (msg?.type === "google.getLastCredentials") {
-    // Pre-populate the setup popup from the most-recently-created account.
-    // No new storage — just read the existing account records.
-    const rv = await browser.storage.local.get({ [KEYS.ACCOUNTS]: {} });
-    const last = Object.values(rv[KEYS.ACCOUNTS])
-      .filter(a => a.clientID && a.clientSecret)
-      .sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0))[0];
-    return last
-      ? { clientID: last.clientID, clientSecret: last.clientSecret }
-      : null;
+    try {
+      return await provider.getLastCredentials();
+    } catch {
+      return null;
+    }
   }
   if (msg?.type === "google.getAccount") {
     try {
@@ -76,22 +66,13 @@ browser.runtime.onMessage.addListener(async msg => {
   return undefined;
 });
 
-await ensureSchema();
 provider.init();
 changelogWatcher.init();
 
-// Re-attach the changelog watcher to every book owned by this provider.
-// WebExtension event listeners don't replay events across restarts, so we
-// walk every stored account's folders and register each existing book so
-// subsequent user edits are captured from this point forward.
-try {
-  for (const account of await accounts.list()) {
-    for (const folder of await folders.listForAccount(account.providerAccountId)) {
-      if (folder.targetAbId) {
-        await changelogWatcher.registerTarget(folder.targetAbId, account.providerAccountId);
-      }
-    }
-  }
-} catch (err) {
-  console.warn("[google-4-tbsync] changelog-watcher startup priming failed:", err);
-}
+// Re-attach the changelog watcher to every book owned by this provider on
+// startup. WebExtension event listeners don't replay across restarts, so we
+// walk the host's account + folder rows and re-register each bound book.
+// Runs best-effort; the host may still be booting when we hit this line.
+provider.primeStartupState().catch(err => {
+  console.warn("[google-4-tbsync] startup priming failed:", err);
+});

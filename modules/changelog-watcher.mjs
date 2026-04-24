@@ -23,15 +23,15 @@ import * as groupMap from "./group-map.mjs";
  * not tracked: memberships are server→local only.
  */
 
-const registeredBooks = new Map();   // targetAbId → providerAccountId
+const registeredBooks = new Map();   // targetID → providerAccountId
 const idToResourceName = new Map();  // contactId → resourceName
 let selfWriteDepth = 0;
 
 /** Watch a book and prime the identity cache from its contents. */
-export async function registerTarget(targetAbId, providerAccountId) {
-  if (!targetAbId || !providerAccountId) return;
-  registeredBooks.set(targetAbId, providerAccountId);
-  const contacts = await addressBook.listContacts(targetAbId);
+export async function registerTarget(targetID, providerAccountId) {
+  if (!targetID || !providerAccountId) return;
+  registeredBooks.set(targetID, providerAccountId);
+  const contacts = await addressBook.listContacts(targetID);
   for (const c of contacts) {
     const resourceName = mapper.readIdentity(c.vCard)?.resourceName ?? null;
     if (resourceName) idToResourceName.set(c.id, resourceName);
@@ -40,9 +40,9 @@ export async function registerTarget(targetAbId, providerAccountId) {
 
 /** Stop watching a book. Identity-cache entries are left as-is; no future
  *  event will reference them. */
-export function unregisterTarget(targetAbId) {
-  if (!targetAbId) return;
-  registeredBooks.delete(targetAbId);
+export function unregisterTarget(targetID) {
+  if (!targetID) return;
+  registeredBooks.delete(targetID);
 }
 
 /** Run `fn` with the watcher muted. The trailing `setTimeout(0)` lets any

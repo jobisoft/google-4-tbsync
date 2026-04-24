@@ -12,17 +12,15 @@ import * as peopleApi from "./people-api.mjs";
 import { PUSH_ERR } from "./people-api.mjs";
 import * as mapper from "./contact-mapper.mjs";
 import * as addressBook from "../address-book.mjs";
-import * as accounts from "../accounts.mjs";
 import * as changelog from "../changelog.mjs";
 import * as changelogWatcher from "../changelog-watcher.mjs";
 import * as groupMap from "../group-map.mjs";
 
 const SYSTEM_GROUP = "SYSTEM_CONTACT_GROUP";
 
-export async function syncFolderContacts({ accountId, providerAccountId, folderId, targetAbId, notify }) {
-  const acc = await accounts.get(providerAccountId);
-  const verbose = !!acc?.verboseLogging;
-  const includeSystemGroups = !!acc?.includeSystemContactGroups;
+export async function syncFolderContacts({ accountId, providerAccountId, folderId, targetID, account, notify }) {
+  const verbose = !!account?.custom?.verboseLogging;
+  const includeSystemGroups = !!account?.custom?.includeSystemContactGroups;
   const log = verbose
     ? (msg, data) => console.log(`[google-4-tbsync] ${msg}`, data ?? "")
     : () => {};
@@ -35,7 +33,7 @@ export async function syncFolderContacts({ accountId, providerAccountId, folderI
   });
 
   try {
-    return await runFolderSync({ accountId, providerAccountId, folderId, targetAbId, notify, acc, verbose, log, includeSystemGroups });
+    return await runFolderSync({ accountId, providerAccountId, folderId, targetID, notify, account, verbose, log, includeSystemGroups });
   } catch (err) {
     if (err?.code === "E:AUTH") {
       // Auth failure is account-scoped. The folder list is about to be
@@ -59,10 +57,10 @@ export async function syncFolderContacts({ accountId, providerAccountId, folderI
   }
 }
 
-async function runFolderSync({ accountId, providerAccountId, folderId, targetAbId, notify, acc, verbose, log, includeSystemGroups }) {
+async function runFolderSync({ accountId, providerAccountId, folderId, targetID, notify, account, verbose, log, includeSystemGroups }) {
   // ── Push pass ──────────────────────────────────────────────────────────
   let pushCounts = { added: 0, updated: 0, deleted: 0, conflicts: 0 };
-  const readOnly = !!acc?.readOnlyMode;
+  const readOnly = !!account?.custom?.readOnlyMode;
   if (readOnly) {
     notify.reportEventLog({
       accountId, folderId,
@@ -71,7 +69,7 @@ async function runFolderSync({ accountId, providerAccountId, folderId, targetAbI
     });
     log("push pass skipped — readOnlyMode");
   } else {
-    pushCounts = await runPushPass({ accountId, folderId, providerAccountId, targetAbId, notify, log });
+    pushCounts = await runPushPass({ accountId, folderId, providerAccountId, targetID, notify, log });
   }
 
   // ── Pull contacts ──────────────────────────────────────────────────────
@@ -81,7 +79,7 @@ async function runFolderSync({ accountId, providerAccountId, folderId, targetAbI
   if (verbose && people.length > 0) log("pull: first server contact =", people[0]);
 
   notify.reportSyncState({ accountId, folderId, syncState: "sync" });
-  const local = await addressBook.listContacts(targetAbId);
+  const local = await addressBook.listContacts(targetID);
   log(`pull: local book has ${local.length} card(s)`);
   const byResourceName = new Map();
   for (const card of local) {
@@ -113,7 +111,7 @@ async function runFolderSync({ accountId, providerAccountId, folderId, targetAbI
       const existing = byResourceName.get(resourceName);
       if (!existing) {
         const vCard = mapper.personToVCard(person);
-        const newId = await addressBook.createContact(targetAbId, vCard);
+        const newId = await addressBook.createContact(targetID, vCard);
         byResourceName.set(resourceName, { id: newId, etag: person.etag });
         changelogWatcher.rememberIdentity(newId, resourceName);
         pullAdded++;
@@ -140,7 +138,7 @@ async function runFolderSync({ accountId, providerAccountId, folderId, targetAbI
 
   // ── Pull groups + apply memberships ───────────────────────────────────
   const groupCounts = await runGroupPullPass({
-    accountId, folderId, providerAccountId, targetAbId,
+    accountId, folderId, providerAccountId, targetID,
     includeSystemGroups, byResourceName, memberMap, notify, log,
   });
 
@@ -187,7 +185,7 @@ function indexMemberships(memberMap, contactResourceName, memberships) {
 /** Push the account's changelog. Dispatches on `kind` (contact | group).
  *  Successful / policy-dropped entries are removed; transient failures are
  *  re-queued. */
-async function runPushPass({ accountId, folderId, providerAccountId, targetAbId, notify, log = () => {} }) {
+async function runPushPass({ accountId, folderId, providerAccountId, targetID, notify, log = () => {} }) {
   notify.reportSyncState({ accountId, folderId, syncState: "sync" });
 
   const rawEntries = await changelog.listForAccount(providerAccountId);
@@ -206,7 +204,7 @@ async function runPushPass({ accountId, folderId, providerAccountId, targetAbId,
   for (const entry of entries) {
     try {
       const outcome = entry.kind === changelog.KIND.GROUP
-        ? await pushGroupEntry(providerAccountId, targetAbId, entry, log)
+        ? await pushGroupEntry(providerAccountId, targetID, entry, log)
         : await pushContactEntry(providerAccountId, entry, log);
       if (outcome === "added") added++;
       else if (outcome === "updated") updated++;
@@ -322,9 +320,9 @@ async function stampLocalCard(contactId, originalVCard, serverPerson) {
 // ── Groups: push ─────────────────────────────────────────────────────────
 
 /** Dispatch a group changelog entry. */
-async function pushGroupEntry(providerAccountId, targetAbId, entry, log) {
+async function pushGroupEntry(providerAccountId, targetID, entry, log) {
   if (entry.status === changelog.STATUS.ADDED_BY_USER) {
-    return pushGroupAdd(providerAccountId, targetAbId, entry, log);
+    return pushGroupAdd(providerAccountId, targetID, entry, log);
   }
   if (entry.status === changelog.STATUS.MODIFIED_BY_USER) {
     return pushGroupModify(providerAccountId, entry, log);
@@ -336,7 +334,7 @@ async function pushGroupEntry(providerAccountId, targetAbId, entry, log) {
 }
 
 /** Create a user contact group on Google from a locally-added mailing list. */
-async function pushGroupAdd(providerAccountId, _targetAbId, entry, log) {
+async function pushGroupAdd(providerAccountId, _targetID, entry, log) {
   const list = await addressBook.getMailingList(entry.itemId);
   if (!list) return "dropped";
   log(`push.group.add ${entry.itemId} — sending to Google: ${list.name}`);
@@ -416,7 +414,7 @@ async function pushGroupDelete(providerAccountId, entry, log) {
  * `suppressDuringSelfWrite`.
  */
 async function runGroupPullPass({
-  accountId, folderId, providerAccountId, targetAbId,
+  accountId, folderId, providerAccountId, targetID,
   includeSystemGroups, byResourceName, memberMap, notify, log,
 }) {
   notify.reportSyncState({ accountId, folderId, syncState: "sync" });
@@ -427,7 +425,7 @@ async function runGroupPullPass({
   );
   log(`groups: server returned ${serverGroups.length} (${eligible.length} after system-group filter)`);
 
-  const localLists = await addressBook.listMailingLists(targetAbId);
+  const localLists = await addressBook.listMailingLists(targetID);
   const localByListId = new Map(localLists.map(l => [l.id, l]));
 
   // listId → expected resourceName from the map; inverse of what we'll build.
@@ -449,13 +447,13 @@ async function runGroupPullPass({
         : null;
 
       if (!existing) {
-        const listId = await addressBook.createMailingList(targetAbId, { name: group.name });
+        const listId = await addressBook.createMailingList(targetID, { name: group.name });
         await groupMap.set(providerAccountId, resourceName, {
           mailingListId: listId,
           etag: group.etag,
           groupType: group.groupType,
         });
-        localByListId.set(listId, { id: listId, name: group.name, parentId: targetAbId });
+        localByListId.set(listId, { id: listId, name: group.name, parentId: targetID });
         added++;
       } else if (mapping.etag !== group.etag || existing.name !== group.name) {
         if (existing.name !== group.name) {

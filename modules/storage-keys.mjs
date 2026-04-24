@@ -1,21 +1,17 @@
 /**
- * Keys the Google provider uses in its own storage.local. Unlike tbsync-new,
- * the provider owns tokens and sync cursors — none of this data is visible to
- * TbSync beyond what we push explicitly over the port.
+ * Keys the Google provider uses in its own storage.local.
+ *
+ * Host storage owns per-account user-config (clientID, clientSecret, toggles)
+ * and per-folder binding (targetID/targetName). The provider keeps only:
+ *   - OAuth refresh tokens (secret isolation),
+ *   - the changelog of pending local mutations,
+ *   - the contact-group ↔ mailing-list map.
+ * All are transient/secret state that a full resync (or a sign-in-again click)
+ * can regenerate — no loss of user configuration if this storage is wiped.
  */
 
 export const KEYS = {
-  SCHEMA_VERSION: "google.schemaVersion",
-  ACCOUNTS: "google.accounts",
-  FOLDERS: "google.folders",
+  OAUTH_TOKENS: "google.oauthTokens",
   CHANGELOG: "google.changelog",
   GROUP_MAP: "google.groupMap",
-  ACCOUNT_ID_MAP: "google.accountIdMap",
-  SETTINGS: "google.settings",
-};
-
-export const CURRENT_SCHEMA_VERSION = 1;
-
-export const DEFAULT_SETTINGS = {
-  timeoutMs: 60_000,
 };

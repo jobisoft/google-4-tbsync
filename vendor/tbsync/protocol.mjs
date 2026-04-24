@@ -45,12 +45,44 @@ export const HOST_CMD = {
   IMPORT_LEGACY_DATA: "importLegacyData",
 };
 
-/** Provider → TbSync command names (RPC). */
+/** Provider → TbSync command names (RPC).
+ *
+ * ## Row shape contract (accounts and folders)
+ *
+ * Both row kinds carry **flat universal fields** plus one opaque
+ * `custom: {}` object the host never interprets.
+ *
+ * Account universal fields:
+ *   accountId, accountName, provider, providerAccountId, enabled,
+ *   warning, error, lastSyncTime, autoSyncIntervalMinutes, custom
+ *
+ * Folder universal fields:
+ *   folderId, accountId, folderType, displayName, selected, readOnly,
+ *   warning, error, lastSyncTime, orderIndex, targetID, targetName, custom
+ *
+ * `targetID`/`targetName` identify the local Thunderbird artifact bound to
+ * the remote resource. They are null until the provider's first sync
+ * creates the local artifact and writes them via UPDATE_FOLDER.
+ *
+ * `custom` is opaque to the host and stores provider-specific per-row
+ * configuration without host-schema changes.
+ *
+ * ## RPC semantics
+ *
+ * REGISTER_ACCOUNT { accountName, providerAccountId, custom?, initialFolders? }
+ * UPDATE_ACCOUNT   { accountId, patch }  — top-level + shallow-merge `custom`
+ * UPDATE_FOLDER    { accountId, folderId, patch } — top-level + shallow-merge `custom`
+ * PUSH_FOLDER_LIST { accountId, folders: [descriptor…] } — preserves
+ *   `selected`, `lastSyncTime`, `targetID`, `targetName`, `custom` from
+ *   prior rows when descriptors omit them.
+ */
 export const PROVIDER_CMD = {
   REGISTER_ACCOUNT: "registerAccount",
   UPDATE_ACCOUNT: "updateAccount",
   UPDATE_FOLDER: "updateFolder",
   PUSH_FOLDER_LIST: "pushFolderList",
+  LIST_ACCOUNTS: "listAccounts",
+  GET_ACCOUNT: "getAccount",
 };
 
 /** Provider → TbSync notification types (no response). */

@@ -154,6 +154,11 @@ export class TbSyncProviderImplementation {
   updateAccount(args)   { return this.#sendCmd(PROVIDER_CMD.UPDATE_ACCOUNT,   args); }
   updateFolder(args)    { return this.#sendCmd(PROVIDER_CMD.UPDATE_FOLDER,    args); }
   pushFolderList(args)  { return this.#sendCmd(PROVIDER_CMD.PUSH_FOLDER_LIST, args); }
+  /** Accounts owned by this provider, scoped on the host side. */
+  listAccounts()                 { return this.#sendCmd(PROVIDER_CMD.LIST_ACCOUNTS); }
+  /** `{account, folders}` for one account, or `null` if it doesn't exist
+   *  or isn't owned by this provider. */
+  getAccount(accountId)          { return this.#sendCmd(PROVIDER_CMD.GET_ACCOUNT, { accountId }); }
 
   // ── Outbound: notifications ─────────────────────────────────────────────
 
@@ -205,38 +210,35 @@ export class TbSyncProviderImplementation {
       height: this.#setupHeight,
     });
 
-    const { providerAccountId, accountName, initialFolders, accountEntries } =
+    const { providerAccountId, accountName, initialFolders, custom } =
       await new Promise((resolve, reject) => {
         this.#pendingSetups.set(setupToken, { resolve, reject, windowId: win.id });
       });
 
+    // `custom` — if present — seeds the new account's opaque provider blob
+    // atomically with the host row creation. See protocol.mjs PROVIDER_CMD.
     const { accountId } = await this.registerAccount({
       setupToken,
       providerAccountId,
       accountName,
       initialFolders,
+      custom,
     });
 
-    // Give the subclass a chance to link providerAccountId ↔ accountId and
-    // surface sanitized account entries back to the host.
-    const finalEntries = await this.onRegisterSuccessful({
+    // Give the subclass a chance to link providerAccountId ↔ accountId.
+    await this.onRegisterSuccessful({
       accountId,
       providerAccountId,
       accountName,
-      accountEntries: accountEntries ?? {},
     });
 
-    return {
-      accountId,
-      accountName,
-      accountEntries: finalEntries ?? accountEntries ?? {},
-    };
+    return { accountId, accountName };
   }
 
-  /** Called after registerAccount returns. Subclass persists the
-   *  providerAccountId ↔ accountId mapping and may return sanitized
-   *  accountEntries. */
-  async onRegisterSuccessful({ accountEntries }) { return accountEntries ?? {}; }
+  /** Called after registerAccount returns so a subclass can persist the
+   *  providerAccountId ↔ accountId mapping or do any other post-register
+   *  bookkeeping. Return value is discarded. */
+  async onRegisterSuccessful(_args) { return null; }
 
   /** Open the config popup with `accountId`, optional `providerAccountId`,
    *  `readOnly`, and `mode` URL params. Resolves when the popup closes. */
@@ -411,7 +413,7 @@ export class TbSyncProviderImplementation {
         providerAccountId: msg.providerAccountId,
         accountName: msg.accountName,
         initialFolders: msg.initialFolders ?? [],
-        accountEntries: msg.accountEntries ?? {},
+        custom: msg.custom ?? {},
       });
     });
   }

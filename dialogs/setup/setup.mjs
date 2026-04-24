@@ -30,6 +30,9 @@ function clearError() {
 
 async function prefillCredentials() {
   try {
+    // Reads the host's accounts via `provider.listAccounts()` and picks the
+    // most recent entry's custom.clientID / custom.clientSecret — no more
+    // provider-local account storage to consult.
     const creds = await browser.runtime.sendMessage({ type: "google.getLastCredentials" });
     if (!creds) return;
     document.getElementById("client-id").value = creds.clientID ?? "";
@@ -87,6 +90,8 @@ async function onSignIn() {
       providerAccountId: reply.result.providerAccountId,
       accountName: reply.result.accountName,
       initialFolders: reply.result.initialFolders,
+      // Seeds the host row's opaque `custom` blob atomically with creation.
+      custom: reply.result.custom,
     });
     window.close();
   } catch (err) {
