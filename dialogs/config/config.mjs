@@ -18,6 +18,12 @@
 
 import { localizeDocument } from "../../vendor/i18n/i18n.mjs";
 
+/** Look up a localized message, falling back to the inline default if the
+ *  key is missing. Optional third arg forwards substitutions to
+ *  `getMessage` for placeholder-bearing keys. */
+const i18n = (key, fallback, substitutions) =>
+  browser.i18n.getMessage(key, substitutions) || fallback;
+
 const params = new URLSearchParams(location.search);
 const accountId = params.get("accountId");
 const readOnly = params.get("readOnly") === "1";
@@ -36,12 +42,12 @@ function clearBanners() {
 
 async function load() {
   if (!accountId) {
-    showError(browser.i18n.getMessage("config.error.missingAccountId") ?? "Missing account identifier.");
+    showError(i18n("config.error.missingAccountId", "Missing account identifier."));
     return;
   }
   const reply = await browser.runtime.sendMessage({ type: "google.getAccount", accountId });
   if (!reply?.ok) {
-    showError(reply?.error ?? browser.i18n.getMessage("config.error.loadFailed") ?? "Failed to load account.");
+    showError(reply?.error ?? i18n("config.error.loadFailed", "Failed to load account."));
     return;
   }
   const account = reply.result;
@@ -58,8 +64,7 @@ async function load() {
 function applyReadOnly() {
   const banner = document.getElementById("readonly-banner");
   if (readOnly) {
-    banner.textContent = browser.i18n.getMessage("config.readOnlyBanner")
-      ?? "To prevent synchronization errors, settings cannot be edited while the account is enabled.";
+    banner.textContent = i18n("config.readOnlyBanner", "To prevent synchronization errors, settings cannot be edited while the account is enabled.");
     banner.classList.add("visible");
   } else {
     banner.classList.remove("visible");
@@ -72,8 +77,8 @@ function applyReadOnly() {
   // there so it reads as the primary/only action instead of a dismissal.
   const cancelBtn = document.getElementById("btn-cancel");
   cancelBtn.textContent = readOnly
-    ? (browser.i18n.getMessage("config.close") ?? "Close")
-    : (browser.i18n.getMessage("config.cancel") ?? "Cancel");
+    ? (i18n("config.close", "Close"))
+    : (i18n("config.cancel", "Cancel"));
 }
 
 async function onSave() {
@@ -85,14 +90,14 @@ async function onSave() {
     includeSystemContactGroups: document.getElementById("include-system-groups").checked,
   };
   if (!patch.accountName) {
-    showError(browser.i18n.getMessage("config.error.accountNameRequired") ?? "Account name is required.");
+    showError(i18n("config.error.accountNameRequired", "Account name is required."));
     return;
   }
   document.getElementById("btn-save").disabled = true;
   try {
     const reply = await browser.runtime.sendMessage({ type: "google.saveAccount", accountId, patch });
     if (!reply?.ok) {
-      throw new Error(reply?.error ?? browser.i18n.getMessage("config.error.saveFailed") ?? "Save failed");
+      throw new Error(reply?.error ?? i18n("config.error.saveFailed", "Save failed"));
     }
     window.close();
   } catch (err) {

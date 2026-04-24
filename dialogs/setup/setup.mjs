@@ -9,6 +9,12 @@
 
 import { localizeDocument } from "../../vendor/i18n/i18n.mjs";
 
+/** Look up a localized message, falling back to the inline default if the
+ *  key is missing. Optional third arg forwards substitutions to
+ *  `getMessage` for placeholder-bearing keys. */
+const i18n = (key, fallback, substitutions) =>
+  browser.i18n.getMessage(key, substitutions) || fallback;
+
 const params = new URLSearchParams(location.search);
 const setupToken = params.get("setupToken");
 
@@ -40,14 +46,11 @@ async function onCopyRedirectURL() {
     const { redirectURL } = await browser.runtime.sendMessage({ type: "google.getRedirectURL" });
     await navigator.clipboard.writeText(redirectURL);
     const prior = btn.textContent;
-    btn.textContent = browser.i18n.getMessage("setup.copied") ?? "Copied";
+    btn.textContent = i18n("setup.copied", "Copied");
     setTimeout(() => { btn.textContent = prior; }, 1200);
   } catch (err) {
     const detail = err.message ?? String(err);
-    showError(
-      browser.i18n.getMessage("setup.error.copyFailed", detail)
-        ?? `Copy failed: ${detail}`
-    );
+    showError(i18n("setup.error.copyFailed", `Copy failed: ${detail}`, detail));
   }
 }
 
@@ -57,16 +60,16 @@ async function onSignIn() {
   const clientID = document.getElementById("client-id").value.trim();
   const clientSecret = document.getElementById("client-secret").value.trim();
   if (!label) {
-    showError(browser.i18n.getMessage("setup.error.accountNameRequired") ?? "Please enter an account name.");
+    showError(i18n("setup.error.accountNameRequired", "Please enter an account name."));
     document.getElementById("account-name").focus();
     return;
   }
   if (!clientID || !clientSecret) {
-    showError(browser.i18n.getMessage("setup.error.credentialsRequired") ?? "Please enter both the Client ID and the Client secret.");
+    showError(i18n("setup.error.credentialsRequired", "Please enter both the Client ID and the Client secret."));
     return;
   }
   if (!setupToken) {
-    showError(browser.i18n.getMessage("setup.error.missingToken") ?? "Missing setup token. Open this window through TbSync.");
+    showError(i18n("setup.error.missingToken", "Missing setup token. Open this window through TbSync."));
     return;
   }
 
@@ -79,7 +82,7 @@ async function onSignIn() {
     });
     if (!reply?.ok) {
       if (reply?.code === "E:CANCELLED") { btn.disabled = false; return; }
-      throw new Error(reply?.error ?? browser.i18n.getMessage("setup.error.signInFailed") ?? "Sign-in failed");
+      throw new Error(reply?.error ?? i18n("setup.error.signInFailed", "Sign-in failed"));
     }
 
     await browser.runtime.sendMessage({
