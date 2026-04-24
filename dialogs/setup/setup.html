@@ -5,60 +5,94 @@
     <title data-i18n-content="setup.title"></title>
     <script type="module" src="setup.mjs"></script>
     <style>
+      :root {
+        --bg-page: #fff;
+        --text-primary: #222;
+        --text-secondary: #555;
+        --text-tertiary: #777;
+        --border-input: #ccc;
+        --accent: #2a7fd4;
+        --accent-hover: #1a6fc4;
+        --btn-secondary-bg: #e5e5e7;
+        --error-bg: #ffe0e0;
+        --error-accent: #c43b3b;
+        --error-text: #7a2222;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg-page: #1e1f21;
+          --text-primary: #e8e9eb;
+          --text-secondary: #b3b5ba;
+          --text-tertiary: #9498a0;
+          --border-input: #4a4d52;
+          --accent: #5fa6e8;
+          --accent-hover: #7ab5ec;
+          --btn-secondary-bg: #3a3c40;
+          --error-bg: #3f1f1f;
+          --error-accent: #e66a6a;
+          --error-text: #f3a5a5;
+        }
+      }
+
       body {
         font-family: system-ui, sans-serif;
         font-size: 13px;
-        color: #222;
+        color: var(--text-primary);
+        background: var(--bg-page);
         margin: 0;
         padding: 20px 24px;
       }
       h2 { margin: 0 0 10px; font-size: 15px; font-weight: 600; }
-      p.intro { color: #555; line-height: 1.5; margin: 0 0 16px; }
+      p.intro { color: var(--text-secondary); line-height: 1.5; margin: 0 0 8px; }
+      p.help-link { margin: 0 0 16px; font-size: 12px; }
+      p.help-link a { color: var(--accent); text-decoration: underline; cursor: pointer; }
+      p.help-link a:hover { color: var(--accent-hover); }
 
       .field { display: flex; flex-direction: column; margin-bottom: 10px; }
       .field label {
-        font-size: 11px; color: #555; text-transform: uppercase;
+        font-size: 11px; color: var(--text-secondary); text-transform: uppercase;
         letter-spacing: .04em; margin-bottom: 4px;
       }
       .field input {
-        padding: 5px 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 13px;
+        padding: 5px 8px; border: 1px solid var(--border-input); border-radius: 4px; font-size: 13px;
+        background: var(--bg-page); color: var(--text-primary);
       }
 
       .redirect-hint {
         margin: 10px 0 0;
         font-size: 11px;
-        color: #777;
+        color: var(--text-tertiary);
         line-height: 1.5;
       }
-      .redirect-hint strong { color: #555; }
+      .redirect-hint strong { color: var(--text-secondary); }
       .redirect-copy-btn {
         display: inline-block;
         margin-left: 4px;
         background: none;
         border: none;
         padding: 0;
-        color: #2a7fd4;
+        color: var(--accent);
         cursor: pointer;
         font-size: 11px;
         text-decoration: underline;
       }
-      .redirect-copy-btn:hover { color: #1a6fc4; }
+      .redirect-copy-btn:hover { color: var(--accent-hover); }
 
       .actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; }
       button.primary {
-        padding: 6px 14px; background: #2a7fd4; color: #fff; border: none;
+        padding: 6px 14px; background: var(--accent); color: #fff; border: none;
         border-radius: 4px; cursor: pointer; font-size: 13px;
       }
-      button.primary:hover { background: #1a6fc4; }
+      button.primary:hover { background: var(--accent-hover); }
       button.primary:disabled { opacity: .5; cursor: not-allowed; }
       button.secondary {
-        padding: 6px 14px; background: #e5e5e7; color: #222; border: none;
+        padding: 6px 14px; background: var(--btn-secondary-bg); color: var(--text-primary); border: none;
         border-radius: 4px; cursor: pointer; font-size: 13px;
       }
 
       .error {
-        margin-top: 10px; padding: 8px 12px; background: #ffe0e0;
-        border-left: 3px solid #c43b3b; color: #7a2222; font-size: 12px;
+        margin-top: 10px; padding: 8px 12px; background: var(--error-bg);
+        border-left: 3px solid var(--error-accent); color: var(--error-text); font-size: 12px;
         border-radius: 3px; display: none;
       }
       .error.visible { display: block; }
@@ -67,6 +101,11 @@
   <body>
     <h2 data-i18n-content="setup.title"></h2>
     <p class="intro" data-i18n-content="setup.intro"></p>
+    <p class="help-link">
+      <a href="https://github.com/zanonmark/Google-4-TbSync/wiki/How-to-generate-your-own-Google-Cloud-Console-project-credentials"
+         data-link-target="browser"
+         data-i18n-content="setup.credentialsHelpLink"></a>
+    </p>
 
     <div class="field">
       <label data-i18n-content="setup.accountName"></label>

@@ -103,3 +103,10 @@ prefillCredentials();
 document.getElementById("btn-copy").addEventListener("click", onCopyRedirectURL);
 document.getElementById("btn-cancel").addEventListener("click", () => window.close());
 document.getElementById("btn-sign-in").addEventListener("click", onSignIn);
+
+document.body.addEventListener("click", e => {
+  const a = e.target.closest("a[data-link-target='browser']");
+  if (!a) return;
+  e.preventDefault();
+  messenger.windows.openDefaultBrowser(a.getAttribute("href"));
+});
