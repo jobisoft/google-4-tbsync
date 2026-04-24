@@ -5,9 +5,9 @@
  * pulls its context from the host at the top of each on* hook via
  * `this.getAccount(accountId)`, reads user-config, OAuth credentials and
  * the refresh token from `account.custom.*`, and writes state back via
- * UPDATE_ACCOUNT / UPDATE_FOLDER RPCs. Provider-side persistent storage
- * is limited to transient sync scaffolding (changelog, group map) — all
- * regenerable via a fresh sync.
+ * UPDATE_ACCOUNT / UPDATE_FOLDER RPCs. The provider has no persistent
+ * storage of its own — even the changelog and the contact-group map
+ * live on the host's folder rows.
  *
  * `authenticateAndCreateAccount` and `saveAccountFromConfig` are plain
  * methods triggered by runtime.onMessage from setup.html / config.html.
@@ -17,12 +17,10 @@ import {
   ERR, withCode, error, ok,
   TbSyncProviderImplementation,
 } from "../vendor/tbsync/provider.mjs";
-import * as changelog from "./changelog.mjs";
-import * as changelogWatcher from "./changelog-watcher.mjs";
-import * as groupMap from "./group-map.mjs";
 import * as oauth from "./google/oauth.mjs";
 import * as addressBook from "./address-book.mjs";
 import { syncFolderContacts } from "./google/sync-contacts.mjs";
+import { DEBUG_STATUS_DELAY_MS } from "./debug.mjs";
 
 export class GoogleProvider extends TbSyncProviderImplementation {
   constructor() {
@@ -54,6 +52,13 @@ export class GoogleProvider extends TbSyncProviderImplementation {
    *  on the host row and is looked up via getAccount() whenever needed. */
   async onRegisterSuccessful() { return null; }
 
+  /** Fired by the base class the first time the host opens the port (and on
+   *  every subsequent reconnect). Safe to call more than once — priming is
+   *  idempotent. */
+  async onConnectedToHost() {
+    await this.primeStartupState();
+  }
+
   // ── Sync ───────────────────────────────────────────────────────────────
 
   async onSyncAccount({ accountId }) {
@@ -64,8 +69,10 @@ export class GoogleProvider extends TbSyncProviderImplementation {
     this.#primeAuth(ctx);
     // Google surfaces a single contacts container — no server-side folder
     // discovery. The host's sync-coordinator proceeds to call onSyncFolder
-    // for each selected folder.
+    // for each selected folder. Dwell 250 ms so the manager can render
+    // the "Preparing…" transition.
     this.reportSyncState({ accountId, syncState: "prepare" });
+    await new Promise(r => setTimeout(r, DEBUG_STATUS_DELAY_MS));
     return ok();
   }
 
@@ -79,24 +86,27 @@ export class GoogleProvider extends TbSyncProviderImplementation {
 
     // Defensive: the stored targetID may be stale if the user deleted the
     // address book manually from Thunderbird's UI. Recreate on the fly so
-    // the sync can still proceed — push the new ID back to the host.
+    // the sync can still proceed — push the new ID back to the host. The
+    // host-side watcher picks up the new targetID via the folders-changed
+    // broadcast that follows the updateFolder call.
     let targetID = folder.targetID;
     if (!targetID || !(await addressBook.bookExists(targetID))) {
-      if (folder.targetID) changelogWatcher.unregisterTarget(folder.targetID);
       const bookName = computeBookName(ctx.account.accountName, ctx.authenticatedUserEmail);
       targetID = await addressBook.createBook(bookName);
       await this.updateFolder({
         accountId, folderId,
         patch: { targetID, targetName: bookName },
       });
-      await changelogWatcher.registerTarget(targetID, ctx.providerAccountId);
     }
 
     return await syncFolderContacts({
       accountId,
       providerAccountId: ctx.providerAccountId,
       folderId,
-      targetID,
+      // Pass the refreshed folder row so `sync-contacts` has `folder.targetID`
+      // and `folder.custom.groupMap` — the latter is loaded once at the top
+      // of the sync and flushed back via one UPDATE_FOLDER at the end.
+      folder: { ...folder, targetID },
       account: ctx.account,
       notify: this,
     });
@@ -111,12 +121,13 @@ export class GoogleProvider extends TbSyncProviderImplementation {
     if (!ctx) return null;
     // Re-enable after disable: push a fresh single-folder descriptor. The
     // book itself is created lazily (onFolderEnabled / onSyncFolder) since
-    // the user may enable but not immediately sync.
+    // the user may enable but not immediately sync. displayName mirrors
+    // the first-setup convention (authenticatedUserEmail if available).
     if (ctx.folders.length > 0) return null;
     const folder = {
       folderId: `f-${crypto.randomUUID()}`,
       folderType: "contacts",
-      displayName: ctx.account.accountName,
+      displayName: ctx.authenticatedUserEmail?.trim() || ctx.account.accountName,
       readOnly: false,
       selected: false,
     };
@@ -128,10 +139,16 @@ export class GoogleProvider extends TbSyncProviderImplementation {
     const ctx = await this.#loadContext(accountId);
     if (!ctx) return null;
     // Disable always releases Thunderbird resources so re-enable starts
-    // from a clean slate.
+    // from a clean slate. Clear each folder's groupMap, contactMap, and
+    // pending changelog too — the TB ids they hold reference books we
+    // just deleted.
     await this.#deleteAccountTargets(ctx.folders);
-    await changelog.clearAccount(ctx.providerAccountId);
-    await groupMap.clearAccount(ctx.providerAccountId);
+    for (const folder of ctx.folders) {
+      await this.updateFolder({
+        accountId, folderId: folder.folderId,
+        patch: { custom: { groupMap: {}, contactMap: {}, changelog: [] } },
+      }).catch(() => { /* best effort */ });
+    }
     oauth.invalidateAccessToken(ctx.providerAccountId);
     oauth.forgetAuth(ctx.providerAccountId);
     return null;
@@ -142,13 +159,11 @@ export class GoogleProvider extends TbSyncProviderImplementation {
     if (!ctx) return null;
     // `purgeTargets` travels over the protocol from the host. Default to
     // true: removing an account normally means the books go too. The host
-    // row (including its OAuth secrets in `custom`) is wiped by the host
-    // right after we return — nothing more to clean up here.
+    // row (including custom.{groupMap,contactMap,changelog} and OAuth
+    // secrets) is wiped right after we return — no explicit patch needed.
     if (purgeTargets !== false) {
       await this.#deleteAccountTargets(ctx.folders);
     }
-    await changelog.clearAccount(ctx.providerAccountId);
-    await groupMap.clearAccount(ctx.providerAccountId);
     oauth.invalidateAccessToken(ctx.providerAccountId);
     oauth.forgetAuth(ctx.providerAccountId);
     return null;
@@ -159,9 +174,10 @@ export class GoogleProvider extends TbSyncProviderImplementation {
     if (!ctx) throw withCode(new Error("unknown account"), ERR.UNKNOWN_ACCOUNT);
     const folder = ctx.folders.find(f => f.folderId === folderId);
     if (!folder) throw withCode(new Error("unknown folder"), ERR.UNKNOWN_FOLDER);
-    // Idempotent: if the book is already present, just re-register it.
+    // Idempotent: if the book is already present, nothing to do — the
+    // host's watcher is already registered for this targetID via the
+    // folder-row registry.
     if (folder.targetID && await addressBook.bookExists(folder.targetID)) {
-      await changelogWatcher.registerTarget(folder.targetID, ctx.providerAccountId);
       return null;
     }
     const bookName = computeBookName(ctx.account.accountName, ctx.authenticatedUserEmail);
@@ -170,7 +186,6 @@ export class GoogleProvider extends TbSyncProviderImplementation {
       accountId, folderId,
       patch: { targetID, targetName: bookName },
     });
-    await changelogWatcher.registerTarget(targetID, ctx.providerAccountId);
     return null;
   }
 
@@ -180,19 +195,22 @@ export class GoogleProvider extends TbSyncProviderImplementation {
     const folder = ctx.folders.find(f => f.folderId === folderId);
     if (!folder) throw withCode(new Error("unknown folder"), ERR.UNKNOWN_FOLDER);
     if (folder.targetID) {
-      // Unregister before deletion so cascading onDeleted events fired by
-      // deleteBook don't log every card as a user-initiated delete.
-      changelogWatcher.unregisterTarget(folder.targetID);
+      // Drop the targetID first so the host's watcher stops listening
+      // before we delete the book (otherwise each cascading onDeleted
+      // event from the book teardown would be logged as a user delete).
+      await this.updateFolder({
+        accountId, folderId,
+        patch: { targetID: null, targetName: null },
+      });
       await safeDeleteBook(folder.targetID);
     }
-    // Dropping the book invalidates every pending changelog entry for this
-    // account — the resourceNames they reference no longer correspond to
-    // anything local. Clear so a re-enable starts from a clean slate.
-    await changelog.clearAccount(ctx.providerAccountId);
-    await groupMap.clearAccount(ctx.providerAccountId);
+    // Dropping the book invalidates every pending changelog entry and
+    // both provider-maintained maps — the TB ids they hold reference
+    // the book we just deleted. Clear in one patch so re-enable starts
+    // fresh.
     await this.updateFolder({
       accountId, folderId,
-      patch: { targetID: null, targetName: null },
+      patch: { custom: { groupMap: {}, contactMap: {}, changelog: [] } },
     });
     return null;
   }
@@ -393,9 +411,11 @@ export class GoogleProvider extends TbSyncProviderImplementation {
     return null;
   }
 
-  /** Re-prime auth and re-register books for every account on startup.
-   *  WebExtension event listeners don't replay across restarts, so we walk
-   *  the host's accounts and wire the changelog watcher back in. */
+  /** Re-prime the in-memory OAuth auth cache for every account on startup
+   *  from host-stored credentials. Fired by the base class from
+   *  `onConnectedToHost` (first port-open + every reconnect). Safe to run
+   *  multiple times. Book observation is host-owned now, so nothing to
+   *  do for the watcher here. */
   async primeStartupState() {
     const accounts = await this.listAccounts();
     for (const acc of accounts) {
@@ -408,14 +428,9 @@ export class GoogleProvider extends TbSyncProviderImplementation {
           refreshToken: custom.refreshToken,
         });
       }
-      const ctx = await this.getAccount(acc.accountId);
-      if (!ctx) continue;
-      for (const folder of ctx.folders) {
-        if (folder.targetID) {
-          await changelogWatcher.registerTarget(folder.targetID, providerAccountId);
-        }
-      }
     }
+    // Book observation + identity caches are host-owned now; the host
+    // watcher seeds its registry from the folders storage blob at boot.
   }
 
   // ── Private ────────────────────────────────────────────────────────────
@@ -443,13 +458,13 @@ export class GoogleProvider extends TbSyncProviderImplementation {
   }
 
   /** Delete every Thunderbird address book bound to these folder rows,
-   *  tolerating per-folder failures (log and continue). Also unregisters
-   *  each book from the changelog watcher so pending onDeleted events don't
-   *  write orphan entries. */
+   *  tolerating per-folder failures (log and continue). The host watcher
+   *  unregisters each book on the next folders-changed broadcast (when
+   *  targetID drops to null) — callers that care about avoiding orphan
+   *  delete entries should null targetID *before* calling this helper. */
   async #deleteAccountTargets(folderList) {
     for (const folder of folderList) {
       if (folder.targetID) {
-        changelogWatcher.unregisterTarget(folder.targetID);
         await safeDeleteBook(folder.targetID);
       }
     }

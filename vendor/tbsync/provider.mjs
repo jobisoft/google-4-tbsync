@@ -159,6 +159,16 @@ export class TbSyncProviderImplementation {
   /** `{account, folders}` for one account, or `null` if it doesn't exist
    *  or isn't owned by this provider. */
   getAccount(accountId)          { return this.#sendCmd(PROVIDER_CMD.GET_ACCOUNT, { accountId }); }
+  /** Stamp a `*_by_server` pre-tag on `folder.custom.changelog` so the
+   *  host's observer drops the next Thunderbird event for this item as
+   *  self-inflicted (1500 ms freeze). Pass `itemId: null` for creates
+   *  where the TB-assigned id isn't known pre-call. Must be awaited
+   *  BEFORE the actual `messenger.contacts.*` / `messenger.mailingLists.*`
+   *  call so the tag is durable before the event fires. */
+  changelogMarkServerWrite(args) { return this.#sendCmd(PROVIDER_CMD.CHANGELOG_MARK_SERVER_WRITE, args); }
+  /** Remove the changelog entry for `(parentId, itemId)` regardless of
+   *  status. Called after successfully pushing a `*_by_user` entry. */
+  changelogRemove(args)          { return this.#sendCmd(PROVIDER_CMD.CHANGELOG_REMOVE, args); }
 
   // ── Outbound: notifications ─────────────────────────────────────────────
 
@@ -190,6 +200,12 @@ export class TbSyncProviderImplementation {
 
   async onReauthenticate(_args)        { throw this.#notImplemented("onReauthenticate"); }
   async onImportLegacyData(_args)      { throw this.#notImplemented("onImportLegacyData"); }
+
+  /** Called each time the host opens a port to us (initial boot + every
+   *  reconnect after a host restart). Safe place for startup work that
+   *  needs to read host state — listAccounts, getAccount, etc. — since the
+   *  port is live from this point. Must be idempotent. */
+  async onConnectedToHost()            { return null; }
 
   /** Open the setup popup, wait for `tbsync-setup-completed`, register the
    *  account with the host, and return `{accountId, accountName, accountEntries}`. */
@@ -278,6 +294,13 @@ export class TbSyncProviderImplementation {
         if (this.#port === incoming) this.#port = null;
         this.#rejectAllPending(ERR.PORT_CLOSED, "host disconnected");
       });
+      // Fire the subclass hook so startup work that needs the port
+      // (provider→host reads via listAccounts/getAccount) runs at the
+      // right moment. Warn-not-throw keeps a buggy subclass from poisoning
+      // the fresh port.
+      this.onConnectedToHost().catch(err =>
+        console.warn(`${this.#logPrefix} onConnectedToHost failed:`, err)
+      );
     });
   }
 

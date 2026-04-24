@@ -83,6 +83,8 @@ export const PROVIDER_CMD = {
   PUSH_FOLDER_LIST: "pushFolderList",
   LIST_ACCOUNTS: "listAccounts",
   GET_ACCOUNT: "getAccount",
+  CHANGELOG_MARK_SERVER_WRITE: "changelogMarkServerWrite",
+  CHANGELOG_REMOVE: "changelogRemove",
 };
 
 /** Provider → TbSync notification types (no response). */

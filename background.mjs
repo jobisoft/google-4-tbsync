@@ -1,4 +1,3 @@
-import * as changelogWatcher from "./modules/changelog-watcher.mjs";
 import { getRedirectURL } from "./modules/google/oauth.mjs";
 import { GoogleProvider } from "./modules/google-provider.mjs";
 
@@ -9,9 +8,10 @@ import { GoogleProvider } from "./modules/google-provider.mjs";
  * runtime.onMessage traffic (from setup.html / config.html) to the
  * appropriate provider method.
  *
- * Provider-local storage is limited to OAuth refresh tokens, the pending
- * changelog, and the group map — all transient or secret. The host owns
- * the authoritative account + folder rows.
+ * The provider carries no persistent storage. The host owns the account
+ * and folder rows (including OAuth secrets, groupMap, contactMap, and
+ * the changelog). The host also runs the address-book observer; the
+ * provider is a pure consumer of the host's changelog queue.
  */
 
 const provider = new GoogleProvider();
@@ -67,12 +67,8 @@ browser.runtime.onMessage.addListener(async msg => {
 });
 
 provider.init();
-changelogWatcher.init();
 
-// Re-attach the changelog watcher to every book owned by this provider on
-// startup. WebExtension event listeners don't replay across restarts, so we
-// walk the host's account + folder rows and re-register each bound book.
-// Runs best-effort; the host may still be booting when we hit this line.
-provider.primeStartupState().catch(err => {
-  console.warn("[google-4-tbsync] startup priming failed:", err);
-});
+// Startup priming runs inside `provider.onConnectedToHost` (fired by the
+// base class when the host opens the port), not here — at this point the
+// port isn't open yet, so listAccounts/getAccount would fail with
+// "host not connected".
