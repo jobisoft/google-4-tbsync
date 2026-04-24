@@ -23,9 +23,6 @@
   "setup.authButton": {
     "message": "Sign in with Google"
   },
-  "setup.finishButton": {
-    "message": "Finish"
-  },
   "setup.cancelButton": {
     "message": "Cancel"
   },
