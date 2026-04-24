@@ -1,32 +1,11 @@
 /**
- * Account/folder status constants plus the StatusData result shape that
- * providers must use when responding to syncAccount/syncFolder RPCs.
+ * StatusData result shape that providers must use when responding to
+ * syncAccount / syncFolder RPCs. Account + folder *display* status are
+ * derived at render time on the host; no persistent status enums live here.
  *
  * **MIRRORED INTO EVERY PROVIDER ADD-ON** — see the header of
  * `./protocol.mjs` for the sync rule.
  */
-
-export const ACCOUNT_STATUS = {
-  SUCCESS: "success",
-  SYNCING: "syncing",
-  BUSY: "busy",
-  NOT_SYNCED: "notsyncronized",
-  WARNING: "warning",
-  ERROR: "error",
-  DISABLED: "disabled",
-  PROVIDER_UNAVAILABLE: "provider-unavailable",
-  NEEDS_REAUTH: "needs-reauth",
-};
-
-export const FOLDER_STATUS = {
-  PENDING: "pending",
-  SUCCESS: "success",
-  BUSY: "busy",
-  WARNING: "warning",
-  ERROR: "error",
-  SKIPPED: "skipped",
-  DISABLED: "disabled",
-};
 
 export const STATUS_TYPES = {
   SUCCESS: "success",

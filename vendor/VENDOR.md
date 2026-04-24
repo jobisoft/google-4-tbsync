@@ -37,7 +37,7 @@ Contents:
 |---|---|
 | [tbsync/provider.mjs](./tbsync/provider.mjs) | `TbSyncProviderImplementation` — owns the port, handshake, RPC dispatch, setup/config popup machinery. Provider subclasses override `on*` virtual hooks. Also exports `TBSYNC_ID`. |
 | [tbsync/protocol.mjs](./tbsync/protocol.mjs) | Wire-protocol constants: port name, command/notification enums, error codes, `withCode` helper. **Mirror-synced with the host's copy** — see file header. |
-| [tbsync/status.mjs](./tbsync/status.mjs) | `STATUS_TYPES` enum plus `ok()`/`warning()`/`error()` builders for RPC return values. **Mirror-synced** — same contract as `protocol.mjs`. (`ACCOUNT_STATUS` / `FOLDER_STATUS` are host-only UI values and stay on the host side.) |
+| [tbsync/status.mjs](./tbsync/status.mjs) | `STATUS_TYPES` enum plus `ok()`/`warning()`/`error()` builders for RPC return values. **Mirror-synced** — same contract as `protocol.mjs`. Account and folder display status are derived on the host at render time; no persistent status enums live on the wire. |
 
 ### Mirror-sync contract
 

@@ -79,7 +79,7 @@ export class GoogleProvider extends TbSyncProviderImplementation {
     // Google surfaces a single contacts container — no server-side folder
     // discovery happens here. The host's sync-coordinator proceeds to call
     // onSyncFolder for each selected folder.
-    this.reportSyncState({ accountId, syncState: "send.account-list" });
+    this.reportSyncState({ accountId, syncState: "prepare" });
     return ok();
   }
 

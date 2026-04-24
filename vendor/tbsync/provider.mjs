@@ -143,6 +143,7 @@ export class TbSyncProviderImplementation {
 
   registerAccount(args) { return this.#sendCmd(PROVIDER_CMD.REGISTER_ACCOUNT, args); }
   updateAccount(args)   { return this.#sendCmd(PROVIDER_CMD.UPDATE_ACCOUNT,   args); }
+  updateFolder(args)    { return this.#sendCmd(PROVIDER_CMD.UPDATE_FOLDER,    args); }
   pushFolderList(args)  { return this.#sendCmd(PROVIDER_CMD.PUSH_FOLDER_LIST, args); }
 
   // ── Outbound: notifications ─────────────────────────────────────────────

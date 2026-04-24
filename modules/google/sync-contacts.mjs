@@ -27,23 +27,59 @@ export async function syncFolderContacts({ accountId, providerAccountId, folderI
     ? (msg, data) => console.log(`[google-4-tbsync] ${msg}`, data ?? "")
     : () => {};
 
+  // Clear any stale warning/error from a prior sync. The host never touches
+  // these fields — the provider owns their lifecycle.
+  await notify.updateFolder({
+    accountId, folderId,
+    patch: { warning: null, error: null },
+  });
+
+  try {
+    return await runFolderSync({ accountId, providerAccountId, folderId, targetAbId, notify, acc, verbose, log, includeSystemGroups });
+  } catch (err) {
+    if (err?.code === "E:AUTH") {
+      // Auth failure is account-scoped. The folder list is about to be
+      // wiped by the host's reauth flow, so stamping folder.error is
+      // wasted work. Put the error on the account record instead — the
+      // host's UI reads `error: "E:AUTH"` to render the Sign-in-again CTA.
+      await notify.updateAccount({
+        accountId,
+        patch: { error: "E:AUTH" },
+      }).catch(() => { /* best effort — original error still propagates */ });
+    } else {
+      // Non-auth errors are folder-scoped. Prefer the ERR code (localised
+      // on the host) over the raw message.
+      await notify.updateFolder({
+        accountId, folderId,
+        patch: { error: err?.code ?? err?.message ?? "Sync failed" },
+      }).catch(() => { /* best effort */ });
+    }
+    throw err;
+  }
+}
+
+async function runFolderSync({ accountId, providerAccountId, folderId, targetAbId, notify, acc, verbose, log, includeSystemGroups }) {
   // ── Push pass ──────────────────────────────────────────────────────────
   let pushCounts = { added: 0, updated: 0, deleted: 0, conflicts: 0 };
   const readOnly = !!acc?.readOnlyMode;
   if (readOnly) {
-    notify.reportSyncState({ accountId, folderId, syncState: "push.skipped-read-only" });
+    notify.reportEventLog({
+      accountId, folderId,
+      severity: "info",
+      message: "Push skipped (read-only mode)",
+    });
     log("push pass skipped — readOnlyMode");
   } else {
     pushCounts = await runPushPass({ accountId, folderId, providerAccountId, targetAbId, notify, log });
   }
 
   // ── Pull contacts ──────────────────────────────────────────────────────
-  notify.reportSyncState({ accountId, folderId, syncState: "send.people-list" });
+  notify.reportSyncState({ accountId, folderId, syncState: "sync" });
   const people = await peopleApi.listAllConnections(providerAccountId);
   log(`pull: server returned ${people.length} contact(s)`);
   if (verbose && people.length > 0) log("pull: first server contact =", people[0]);
 
-  notify.reportSyncState({ accountId, folderId, syncState: "eval.diff" });
+  notify.reportSyncState({ accountId, folderId, syncState: "sync" });
   const local = await addressBook.listContacts(targetAbId);
   log(`pull: local book has ${local.length} card(s)`);
   const byResourceName = new Map();
@@ -107,7 +143,7 @@ export async function syncFolderContacts({ accountId, providerAccountId, folderI
     includeSystemGroups, byResourceName, memberMap, notify, log,
   });
 
-  notify.reportSyncState({ accountId, folderId, syncState: "eval.done" });
+  notify.reportSyncState({ accountId, folderId, syncState: "sync" });
 
   const pushSummary = readOnly
     ? "push skipped (read-only)"
@@ -116,9 +152,20 @@ export async function syncFolderContacts({ accountId, providerAccountId, folderI
   const groupSummary = `groups: ${groupCounts.added}+${groupCounts.updated} ↓, ${groupCounts.deleted} delete; members: ${groupCounts.membersAdded}+${groupCounts.membersRemoved}`;
   const summary = `${pushSummary}; ${pullSummary}; ${groupSummary}`;
 
+  // Stamp the folder's lastSyncTime. warning/error were cleared at entry,
+  // so a clean sync leaves them null.
+  const now = Date.now();
   if (itemsTotal === 0 && local.length > 0 && pullAdded === 0 && pullUpdated === 0) {
+    await notify.updateFolder({
+      accountId, folderId,
+      patch: { warning: "Server returned 0 contacts", lastSyncTime: now },
+    });
     return warning("Server returned 0 contacts", summary);
   }
+  await notify.updateFolder({
+    accountId, folderId,
+    patch: { lastSyncTime: now },
+  });
   return ok(summary);
 }
 
@@ -140,7 +187,7 @@ function indexMemberships(memberMap, contactResourceName, memberships) {
  *  Successful / policy-dropped entries are removed; transient failures are
  *  re-queued. */
 async function runPushPass({ accountId, folderId, providerAccountId, targetAbId, notify, log = () => {} }) {
-  notify.reportSyncState({ accountId, folderId, syncState: "push.updates" });
+  notify.reportSyncState({ accountId, folderId, syncState: "sync" });
 
   const rawEntries = await changelog.listForAccount(providerAccountId);
   const entries = changelog.consolidate(rawEntries);
@@ -371,7 +418,7 @@ async function runGroupPullPass({
   accountId, folderId, providerAccountId, targetAbId,
   includeSystemGroups, byResourceName, memberMap, notify, log,
 }) {
-  notify.reportSyncState({ accountId, folderId, syncState: "groups.pull" });
+  notify.reportSyncState({ accountId, folderId, syncState: "sync" });
 
   const serverGroups = await peopleApi.listAllContactGroups(providerAccountId);
   const eligible = serverGroups.filter(g =>
