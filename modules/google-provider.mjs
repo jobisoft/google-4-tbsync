@@ -128,7 +128,9 @@ export class GoogleProvider extends TbSyncProviderImplementation {
       folderId: `f-${crypto.randomUUID()}`,
       folderType: "contacts",
       displayName: ctx.authenticatedUserEmail?.trim() || ctx.account.accountName,
-      readOnly: false,
+      // Mirror the account-level toggle so the ACL icon is correct from
+      // the moment the folder is discovered, before the user enables it.
+      readOnly: !!ctx.account.custom?.readOnlyMode,
       selected: false,
     };
     await this.pushFolderList({ accountId, folders: [folder] });
@@ -244,6 +246,7 @@ export class GoogleProvider extends TbSyncProviderImplementation {
   async onGetSortedFolders({ accountId }) {
     const ctx = await this.#loadContext(accountId);
     if (!ctx) return [];
+    const readOnly = !!ctx.account.custom?.readOnlyMode;
     return ctx.folders
       .slice()
       .sort((a, b) => (a.orderIndex ?? 0) - (b.orderIndex ?? 0))
@@ -251,7 +254,10 @@ export class GoogleProvider extends TbSyncProviderImplementation {
         folderId: f.folderId,
         folderType: f.folderType ?? "contacts",
         displayName: f.displayName,
-        readOnly: f.readOnly ?? false,
+        // Mirror the account-level "read-only mode" toggle onto every
+        // folder row so the manager's ACL column surfaces the cause of a
+        // skipped push pass without any host-side knowledge of the flag.
+        readOnly,
         selected: f.selected ?? false,
       }));
   }
@@ -340,7 +346,9 @@ export class GoogleProvider extends TbSyncProviderImplementation {
       folderId: `f-${crypto.randomUUID()}`,
       folderType: "contacts",
       displayName: authenticatedUserEmail?.trim() || trimmedLabel,
-      readOnly: false,
+      // Mirrors `custom.readOnlyMode` default below so the ACL indicator
+      // and push behavior agree from row zero.
+      readOnly: true,
       selected: false,
     }];
 
@@ -411,6 +419,16 @@ export class GoogleProvider extends TbSyncProviderImplementation {
     if (Object.keys(customPatch).length) outgoing.custom = customPatch;
     if (Object.keys(outgoing).length) {
       await this.updateAccount({ accountId, patch: outgoing });
+    }
+
+    // Mirror a read-only toggle onto every folder row immediately so the
+    // manager's ACL column updates without waiting for the next sync's
+    // onGetSortedFolders pass.
+    if ("readOnlyMode" in patch) {
+      const readOnly = !!patch.readOnlyMode;
+      await Promise.all(ctx.folders.map(f =>
+        this.updateFolder({ accountId, folderId: f.folderId, patch: { readOnly } })
+      ));
     }
     return null;
   }
