@@ -103,13 +103,22 @@ export class TbSyncProviderImplementation {
   /** Send an announce. Returns the host's reply, or null on rejection / no response. */
   async announce() {
     const manifest = browser.runtime.getManifest();
+    // Resolve relative icon paths to absolute moz-extension:// URLs so the
+    // host can render them cross-extension via <img src>. The provider must
+    // list these paths in its manifest's web_accessible_resources.
+    const absoluteIcons = Object.fromEntries(
+      Object.entries(this.#icons).map(([size, path]) => [
+        size,
+        /^(moz-extension|https?):/.test(path) ? path : browser.runtime.getURL(path),
+      ])
+    );
     const payload = {
       type: DISCOVERY.ANNOUNCE,
       protocolVersion: PROTOCOL_VERSION,
       providerId: browser.runtime.id,
       providerName: this.#name,
       providerVersion: manifest.version,
-      icons: this.#icons,
+      icons: absoluteIcons,
       capabilities: this.#capabilities,
       defaultAccountEntries: this.#defaultAccountEntries,
       defaultFolderEntries: this.#defaultFolderEntries,
