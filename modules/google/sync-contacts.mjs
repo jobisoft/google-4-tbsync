@@ -116,7 +116,7 @@ async function runFolderSync(ctx) {
   let pushCounts = { added: 0, updated: 0, deleted: 0, conflicts: 0 };
   if (readOnly) {
     notify.reportEventLog({
-      accountId, folderId, severity: "info",
+      accountId, folderId, level: "debug",
       message: "Push skipped (read-only mode)",
     });
     log("push: skipped (read-only)");

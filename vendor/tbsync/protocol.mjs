@@ -113,7 +113,14 @@ export const PROVIDER_CMD = {
   CHANGELOG_REMOVE: "changelogRemove",
 };
 
-/** Provider → TbSync notification types (no response). */
+/** Provider → TbSync notification types (no response).
+ *
+ *  REPORT_EVENT_LOG { level, message, accountId?, folderId?, details? }
+ *    Appends an entry to the host's session-scoped event log. `level` is
+ *    REQUIRED and MUST be one of "error" | "warning" | "debug"; the host
+ *    rejects payloads without a valid level. The host applies its own
+ *    capture gate from `settings.logLevel` before persisting.
+ */
 export const PROVIDER_NOTIFY = {
   REPORT_SYNC_STATE: "reportSyncState",
   REPORT_PROGRESS: "reportProgress",

@@ -174,8 +174,17 @@ export class TbSyncProviderImplementation {
 
   reportSyncState(payload)    { this.#notify(PROVIDER_NOTIFY.REPORT_SYNC_STATE, payload); }
   reportProgress(payload)     { this.#notify(PROVIDER_NOTIFY.REPORT_PROGRESS,   payload); }
-  reportEventLog(payload)     { this.#notify(PROVIDER_NOTIFY.REPORT_EVENT_LOG,  payload); }
-  reportStatus(payload)       { this.#notify(PROVIDER_NOTIFY.REPORT_STATUS,     payload); }
+  /** Append a line to the host's event log. `payload.level` is REQUIRED and
+   *  MUST be one of "error" | "warning" | "debug"; a plain Error is thrown
+   *  at the call site if it's missing or bogus (fail-fast, not a wire error). */
+  reportEventLog(payload) {
+    const level = payload?.level;
+    if (level !== "error" && level !== "warning" && level !== "debug") {
+      throw new Error(`reportEventLog: level must be "error" | "warning" | "debug" (got ${JSON.stringify(level)})`);
+    }
+    this.#notify(PROVIDER_NOTIFY.REPORT_EVENT_LOG, payload);
+  }
+  reportStatus(payload)       { this.#notify(PROVIDER_NOTIFY.REPORT_STATUS, payload); }
   requestOpenManager(payload) { this.#notify(PROVIDER_NOTIFY.REQUEST_OPEN_MANAGER, payload); }
 
   // ── Virtual hooks — subclass overrides ──────────────────────────────────
