@@ -3,10 +3,8 @@ import { KEYS } from "./storage-keys.mjs";
 /**
  * Per-account changelog of pending local mutations. Entry shape:
  *   { kind, parentId, itemId, timestamp, status, resourceName? }
- * `kind` is "contact" or "group"; entries without it default to "contact"
- * so pre-M3c changelogs upgrade transparently. `resourceName` is captured
- * at event time so `deleted_by_user` entries survive after the local
- * object is gone.
+ * `kind` is "contact" or "group". `resourceName` is captured at event time
+ * so `deleted_by_user` entries survive after the local object is gone.
  */
 
 export const KIND = {

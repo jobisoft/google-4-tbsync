@@ -41,7 +41,8 @@ export async function syncFolderContacts({ accountId, providerAccountId, folderI
       // Auth failure is account-scoped. The folder list is about to be
       // wiped by the host's reauth flow, so stamping folder.error is
       // wasted work. Put the error on the account record instead — the
-      // host's UI reads `error: "E:AUTH"` to render the Sign-in-again CTA.
+      // host's UI reads `error: "E:AUTH"` to render the "Sign in again"
+      // button.
       await notify.updateAccount({
         accountId,
         patch: { error: "E:AUTH" },

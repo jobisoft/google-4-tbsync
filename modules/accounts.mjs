@@ -42,27 +42,35 @@ export async function remove(providerAccountId) {
 
 // ── providerAccountId ↔ tbsyncAccountId mapping ───────────────────────────
 
+async function mapRead() {
+  return (await browser.storage.local.get({ [KEYS.ACCOUNT_ID_MAP]: {} }))[KEYS.ACCOUNT_ID_MAP];
+}
+
+async function mapWrite(map) {
+  await browser.storage.local.set({ [KEYS.ACCOUNT_ID_MAP]: map });
+}
+
 export async function setTbsyncAccountId(providerAccountId, tbsyncAccountId) {
-  const rv = await browser.storage.local.get({ [KEYS.ACCOUNT_ID_MAP]: {} });
-  rv[KEYS.ACCOUNT_ID_MAP][providerAccountId] = tbsyncAccountId;
-  await browser.storage.local.set({ [KEYS.ACCOUNT_ID_MAP]: rv[KEYS.ACCOUNT_ID_MAP] });
+  const map = await mapRead();
+  map[providerAccountId] = tbsyncAccountId;
+  await mapWrite(map);
 }
 
 export async function getTbsyncAccountId(providerAccountId) {
-  const rv = await browser.storage.local.get({ [KEYS.ACCOUNT_ID_MAP]: {} });
-  return rv[KEYS.ACCOUNT_ID_MAP][providerAccountId] ?? null;
+  const map = await mapRead();
+  return map[providerAccountId] ?? null;
 }
 
 export async function getProviderAccountIdByTbsyncAccountId(tbsyncAccountId) {
-  const rv = await browser.storage.local.get({ [KEYS.ACCOUNT_ID_MAP]: {} });
-  for (const [pid, tid] of Object.entries(rv[KEYS.ACCOUNT_ID_MAP])) {
+  const map = await mapRead();
+  for (const [pid, tid] of Object.entries(map)) {
     if (tid === tbsyncAccountId) return pid;
   }
   return null;
 }
 
 export async function clearMapping(providerAccountId) {
-  const rv = await browser.storage.local.get({ [KEYS.ACCOUNT_ID_MAP]: {} });
-  delete rv[KEYS.ACCOUNT_ID_MAP][providerAccountId];
-  await browser.storage.local.set({ [KEYS.ACCOUNT_ID_MAP]: rv[KEYS.ACCOUNT_ID_MAP] });
+  const map = await mapRead();
+  delete map[providerAccountId];
+  await mapWrite(map);
 }

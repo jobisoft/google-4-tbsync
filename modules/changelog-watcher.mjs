@@ -80,7 +80,7 @@ function onContactEvent(op, node) {
   if (!providerAccountId) return;
   if (selfWriteDepth > 0) return;
 
-  // TB events may nest the vCard inside `properties` depending on version.
+  // Thunderbird events may nest the vCard inside `properties` depending on version.
   const vCard = node.vCard ?? node.properties?.vCard ?? null;
 
   let resourceName = null;

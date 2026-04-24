@@ -432,7 +432,7 @@ async function seedContactsFolder(providerAccountId, accountName, authenticatedU
 }
 
 /** Book name includes the email so users with multiple Google accounts
- *  under the same label can tell them apart in the TB sidebar. */
+ *  under the same label can tell them apart in the Thunderbird sidebar. */
 function computeBookName(accountName, authenticatedUserEmail) {
   const email = authenticatedUserEmail?.trim?.() || null;
   return email ? `${accountName} (${email})` : accountName;

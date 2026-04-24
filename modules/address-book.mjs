@@ -59,7 +59,7 @@ export async function getContact(id) {
   }
 }
 
-/** Promote `properties.vCard` (older TB versions) to a top-level field. */
+/** Promote `properties.vCard` (older Thunderbird versions) to a top-level field. */
 function normalizeCard(node) {
   if (!node) return node;
   const vCard = node.vCard ?? node.properties?.vCard ?? null;
@@ -172,7 +172,7 @@ export async function removeMailingListMember(listId, contactId) {
   }
 }
 
-/** Match TB's "unknown id" errors — wording varies across versions. */
+/** Match Thunderbird's "unknown id" errors — wording varies across versions. */
 function isNotFoundError(err) {
   const msg = String(err?.message ?? err ?? "");
   return /no such|not found|invalid id/i.test(msg);
