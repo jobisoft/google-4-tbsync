@@ -1,0 +1,101 @@
+{
+  "extensionName": {
+    "message": "Google-4-TbSync"
+  },
+  "extensionDescription": {
+    "message": "Szolgáltatói kiegészítő a TbSync számára, amely a Google-névjegyeket szinkronizálja a Thunderbirddel."
+  },
+  "setup.title": {
+    "message": "Google-fiók hozzáadása"
+  },
+  "setup.intro": {
+    "message": "A Google-fiókhoz való csatlakozáshoz adja meg a Google Cloud konzolban létrehozott OAuth-ügyfél-azonosítót és titkot. Adja meg a fiókcímkét is, hogy az új fiókot beazonosíthassa a TbSync-ben."
+  },
+  "setup.credentialsHelpLink": {
+    "message": "Hogyan hozza létre a Google Cloud Console hitelesítő adatait"
+  },
+  "setup.accountName": {
+    "message": "Fiókcímke"
+  },
+  "setup.clientID": {
+    "message": "Ügyfél-azonosító"
+  },
+  "setup.clientSecret": {
+    "message": "Ügyfél-titok"
+  },
+  "setup.authButton": {
+    "message": "Bejelentkezés a Google-fiókkal"
+  },
+  "setup.cancelButton": {
+    "message": "Mégse"
+  },
+  "setup.redirectHint": {
+    "message": "Az ügyfél-azonosítónak OAuth webalkalmazás-ügyfélhez kell tartoznia, és az engedélyezett átirányítási URI-knak tartalmazniuk kell ennek a kiegészítőnek az átirányítási URL-jét."
+  },
+  "setup.copyRedirect": {
+    "message": "Átirányítási URL másolása"
+  },
+  "setup.copied": {
+    "message": "Másolva"
+  },
+  "setup.error.copyFailed": {
+    "message": "A másolás sikertelen: $ERROR$",
+    "placeholders": {
+      "ERROR": { "content": "$1", "example": "permission denied" }
+    }
+  },
+  "setup.error.accountNameRequired": {
+    "message": "Adja meg a fiók nevét."
+  },
+  "setup.error.credentialsRequired": {
+    "message": "Adja meg az ügyfél-azonosítót és az ügyfél-titkot is."
+  },
+  "setup.error.missingToken": {
+    "message": "Hiányzó beállítási token. Nyissa meg ezt az ablakot a TbSync-en keresztül."
+  },
+  "setup.error.signInFailed": {
+    "message": "A bejelentkezés sikertelen"
+  },
+  "config.title": {
+    "message": "Google-fiók beállításai"
+  },
+  "config.label": {
+    "message": "Fiókcímke"
+  },
+  "config.email": {
+    "message": "Google-fiók"
+  },
+  "config.clientId": {
+    "message": "OAuth-ügyfél-azonosító"
+  },
+  "config.readOnlyMode": {
+    "message": "Csak olvasható (helyi módosításokat ne küldje a Google-be)"
+  },
+  "config.includeSystemContactGroups": {
+    "message": "Rendszercsoportok belefoglalása (Csillagozott, Leggyakrabban használt, …)"
+  },
+  "config.readOnlyBanner": {
+    "message": "A szinkronizálási hibák elkerülése érdekében a beállítások nem szerkeszthetők, amíg a fiók engedélyezve van."
+  },
+  "config.save": {
+    "message": "Mentés"
+  },
+  "config.cancel": {
+    "message": "Mégse"
+  },
+  "config.close": {
+    "message": "Bezárás"
+  },
+  "config.error.missingAccountId": {
+    "message": "Hiányzó fiókazonosító."
+  },
+  "config.error.loadFailed": {
+    "message": "A fiók betöltése sikertelen."
+  },
+  "config.error.accountNameRequired": {
+    "message": "A fiók neve kötelező."
+  },
+  "config.error.saveFailed": {
+    "message": "A mentés sikertelen"
+  }
+}

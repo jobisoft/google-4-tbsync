@@ -1,0 +1,101 @@
+{
+  "extensionName": {
+    "message": "Google-4-TbSync"
+  },
+  "extensionDescription": {
+    "message": "Complemento provedor para TbSync que sincroniza os contatos do Google com o Thunderbird."
+  },
+  "setup.title": {
+    "message": "Adicionar conta do Google"
+  },
+  "setup.intro": {
+    "message": "Para conectar a uma conta do Google, informe um ID de cliente OAuth e um segredo criados no console do Google Cloud. Especifique um rótulo para identificar a nova conta no TbSync."
+  },
+  "setup.credentialsHelpLink": {
+    "message": "Como criar suas credenciais do Google Cloud Console"
+  },
+  "setup.accountName": {
+    "message": "Rótulo da conta"
+  },
+  "setup.clientID": {
+    "message": "ID do cliente"
+  },
+  "setup.clientSecret": {
+    "message": "Segredo do cliente"
+  },
+  "setup.authButton": {
+    "message": "Entrar com o Google"
+  },
+  "setup.cancelButton": {
+    "message": "Cancelar"
+  },
+  "setup.redirectHint": {
+    "message": "O ID do cliente deve pertencer a um cliente de aplicativo Web OAuth e seus URIs de redirecionamento autorizados devem incluir a URL de redirecionamento deste complemento."
+  },
+  "setup.copyRedirect": {
+    "message": "Copiar URL de redirecionamento"
+  },
+  "setup.copied": {
+    "message": "Copiado"
+  },
+  "setup.error.copyFailed": {
+    "message": "Falha ao copiar: $ERROR$",
+    "placeholders": {
+      "ERROR": { "content": "$1", "example": "permission denied" }
+    }
+  },
+  "setup.error.accountNameRequired": {
+    "message": "Insira um nome de conta."
+  },
+  "setup.error.credentialsRequired": {
+    "message": "Insira tanto o ID do cliente quanto o segredo do cliente."
+  },
+  "setup.error.missingToken": {
+    "message": "Token de configuração ausente. Abra esta janela pelo TbSync."
+  },
+  "setup.error.signInFailed": {
+    "message": "Falha ao entrar"
+  },
+  "config.title": {
+    "message": "Configurações da conta do Google"
+  },
+  "config.label": {
+    "message": "Rótulo da conta"
+  },
+  "config.email": {
+    "message": "Conta do Google"
+  },
+  "config.clientId": {
+    "message": "ID de cliente OAuth"
+  },
+  "config.readOnlyMode": {
+    "message": "Somente leitura (não enviar alterações locais ao Google)"
+  },
+  "config.includeSystemContactGroups": {
+    "message": "Incluir grupos do sistema (Marcados com estrela, Mais contatados, …)"
+  },
+  "config.readOnlyBanner": {
+    "message": "Para evitar erros de sincronização, as configurações não podem ser editadas enquanto a conta estiver ativada."
+  },
+  "config.save": {
+    "message": "Salvar"
+  },
+  "config.cancel": {
+    "message": "Cancelar"
+  },
+  "config.close": {
+    "message": "Fechar"
+  },
+  "config.error.missingAccountId": {
+    "message": "Identificador da conta ausente."
+  },
+  "config.error.loadFailed": {
+    "message": "Falha ao carregar a conta."
+  },
+  "config.error.accountNameRequired": {
+    "message": "O nome da conta é obrigatório."
+  },
+  "config.error.saveFailed": {
+    "message": "Falha ao salvar"
+  }
+}

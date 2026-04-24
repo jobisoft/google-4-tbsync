@@ -1,0 +1,101 @@
+{
+  "extensionName": {
+    "message": "Google-4-TbSync"
+  },
+  "extensionDescription": {
+    "message": "Google 連絡先を Thunderbird と同期する TbSync 用プロバイダーアドオンです。"
+  },
+  "setup.title": {
+    "message": "Google アカウントを追加"
+  },
+  "setup.intro": {
+    "message": "Google アカウントに接続するには、Google Cloud コンソールで作成した OAuth クライアント ID とシークレットを指定してください。TbSync 内で新しいアカウントを識別するためのラベルも入力します。"
+  },
+  "setup.credentialsHelpLink": {
+    "message": "Google Cloud Console の認証情報の作成方法"
+  },
+  "setup.accountName": {
+    "message": "アカウントラベル"
+  },
+  "setup.clientID": {
+    "message": "クライアント ID"
+  },
+  "setup.clientSecret": {
+    "message": "クライアントシークレット"
+  },
+  "setup.authButton": {
+    "message": "Google でサインイン"
+  },
+  "setup.cancelButton": {
+    "message": "キャンセル"
+  },
+  "setup.redirectHint": {
+    "message": "クライアント ID は OAuth ウェブアプリケーション クライアントに属している必要があり、その承認済みリダイレクト URI にこのアドオンのリダイレクト URL を含める必要があります。"
+  },
+  "setup.copyRedirect": {
+    "message": "リダイレクト URL をコピー"
+  },
+  "setup.copied": {
+    "message": "コピー済み"
+  },
+  "setup.error.copyFailed": {
+    "message": "コピーに失敗しました: $ERROR$",
+    "placeholders": {
+      "ERROR": { "content": "$1", "example": "permission denied" }
+    }
+  },
+  "setup.error.accountNameRequired": {
+    "message": "アカウント名を入力してください。"
+  },
+  "setup.error.credentialsRequired": {
+    "message": "クライアント ID とクライアントシークレットの両方を入力してください。"
+  },
+  "setup.error.missingToken": {
+    "message": "セットアップトークンがありません。TbSync からこのウィンドウを開いてください。"
+  },
+  "setup.error.signInFailed": {
+    "message": "サインインに失敗しました"
+  },
+  "config.title": {
+    "message": "Google アカウント設定"
+  },
+  "config.label": {
+    "message": "アカウントラベル"
+  },
+  "config.email": {
+    "message": "Google アカウント"
+  },
+  "config.clientId": {
+    "message": "OAuth クライアント ID"
+  },
+  "config.readOnlyMode": {
+    "message": "読み取り専用 (ローカルの変更を Google に送信しない)"
+  },
+  "config.includeSystemContactGroups": {
+    "message": "システムグループを含める (スター付き、よく連絡を取る人 など)"
+  },
+  "config.readOnlyBanner": {
+    "message": "同期エラーを防ぐため、アカウントが有効な間は設定を編集できません。"
+  },
+  "config.save": {
+    "message": "保存"
+  },
+  "config.cancel": {
+    "message": "キャンセル"
+  },
+  "config.close": {
+    "message": "閉じる"
+  },
+  "config.error.missingAccountId": {
+    "message": "アカウント識別子がありません。"
+  },
+  "config.error.loadFailed": {
+    "message": "アカウントの読み込みに失敗しました。"
+  },
+  "config.error.accountNameRequired": {
+    "message": "アカウント名は必須です。"
+  },
+  "config.error.saveFailed": {
+    "message": "保存に失敗しました"
+  }
+}

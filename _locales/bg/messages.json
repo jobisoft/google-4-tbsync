@@ -1,0 +1,101 @@
+{
+  "extensionName": {
+    "message": "Google-4-TbSync"
+  },
+  "extensionDescription": {
+    "message": "Добавка-доставчик за TbSync, която синхронизира контактите от Google с Thunderbird."
+  },
+  "setup.title": {
+    "message": "Добавяне на акаунт в Google"
+  },
+  "setup.intro": {
+    "message": "За да се свържете с акаунт в Google, посочете идентификатор на клиент OAuth и тайна, които сте създали в конзолата на Google Cloud. Задайте етикет на акаунта, за да идентифицирате новия акаунт в TbSync."
+  },
+  "setup.credentialsHelpLink": {
+    "message": "Как да създадете идентификационни данни за Google Cloud Console"
+  },
+  "setup.accountName": {
+    "message": "Етикет на акаунта"
+  },
+  "setup.clientID": {
+    "message": "Идентификатор на клиент"
+  },
+  "setup.clientSecret": {
+    "message": "Тайна на клиент"
+  },
+  "setup.authButton": {
+    "message": "Вход с Google"
+  },
+  "setup.cancelButton": {
+    "message": "Отказ"
+  },
+  "setup.redirectHint": {
+    "message": "Идентификаторът на клиента трябва да принадлежи на клиент за OAuth уеб приложение и оторизираните URI за пренасочване трябва да включват URL адреса за пренасочване на тази добавка."
+  },
+  "setup.copyRedirect": {
+    "message": "Копиране на URL за пренасочване"
+  },
+  "setup.copied": {
+    "message": "Копирано"
+  },
+  "setup.error.copyFailed": {
+    "message": "Копирането е неуспешно: $ERROR$",
+    "placeholders": {
+      "ERROR": { "content": "$1", "example": "permission denied" }
+    }
+  },
+  "setup.error.accountNameRequired": {
+    "message": "Моля, въведете име на акаунта."
+  },
+  "setup.error.credentialsRequired": {
+    "message": "Моля, въведете както идентификатора на клиента, така и тайната на клиента."
+  },
+  "setup.error.missingToken": {
+    "message": "Липсва токен за настройка. Отворете този прозорец чрез TbSync."
+  },
+  "setup.error.signInFailed": {
+    "message": "Влизането е неуспешно"
+  },
+  "config.title": {
+    "message": "Настройки на акаунта в Google"
+  },
+  "config.label": {
+    "message": "Етикет на акаунта"
+  },
+  "config.email": {
+    "message": "Акаунт в Google"
+  },
+  "config.clientId": {
+    "message": "Идентификатор на клиент OAuth"
+  },
+  "config.readOnlyMode": {
+    "message": "Само за четене (да не се изпращат местни промени към Google)"
+  },
+  "config.includeSystemContactGroups": {
+    "message": "Включване на системни групи (С отметка, Най-чести, …)"
+  },
+  "config.readOnlyBanner": {
+    "message": "За да се предотвратят грешки при синхронизирането, настройките не могат да се променят, докато акаунтът е включен."
+  },
+  "config.save": {
+    "message": "Запазване"
+  },
+  "config.cancel": {
+    "message": "Отказ"
+  },
+  "config.close": {
+    "message": "Затваряне"
+  },
+  "config.error.missingAccountId": {
+    "message": "Липсва идентификатор на акаунт."
+  },
+  "config.error.loadFailed": {
+    "message": "Неуспешно зареждане на акаунта."
+  },
+  "config.error.accountNameRequired": {
+    "message": "Името на акаунта е задължително."
+  },
+  "config.error.saveFailed": {
+    "message": "Запазването е неуспешно"
+  }
+}

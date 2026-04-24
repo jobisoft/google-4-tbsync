@@ -1,0 +1,101 @@
+{
+  "extensionName": {
+    "message": "Google-4-TbSync"
+  },
+  "extensionDescription": {
+    "message": "Teenusepakkuja lisamoodul TbSync jaoks, mis sünkroonib Google'i kontakte Thunderbirdiga."
+  },
+  "setup.title": {
+    "message": "Lisa Google'i konto"
+  },
+  "setup.intro": {
+    "message": "Google'i kontoga ühenduse loomiseks anna OAuth-kliendi ID ja salasõna, mille oled loonud Google Cloud konsoolis. Määra kontosilt uue konto TbSync-is tuvastamiseks."
+  },
+  "setup.credentialsHelpLink": {
+    "message": "Kuidas luua oma Google Cloud Console'i mandaadid"
+  },
+  "setup.accountName": {
+    "message": "Kontosilt"
+  },
+  "setup.clientID": {
+    "message": "Kliendi ID"
+  },
+  "setup.clientSecret": {
+    "message": "Kliendi salasõna"
+  },
+  "setup.authButton": {
+    "message": "Logi sisse Google'iga"
+  },
+  "setup.cancelButton": {
+    "message": "Tühista"
+  },
+  "setup.redirectHint": {
+    "message": "Kliendi ID peab kuuluma OAuthi veebirakenduse kliendile ja selle volitatud ümbersuunamise URI-d peavad sisaldama selle lisamooduli ümbersuunamise URL-i."
+  },
+  "setup.copyRedirect": {
+    "message": "Kopeeri ümbersuunamise URL"
+  },
+  "setup.copied": {
+    "message": "Kopeeritud"
+  },
+  "setup.error.copyFailed": {
+    "message": "Kopeerimine ebaõnnestus: $ERROR$",
+    "placeholders": {
+      "ERROR": { "content": "$1", "example": "permission denied" }
+    }
+  },
+  "setup.error.accountNameRequired": {
+    "message": "Sisesta konto nimi."
+  },
+  "setup.error.credentialsRequired": {
+    "message": "Sisesta nii kliendi ID kui ka kliendi salasõna."
+  },
+  "setup.error.missingToken": {
+    "message": "Seadistamise märk puudub. Ava see aken TbSync kaudu."
+  },
+  "setup.error.signInFailed": {
+    "message": "Sisselogimine ebaõnnestus"
+  },
+  "config.title": {
+    "message": "Google'i konto sätted"
+  },
+  "config.label": {
+    "message": "Kontosilt"
+  },
+  "config.email": {
+    "message": "Google'i konto"
+  },
+  "config.clientId": {
+    "message": "OAuth-kliendi ID"
+  },
+  "config.readOnlyMode": {
+    "message": "Kirjutuskaitstud (ära saada kohalikke muudatusi Google'isse)"
+  },
+  "config.includeSystemContactGroups": {
+    "message": "Kaasa süsteemirühmad (Tähistatud, Enim suheldud, …)"
+  },
+  "config.readOnlyBanner": {
+    "message": "Sünkroonimisvigade vältimiseks ei saa sätteid muuta, kui konto on lubatud."
+  },
+  "config.save": {
+    "message": "Salvesta"
+  },
+  "config.cancel": {
+    "message": "Tühista"
+  },
+  "config.close": {
+    "message": "Sulge"
+  },
+  "config.error.missingAccountId": {
+    "message": "Konto identifikaator puudub."
+  },
+  "config.error.loadFailed": {
+    "message": "Konto laadimine ebaõnnestus."
+  },
+  "config.error.accountNameRequired": {
+    "message": "Konto nimi on kohustuslik."
+  },
+  "config.error.saveFailed": {
+    "message": "Salvestamine ebaõnnestus"
+  }
+}

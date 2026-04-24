@@ -1,0 +1,101 @@
+{
+  "extensionName": {
+    "message": "Google-4-TbSync"
+  },
+  "extensionDescription": {
+    "message": "Doplněk poskytovatele pro TbSync, který synchronizuje kontakty Google s Thunderbirdem."
+  },
+  "setup.title": {
+    "message": "Přidat účet Google"
+  },
+  "setup.intro": {
+    "message": "Pro připojení k účtu Google zadejte ID klienta OAuth a tajný klíč, které jste vytvořili v konzoli Google Cloud. Zadejte také název účtu, podle kterého nový účet rozpoznáte v TbSync."
+  },
+  "setup.credentialsHelpLink": {
+    "message": "Jak vytvořit přihlašovací údaje pro Google Cloud Console"
+  },
+  "setup.accountName": {
+    "message": "Název účtu"
+  },
+  "setup.clientID": {
+    "message": "ID klienta"
+  },
+  "setup.clientSecret": {
+    "message": "Tajný klíč klienta"
+  },
+  "setup.authButton": {
+    "message": "Přihlásit se přes Google"
+  },
+  "setup.cancelButton": {
+    "message": "Zrušit"
+  },
+  "setup.redirectHint": {
+    "message": "ID klienta musí patřit klientovi typu OAuth Web application a jeho autorizované URI pro přesměrování musí obsahovat URL přesměrování tohoto doplňku."
+  },
+  "setup.copyRedirect": {
+    "message": "Zkopírovat URL přesměrování"
+  },
+  "setup.copied": {
+    "message": "Zkopírováno"
+  },
+  "setup.error.copyFailed": {
+    "message": "Kopírování selhalo: $ERROR$",
+    "placeholders": {
+      "ERROR": { "content": "$1", "example": "permission denied" }
+    }
+  },
+  "setup.error.accountNameRequired": {
+    "message": "Zadejte prosím název účtu."
+  },
+  "setup.error.credentialsRequired": {
+    "message": "Zadejte prosím ID klienta i tajný klíč klienta."
+  },
+  "setup.error.missingToken": {
+    "message": "Chybí instalační token. Otevřete toto okno přes TbSync."
+  },
+  "setup.error.signInFailed": {
+    "message": "Přihlášení selhalo"
+  },
+  "config.title": {
+    "message": "Nastavení účtu Google"
+  },
+  "config.label": {
+    "message": "Název účtu"
+  },
+  "config.email": {
+    "message": "Účet Google"
+  },
+  "config.clientId": {
+    "message": "ID klienta OAuth"
+  },
+  "config.readOnlyMode": {
+    "message": "Pouze pro čtení (neodesílat místní změny do Google)"
+  },
+  "config.includeSystemContactGroups": {
+    "message": "Zahrnout systémové skupiny (S hvězdičkou, Nejčastější, …)"
+  },
+  "config.readOnlyBanner": {
+    "message": "Aby se předešlo chybám synchronizace, nelze nastavení upravovat, dokud je účet aktivní."
+  },
+  "config.save": {
+    "message": "Uložit"
+  },
+  "config.cancel": {
+    "message": "Zrušit"
+  },
+  "config.close": {
+    "message": "Zavřít"
+  },
+  "config.error.missingAccountId": {
+    "message": "Chybí identifikátor účtu."
+  },
+  "config.error.loadFailed": {
+    "message": "Účet se nepodařilo načíst."
+  },
+  "config.error.accountNameRequired": {
+    "message": "Název účtu je povinný."
+  },
+  "config.error.saveFailed": {
+    "message": "Uložení selhalo"
+  }
+}

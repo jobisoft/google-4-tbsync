@@ -1,0 +1,101 @@
+{
+  "extensionName": {
+    "message": "Google-4-TbSync"
+  },
+  "extensionDescription": {
+    "message": "Dodatek-dostawca dla TbSync, synchronizujący kontakty Google z Thunderbirdem."
+  },
+  "setup.title": {
+    "message": "Dodaj konto Google"
+  },
+  "setup.intro": {
+    "message": "Aby połączyć się z kontem Google, podaj identyfikator klienta OAuth i klucz tajny utworzone w konsoli Google Cloud. Wprowadź etykietę konta, aby rozróżnić nowe konto w TbSync."
+  },
+  "setup.credentialsHelpLink": {
+    "message": "Jak utworzyć dane uwierzytelniające w Google Cloud Console"
+  },
+  "setup.accountName": {
+    "message": "Etykieta konta"
+  },
+  "setup.clientID": {
+    "message": "Identyfikator klienta"
+  },
+  "setup.clientSecret": {
+    "message": "Klucz tajny klienta"
+  },
+  "setup.authButton": {
+    "message": "Zaloguj się przez Google"
+  },
+  "setup.cancelButton": {
+    "message": "Anuluj"
+  },
+  "setup.redirectHint": {
+    "message": "Identyfikator klienta musi należeć do klienta typu Aplikacja internetowa OAuth, a jego autoryzowane URI przekierowania muszą zawierać URL przekierowania tego dodatku."
+  },
+  "setup.copyRedirect": {
+    "message": "Kopiuj URL przekierowania"
+  },
+  "setup.copied": {
+    "message": "Skopiowano"
+  },
+  "setup.error.copyFailed": {
+    "message": "Nie udało się skopiować: $ERROR$",
+    "placeholders": {
+      "ERROR": { "content": "$1", "example": "permission denied" }
+    }
+  },
+  "setup.error.accountNameRequired": {
+    "message": "Wprowadź nazwę konta."
+  },
+  "setup.error.credentialsRequired": {
+    "message": "Wprowadź zarówno identyfikator klienta, jak i klucz tajny klienta."
+  },
+  "setup.error.missingToken": {
+    "message": "Brak tokenu konfiguracji. Otwórz to okno przez TbSync."
+  },
+  "setup.error.signInFailed": {
+    "message": "Logowanie nie powiodło się"
+  },
+  "config.title": {
+    "message": "Ustawienia konta Google"
+  },
+  "config.label": {
+    "message": "Etykieta konta"
+  },
+  "config.email": {
+    "message": "Konto Google"
+  },
+  "config.clientId": {
+    "message": "Identyfikator klienta OAuth"
+  },
+  "config.readOnlyMode": {
+    "message": "Tylko do odczytu (nie wysyłaj lokalnych zmian do Google)"
+  },
+  "config.includeSystemContactGroups": {
+    "message": "Uwzględnij grupy systemowe (Oznaczone gwiazdką, Najczęściej kontaktowani, …)"
+  },
+  "config.readOnlyBanner": {
+    "message": "Aby uniknąć błędów synchronizacji, ustawień nie można edytować, gdy konto jest włączone."
+  },
+  "config.save": {
+    "message": "Zapisz"
+  },
+  "config.cancel": {
+    "message": "Anuluj"
+  },
+  "config.close": {
+    "message": "Zamknij"
+  },
+  "config.error.missingAccountId": {
+    "message": "Brak identyfikatora konta."
+  },
+  "config.error.loadFailed": {
+    "message": "Nie udało się wczytać konta."
+  },
+  "config.error.accountNameRequired": {
+    "message": "Nazwa konta jest wymagana."
+  },
+  "config.error.saveFailed": {
+    "message": "Nie udało się zapisać"
+  }
+}
