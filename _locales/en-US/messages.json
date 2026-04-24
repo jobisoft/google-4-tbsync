@@ -29,6 +29,33 @@
   "setup.cancelButton": {
     "message": "Cancel"
   },
+  "setup.redirectHint": {
+    "message": "The Client ID must belong to an OAuth Web application client, and its Authorized redirect URIs must include this add-on's redirect URL."
+  },
+  "setup.copyRedirect": {
+    "message": "Copy redirect URL"
+  },
+  "setup.copied": {
+    "message": "Copied"
+  },
+  "setup.error.copyFailed": {
+    "message": "Copy failed: $ERROR$",
+    "placeholders": {
+      "ERROR": { "content": "$1", "example": "permission denied" }
+    }
+  },
+  "setup.error.accountNameRequired": {
+    "message": "Please enter an account name."
+  },
+  "setup.error.credentialsRequired": {
+    "message": "Please enter both the Client ID and the Client secret."
+  },
+  "setup.error.missingToken": {
+    "message": "Missing setup token. Open this window through TbSync."
+  },
+  "setup.error.signInFailed": {
+    "message": "Sign-in failed"
+  },
   "config.title": {
     "message": "Google account settings"
   },
@@ -61,5 +88,17 @@
   },
   "config.close": {
     "message": "Close"
+  },
+  "config.error.missingAccountId": {
+    "message": "Missing account identifier."
+  },
+  "config.error.loadFailed": {
+    "message": "Failed to load account."
+  },
+  "config.error.accountNameRequired": {
+    "message": "Account name is required."
+  },
+  "config.error.saveFailed": {
+    "message": "Save failed"
   }
 }

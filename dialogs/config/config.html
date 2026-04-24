@@ -2,7 +2,7 @@
 <html>
   <head>
     <meta charset="utf-8" />
-    <title>Edit Google account</title>
+    <title data-i18n-content="config.title"></title>
     <script type="module" src="config.mjs"></script>
     <style>
       body {
@@ -80,33 +80,33 @@
     </style>
   </head>
   <body>
-    <h2 id="title">Edit account</h2>
+    <h2 id="title" data-i18n-content="config.title"></h2>
 
     <div id="readonly-banner" class="readonly-banner"></div>
 
     <div class="field">
-      <label data-i18n="config.label"></label>
+      <label data-i18n-content="config.label"></label>
       <input id="account-name" type="text" />
     </div>
     <div class="field">
-      <label data-i18n="config.email"></label>
+      <label data-i18n-content="config.email"></label>
       <div id="email" class="display"></div>
     </div>
     <div class="field">
-      <label data-i18n="config.clientId"></label>
+      <label data-i18n-content="config.clientId"></label>
       <div id="client-id" class="display"></div>
     </div>
     <div class="checkbox-row">
       <input id="read-only-mode" type="checkbox" />
-      <label for="read-only-mode" data-i18n="config.readOnlyMode"></label>
+      <label for="read-only-mode" data-i18n-content="config.readOnlyMode"></label>
     </div>
     <div class="checkbox-row">
       <input id="include-system-groups" type="checkbox" />
-      <label for="include-system-groups" data-i18n="config.includeSystemContactGroups"></label>
+      <label for="include-system-groups" data-i18n-content="config.includeSystemContactGroups"></label>
     </div>
     <div class="checkbox-row">
       <input id="verbose-logging" type="checkbox" />
-      <label for="verbose-logging" data-i18n="config.verboseLogging"></label>
+      <label for="verbose-logging" data-i18n-content="config.verboseLogging"></label>
     </div>
 
     <div id="error" class="error"></div>
@@ -114,7 +114,7 @@
 
     <div class="actions">
       <div class="right">
-        <button id="btn-save"   class="primary"   data-i18n="config.save"></button>
+        <button id="btn-save"   class="primary"   data-i18n-content="config.save"></button>
         <button id="btn-cancel" class="secondary"></button>
       </div>
     </div>

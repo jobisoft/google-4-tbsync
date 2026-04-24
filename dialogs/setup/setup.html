@@ -2,7 +2,7 @@
 <html>
   <head>
     <meta charset="utf-8" />
-    <title>Add a Google account</title>
+    <title data-i18n-content="setup.title"></title>
     <script type="module" src="setup.mjs"></script>
     <style>
       body {
@@ -65,32 +65,32 @@
     </style>
   </head>
   <body>
-    <h2 data-i18n="setup.title"></h2>
-    <p class="intro" data-i18n="setup.intro"></p>
+    <h2 data-i18n-content="setup.title"></h2>
+    <p class="intro" data-i18n-content="setup.intro"></p>
 
     <div class="field">
-      <label data-i18n="setup.accountName"></label>
+      <label data-i18n-content="setup.accountName"></label>
       <input id="account-name" type="text" required />
     </div>
     <div class="field">
-      <label data-i18n="setup.clientID"></label>
+      <label data-i18n-content="setup.clientID"></label>
       <input id="client-id" type="text" autocomplete="off" spellcheck="false" />
     </div>
     <div class="field">
-      <label data-i18n="setup.clientSecret"></label>
+      <label data-i18n-content="setup.clientSecret"></label>
       <input id="client-secret" type="password" autocomplete="off" spellcheck="false" />
     </div>
 
     <p class="redirect-hint">
-      <em>The Client ID must belong to an OAuth <strong>Web application</strong> client, and its Authorized redirect URIs must include this add-on's redirect URL.</em>
-      <button type="button" id="btn-copy" class="redirect-copy-btn">Copy redirect URL</button>
+      <em data-i18n-content="setup.redirectHint"></em>
+      <button type="button" id="btn-copy" class="redirect-copy-btn" data-i18n-content="setup.copyRedirect"></button>
     </p>
 
     <div id="error" class="error"></div>
 
     <div class="actions">
-      <button id="btn-cancel" class="secondary" data-i18n="setup.cancelButton"></button>
-      <button id="btn-sign-in" class="primary" data-i18n="setup.authButton"></button>
+      <button id="btn-cancel" class="secondary" data-i18n-content="setup.cancelButton"></button>
+      <button id="btn-sign-in" class="primary" data-i18n-content="setup.authButton"></button>
     </div>
   </body>
 </html>

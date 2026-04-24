@@ -16,19 +16,11 @@
  * by design.
  */
 
+import { localizeDocument } from "../../vendor/i18n/i18n.mjs";
+
 const params = new URLSearchParams(location.search);
 const accountId = params.get("accountId");
 const readOnly = params.get("readOnly") === "1";
-
-function applyI18n() {
-  document.querySelectorAll("[data-i18n]").forEach(el => {
-    const msg = browser.i18n.getMessage(el.dataset.i18n);
-    if (msg) el.textContent = msg;
-  });
-  document.title = browser.i18n.getMessage("config.title") ?? "Google account settings";
-  const titleEl = document.getElementById("title");
-  if (titleEl) titleEl.textContent = browser.i18n.getMessage("config.title") ?? "Google account settings";
-}
 
 function showError(message) {
   const el = document.getElementById("error");
@@ -43,9 +35,15 @@ function clearBanners() {
 }
 
 async function load() {
-  if (!accountId) { showError("Missing accountId."); return; }
+  if (!accountId) {
+    showError(browser.i18n.getMessage("config.error.missingAccountId") ?? "Missing account identifier.");
+    return;
+  }
   const reply = await browser.runtime.sendMessage({ type: "google.getAccount", accountId });
-  if (!reply?.ok) { showError(reply?.error ?? "Failed to load account."); return; }
+  if (!reply?.ok) {
+    showError(reply?.error ?? browser.i18n.getMessage("config.error.loadFailed") ?? "Failed to load account.");
+    return;
+  }
   const account = reply.result;
 
   document.getElementById("account-name").value = account.accountName ?? "";
@@ -89,15 +87,15 @@ async function onSave() {
     verboseLogging: document.getElementById("verbose-logging").checked,
   };
   if (!patch.accountName) {
-    showError(browser.i18n.getMessage("setup.accountName")
-      ? `${browser.i18n.getMessage("setup.accountName")} is required.`
-      : "Account name is required.");
+    showError(browser.i18n.getMessage("config.error.accountNameRequired") ?? "Account name is required.");
     return;
   }
   document.getElementById("btn-save").disabled = true;
   try {
     const reply = await browser.runtime.sendMessage({ type: "google.saveAccount", accountId, patch });
-    if (!reply?.ok) throw new Error(reply?.error ?? "Save failed");
+    if (!reply?.ok) {
+      throw new Error(reply?.error ?? browser.i18n.getMessage("config.error.saveFailed") ?? "Save failed");
+    }
     window.close();
   } catch (err) {
     showError(err.message ?? String(err));
@@ -105,7 +103,7 @@ async function onSave() {
   }
 }
 
-applyI18n();
+localizeDocument();
 load();
 document.getElementById("btn-cancel").addEventListener("click", () => window.close());
 document.getElementById("btn-save").addEventListener("click", onSave);

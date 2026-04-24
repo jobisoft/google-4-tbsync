@@ -7,16 +7,10 @@
  * host's `openSetupPopup` RPC resolves with the canonical accountId.
  */
 
+import { localizeDocument } from "../../vendor/i18n/i18n.mjs";
+
 const params = new URLSearchParams(location.search);
 const setupToken = params.get("setupToken");
-
-function applyI18n() {
-  document.querySelectorAll("[data-i18n]").forEach(el => {
-    const msg = browser.i18n.getMessage(el.dataset.i18n);
-    if (msg) el.textContent = msg;
-  });
-  document.title = browser.i18n.getMessage("setup.title") ?? "Add a Google account";
-}
 
 function showError(message) {
   const el = document.getElementById("error");
@@ -46,10 +40,14 @@ async function onCopyRedirectURL() {
     const { redirectURL } = await browser.runtime.sendMessage({ type: "google.getRedirectURL" });
     await navigator.clipboard.writeText(redirectURL);
     const prior = btn.textContent;
-    btn.textContent = "Copied";
+    btn.textContent = browser.i18n.getMessage("setup.copied") ?? "Copied";
     setTimeout(() => { btn.textContent = prior; }, 1200);
   } catch (err) {
-    showError(`Copy failed: ${err.message ?? err}`);
+    const detail = err.message ?? String(err);
+    showError(
+      browser.i18n.getMessage("setup.error.copyFailed", detail)
+        ?? `Copy failed: ${detail}`
+    );
   }
 }
 
@@ -59,16 +57,16 @@ async function onSignIn() {
   const clientID = document.getElementById("client-id").value.trim();
   const clientSecret = document.getElementById("client-secret").value.trim();
   if (!label) {
-    showError("Please enter an account name.");
+    showError(browser.i18n.getMessage("setup.error.accountNameRequired") ?? "Please enter an account name.");
     document.getElementById("account-name").focus();
     return;
   }
   if (!clientID || !clientSecret) {
-    showError("Please enter both the Client ID and the Client secret.");
+    showError(browser.i18n.getMessage("setup.error.credentialsRequired") ?? "Please enter both the Client ID and the Client secret.");
     return;
   }
   if (!setupToken) {
-    showError("Missing setup token. Open this window through TbSync.");
+    showError(browser.i18n.getMessage("setup.error.missingToken") ?? "Missing setup token. Open this window through TbSync.");
     return;
   }
 
@@ -81,7 +79,7 @@ async function onSignIn() {
     });
     if (!reply?.ok) {
       if (reply?.code === "E:CANCELLED") { btn.disabled = false; return; }
-      throw new Error(reply?.error ?? "Sign-in failed");
+      throw new Error(reply?.error ?? browser.i18n.getMessage("setup.error.signInFailed") ?? "Sign-in failed");
     }
 
     await browser.runtime.sendMessage({
@@ -100,7 +98,7 @@ async function onSignIn() {
   }
 }
 
-applyI18n();
+localizeDocument();
 prefillCredentials();
 document.getElementById("btn-copy").addEventListener("click", onCopyRedirectURL);
 document.getElementById("btn-cancel").addEventListener("click", () => window.close());
