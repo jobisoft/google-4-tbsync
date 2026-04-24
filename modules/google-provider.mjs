@@ -3,11 +3,11 @@
  *
  * Host is the source of truth for account + folder rows. This provider
  * pulls its context from the host at the top of each on* hook via
- * `this.getAccount(accountId)`, reads user-config from `account.custom.*`
- * (clientID, clientSecret, readOnlyMode, includeSystemContactGroups,
- * verboseLogging), and writes state back via UPDATE_ACCOUNT / UPDATE_FOLDER
- * RPCs. Provider-side persistent storage is limited to OAuth refresh tokens
- * (oauth-tokens.mjs), the changelog, and the group map.
+ * `this.getAccount(accountId)`, reads user-config, OAuth credentials and
+ * the refresh token from `account.custom.*`, and writes state back via
+ * UPDATE_ACCOUNT / UPDATE_FOLDER RPCs. Provider-side persistent storage
+ * is limited to transient sync scaffolding (changelog, group map) — all
+ * regenerable via a fresh sync.
  *
  * `authenticateAndCreateAccount` and `saveAccountFromConfig` are plain
  * methods triggered by runtime.onMessage from setup.html / config.html.
@@ -17,7 +17,6 @@ import {
   ERR, withCode, error, ok,
   TbSyncProviderImplementation,
 } from "../vendor/tbsync/provider.mjs";
-import * as oauthTokens from "./oauth-tokens.mjs";
 import * as changelog from "./changelog.mjs";
 import * as changelogWatcher from "./changelog-watcher.mjs";
 import * as groupMap from "./group-map.mjs";
@@ -60,12 +59,9 @@ export class GoogleProvider extends TbSyncProviderImplementation {
   async onSyncAccount({ accountId }) {
     const ctx = await this.#loadContext(accountId);
     if (!ctx) throw withCode(new Error("unknown account"), ERR.UNKNOWN_ACCOUNT);
-    // Prime credentials so the people-api layer can refresh access tokens
+    // Prime OAuth auth so the people-api layer can refresh access tokens
     // without re-reading host state mid-sync.
-    oauth.primeCredentials(ctx.providerAccountId, {
-      clientID: ctx.account.custom.clientID,
-      clientSecret: ctx.account.custom.clientSecret,
-    });
+    this.#primeAuth(ctx);
     // Google surfaces a single contacts container — no server-side folder
     // discovery. The host's sync-coordinator proceeds to call onSyncFolder
     // for each selected folder.
@@ -79,10 +75,7 @@ export class GoogleProvider extends TbSyncProviderImplementation {
     const folder = ctx.folders.find(f => f.folderId === folderId);
     if (!folder) throw withCode(new Error("unknown folder"), ERR.UNKNOWN_FOLDER);
 
-    oauth.primeCredentials(ctx.providerAccountId, {
-      clientID: ctx.account.custom.clientID,
-      clientSecret: ctx.account.custom.clientSecret,
-    });
+    this.#primeAuth(ctx);
 
     // Defensive: the stored targetID may be stale if the user deleted the
     // address book manually from Thunderbird's UI. Recreate on the fly so
@@ -140,7 +133,7 @@ export class GoogleProvider extends TbSyncProviderImplementation {
     await changelog.clearAccount(ctx.providerAccountId);
     await groupMap.clearAccount(ctx.providerAccountId);
     oauth.invalidateAccessToken(ctx.providerAccountId);
-    oauth.forgetCredentials(ctx.providerAccountId);
+    oauth.forgetAuth(ctx.providerAccountId);
     return null;
   }
 
@@ -148,15 +141,16 @@ export class GoogleProvider extends TbSyncProviderImplementation {
     const ctx = await this.#loadContext(accountId);
     if (!ctx) return null;
     // `purgeTargets` travels over the protocol from the host. Default to
-    // true: removing an account normally means the books go too.
+    // true: removing an account normally means the books go too. The host
+    // row (including its OAuth secrets in `custom`) is wiped by the host
+    // right after we return — nothing more to clean up here.
     if (purgeTargets !== false) {
       await this.#deleteAccountTargets(ctx.folders);
     }
     await changelog.clearAccount(ctx.providerAccountId);
     await groupMap.clearAccount(ctx.providerAccountId);
-    await oauthTokens.remove(ctx.providerAccountId);
     oauth.invalidateAccessToken(ctx.providerAccountId);
-    oauth.forgetCredentials(ctx.providerAccountId);
+    oauth.forgetAuth(ctx.providerAccountId);
     return null;
   }
 
@@ -216,11 +210,10 @@ export class GoogleProvider extends TbSyncProviderImplementation {
         extraRows: [],
       };
     }
-    const tokens = await oauthTokens.get(ctx.providerAccountId);
     return {
       displayName: ctx.account.accountName,
       iconUrl: browser.runtime.getURL("icons/icon-16.png"),
-      connectionState: tokens?.refreshToken ? "connected" : "disconnected",
+      connectionState: ctx.account.custom.refreshToken ? "connected" : "disconnected",
       lastSyncTime: ctx.account.lastSyncTime ?? 0,
       extraRows: [],
     };
@@ -279,11 +272,12 @@ export class GoogleProvider extends TbSyncProviderImplementation {
           ERR.AUTH
         );
       }
-      await oauthTokens.set(ctx.providerAccountId, {
-        refreshToken,
-        authenticatedUserEmail: authenticatedUserEmail ?? ctx.authenticatedUserEmail ?? null,
+      const nextEmail = authenticatedUserEmail ?? ctx.authenticatedUserEmail ?? null;
+      await this.updateAccount({
+        accountId,
+        patch: { custom: { refreshToken, authenticatedUserEmail: nextEmail } },
       });
-      oauth.primeCredentials(ctx.providerAccountId, { clientID, clientSecret });
+      oauth.primeAuth(ctx.providerAccountId, { clientID, clientSecret, refreshToken });
       if (accessToken) oauth.primeAccessToken(ctx.providerAccountId, accessToken, expiresIn);
       return ok();
     } catch (err) {
@@ -301,13 +295,12 @@ export class GoogleProvider extends TbSyncProviderImplementation {
 
   /** Setup popup flow:
    *    1. Run OAuth → refresh token + authenticated email.
-   *    2. Persist refresh token + email in oauth-tokens (provider-side secret).
-   *    3. Return the payload the setup page forwards to the host: the
+   *    2. Return the payload the setup page forwards to the host: the
    *       providerAccountId, the user-chosen account name, the opaque
-   *       `custom` blob with all user-config, and one unselected contacts
-   *       folder descriptor.
-   *  The host row is created by the base-class `onOpenSetupPopup` after the
-   *  page posts `tbsync-setup-completed`. */
+   *       `custom` blob (user-config + OAuth secrets + refresh token),
+   *       and one unselected contacts folder descriptor.
+   *  The host row is created by the base-class `onOpenSetupPopup` after
+   *  the page posts `tbsync-setup-completed`. */
   async authenticateAndCreateAccount({ label, clientID, clientSecret }) {
     const { refreshToken, authenticatedUserEmail, accessToken, expiresIn } =
       await oauth.startAuth({ clientID, clientSecret });
@@ -318,11 +311,7 @@ export class GoogleProvider extends TbSyncProviderImplementation {
     }
     const providerAccountId = `g-${crypto.randomUUID()}`;
 
-    await oauthTokens.set(providerAccountId, {
-      refreshToken,
-      authenticatedUserEmail: authenticatedUserEmail ?? null,
-    });
-    oauth.primeCredentials(providerAccountId, { clientID, clientSecret });
+    oauth.primeAuth(providerAccountId, { clientID, clientSecret, refreshToken });
     if (accessToken) oauth.primeAccessToken(providerAccountId, accessToken, expiresIn);
 
     const initialFolders = [{
@@ -340,6 +329,8 @@ export class GoogleProvider extends TbSyncProviderImplementation {
       custom: {
         clientID,
         clientSecret,
+        refreshToken,
+        authenticatedUserEmail: authenticatedUserEmail ?? null,
         readOnlyMode: true,
         includeSystemContactGroups: false,
         verboseLogging: false,
@@ -402,18 +393,19 @@ export class GoogleProvider extends TbSyncProviderImplementation {
     return null;
   }
 
-  /** Re-prime credentials and re-register books for every enabled account
-   *  on startup. WebExtension event listeners don't replay across restarts,
-   *  so we walk the host's accounts and wire the changelog watcher back in. */
+  /** Re-prime auth and re-register books for every account on startup.
+   *  WebExtension event listeners don't replay across restarts, so we walk
+   *  the host's accounts and wire the changelog watcher back in. */
   async primeStartupState() {
     const accounts = await this.listAccounts();
     for (const acc of accounts) {
       const { providerAccountId, custom } = acc;
       if (!providerAccountId) continue;
-      if (custom?.clientID && custom?.clientSecret) {
-        oauth.primeCredentials(providerAccountId, {
+      if (custom?.clientID && custom?.clientSecret && custom?.refreshToken) {
+        oauth.primeAuth(providerAccountId, {
           clientID: custom.clientID,
           clientSecret: custom.clientSecret,
+          refreshToken: custom.refreshToken,
         });
       }
       const ctx = await this.getAccount(acc.accountId);
@@ -428,18 +420,25 @@ export class GoogleProvider extends TbSyncProviderImplementation {
 
   // ── Private ────────────────────────────────────────────────────────────
 
+  /** Prime OAuth for a context — clientID, clientSecret, and refresh token
+   *  all live on the host row under `custom.*`. */
+  #primeAuth(ctx) {
+    const { clientID, clientSecret, refreshToken } = ctx.account.custom ?? {};
+    if (!clientID || !clientSecret || !refreshToken) return;
+    oauth.primeAuth(ctx.providerAccountId, { clientID, clientSecret, refreshToken });
+  }
+
   /** Load `{account, folders, providerAccountId, authenticatedUserEmail}`
    *  for an on* hook. Returns null if the account doesn't exist or isn't
    *  owned by us. */
   async #loadContext(accountId) {
     const rv = await this.getAccount(accountId);
     if (!rv?.account) return null;
-    const tokens = await oauthTokens.get(rv.account.providerAccountId);
     return {
       account: rv.account,
       folders: rv.folders ?? [],
       providerAccountId: rv.account.providerAccountId,
-      authenticatedUserEmail: tokens?.authenticatedUserEmail ?? null,
+      authenticatedUserEmail: rv.account.custom?.authenticatedUserEmail ?? null,
     };
   }
 

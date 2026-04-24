@@ -2,12 +2,13 @@
  * Google OAuth 2.0.
  *
  * Access tokens are cached in-memory per providerAccountId, never
- * persisted. Refresh tokens live in oauth-tokens.mjs (provider-side
- * secret storage, keyed by providerAccountId).
+ * persisted. OAuth credentials + the refresh token both live on the host
+ * account row under `custom.*`; callers prime an in-memory cache here at
+ * the top of each on* hook so people-api can refresh tokens without
+ * re-reading host state mid-sync.
  */
 
 import { ERR, withCode } from "../../vendor/tbsync/provider.mjs";
-import * as oauthTokens from "../oauth-tokens.mjs";
 
 const AUTH_ENDPOINT = "https://accounts.google.com/o/oauth2/v2/auth";
 const TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token";
@@ -21,23 +22,22 @@ const SCOPES = [
 /** accessTokenCache: providerAccountId -> { token, expiresAt } */
 const accessTokenCache = new Map();
 
-/** credentialsCache: providerAccountId -> { clientID, clientSecret }.
- *  Kept in-memory only. Callers (provider hooks, sync flow) prime this
- *  from the host-supplied account row before invoking people-api so the
- *  API layer can refresh tokens without re-reading host state. Cleared on
+/** authCache: providerAccountId -> { clientID, clientSecret, refreshToken }.
+ *  Transient in-memory mirror of the three host-stored OAuth fields, primed
+ *  at the top of each on* hook that hits the People API. Cleared on
  *  account-disabled/deleted. */
-const credentialsCache = new Map();
+const authCache = new Map();
 
 /** Access-token safety margin: refresh 30 s before expiry. */
 const REFRESH_SKEW_MS = 30_000;
 
-export function primeCredentials(providerAccountId, { clientID, clientSecret }) {
-  if (!clientID || !clientSecret) return;
-  credentialsCache.set(providerAccountId, { clientID, clientSecret });
+export function primeAuth(providerAccountId, { clientID, clientSecret, refreshToken }) {
+  if (!clientID || !clientSecret || !refreshToken) return;
+  authCache.set(providerAccountId, { clientID, clientSecret, refreshToken });
 }
 
-export function forgetCredentials(providerAccountId) {
-  credentialsCache.delete(providerAccountId);
+export function forgetAuth(providerAccountId) {
+  authCache.delete(providerAccountId);
 }
 
 /**
@@ -166,27 +166,23 @@ export async function refreshAccessToken({ clientID, clientSecret, refreshToken 
 }
 
 /** Returns a valid access token for the given provider account, refreshing
- *  transparently when needed. Requires `primeCredentials(providerAccountId,
- *  {clientID, clientSecret})` to have been called first — callers (provider
- *  on* hooks, sync flow) seed that at the top of any work that hits the
- *  People API. The refresh token comes from provider storage. */
+ *  transparently when needed. Requires `primeAuth(providerAccountId,
+ *  {clientID, clientSecret, refreshToken})` to have been called first —
+ *  callers (provider on* hooks, sync flow) seed that at the top of any
+ *  work that hits the People API. */
 export async function getAccessToken(providerAccountId) {
   const cached = accessTokenCache.get(providerAccountId);
   if (cached && cached.expiresAt > Date.now() + REFRESH_SKEW_MS) {
     return cached.token;
   }
-  const tokens = await oauthTokens.get(providerAccountId);
-  if (!tokens?.refreshToken) {
-    throw withCode(new Error("No refresh token on file"), ERR.AUTH);
-  }
-  const creds = credentialsCache.get(providerAccountId);
-  if (!creds?.clientID || !creds?.clientSecret) {
-    throw withCode(new Error("OAuth credentials not primed — call primeCredentials first"), ERR.AUTH);
+  const auth = authCache.get(providerAccountId);
+  if (!auth?.clientID || !auth?.clientSecret || !auth?.refreshToken) {
+    throw withCode(new Error("OAuth auth not primed — call primeAuth first"), ERR.AUTH);
   }
   const fresh = await refreshAccessToken({
-    clientID: creds.clientID,
-    clientSecret: creds.clientSecret,
-    refreshToken: tokens.refreshToken,
+    clientID: auth.clientID,
+    clientSecret: auth.clientSecret,
+    refreshToken: auth.refreshToken,
   });
   accessTokenCache.set(providerAccountId, {
     token: fresh.access_token,
