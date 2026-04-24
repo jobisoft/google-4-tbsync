@@ -147,7 +147,11 @@ export class GoogleProvider extends TbSyncProviderImplementation {
       await this.updateFolder({
         accountId, folderId: folder.folderId,
         patch: { custom: { groupMap: {}, contactMap: {}, changelog: [] } },
-      }).catch(() => { /* best effort */ });
+      }).catch(err => {
+        // Re-enable will resurrect stale data if this fails; logging makes
+        // the drift visible rather than silently accumulating.
+        console.warn(`[google-4-tbsync] clear folder state on disable failed (folder=${folder.folderId}):`, err?.message ?? err);
+      });
     }
     oauth.invalidateAccessToken(ctx.providerAccountId);
     oauth.forgetAuth(ctx.providerAccountId);

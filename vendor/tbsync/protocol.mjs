@@ -52,7 +52,7 @@ export const HOST_CMD = {
  * Both row kinds carry **flat universal fields** plus one opaque
  * `custom: {}` object the host never interprets.
  *
- * Account universal fields:
+ * Account universal fields (host-authored or host-interpreted):
  *   accountId, accountName, provider, providerAccountId, enabled,
  *   warning, error, lastSyncTime, autoSyncIntervalMinutes, custom
  *
@@ -60,29 +60,55 @@ export const HOST_CMD = {
  *   folderId, accountId, folderType, displayName, selected, readOnly,
  *   warning, error, lastSyncTime, orderIndex, targetID, targetName, custom
  *
- * `targetID`/`targetName` identify the local Thunderbird artifact bound to
- * the remote resource. They are null until the provider's first sync
- * creates the local artifact and writes them via UPDATE_FOLDER.
+ * `targetID` / `targetName` identify the local Thunderbird artifact bound
+ * to the remote resource (address-book id, calendar id, task-list id, …).
+ * They are null until the provider's first sync creates the local artifact
+ * and writes them back via UPDATE_FOLDER.
  *
- * `custom` is opaque to the host and stores provider-specific per-row
- * configuration without host-schema changes.
+ * `custom` is opaque to the host and lets each provider stash its own
+ * per-row configuration without host-schema changes. The host stores and
+ * round-trips it unchanged. All reads never need to check presence — the
+ * host defaults `custom` to `{}` on create and across pushes.
  *
  * ## RPC semantics
  *
  * REGISTER_ACCOUNT { accountName, providerAccountId, custom?, initialFolders? }
- * UPDATE_ACCOUNT   { accountId, patch }  — top-level + shallow-merge `custom`
- * UPDATE_FOLDER    { accountId, folderId, patch } — top-level + shallow-merge `custom`
- * PUSH_FOLDER_LIST { accountId, folders: [descriptor…] } — preserves
- *   `selected`, `lastSyncTime`, `targetID`, `targetName`, `custom` from
- *   prior rows when descriptors omit them.
+ *   → creates a host account row. `custom` seeds the opaque blob atomically.
+ *   `initialFolders` descriptors can carry `targetID`, `targetName`, `custom`
+ *   on a per-folder basis.
+ *
+ * UPDATE_ACCOUNT { accountId, patch }
+ *   → patches top-level writable fields (`accountName`, `warning`, `error`)
+ *   and shallow-merges `patch.custom` into the existing `custom` blob.
+ *   Drop a `custom` key by patching it to `null` — there is no explicit
+ *   delete op. Other top-level fields are host-authored.
+ *
+ * UPDATE_FOLDER { accountId, folderId, patch }
+ *   → patches top-level writable fields (`displayName`, `folderType`,
+ *   `readOnly`, `warning`, `error`, `lastSyncTime`, `targetID`, `targetName`)
+ *   and shallow-merges `patch.custom` like UPDATE_ACCOUNT.
+ *
+ * PUSH_FOLDER_LIST { accountId, folders: [descriptor…] }
+ *   → replaces the account's folder list. `selected`, `lastSyncTime`,
+ *   `targetID`, `targetName`, and `custom` are preserved from prior rows
+ *   when the descriptor omits them, so the provider can re-push folder
+ *   lists freely without wiping locally-bound state.
  */
 export const PROVIDER_CMD = {
   REGISTER_ACCOUNT: "registerAccount",
   UPDATE_ACCOUNT: "updateAccount",
   UPDATE_FOLDER: "updateFolder",
   PUSH_FOLDER_LIST: "pushFolderList",
+  // Read-side: the host is the source of truth for account + folder rows,
+  // so the provider pulls its context at the top of each on* handler that
+  // needs it. Both are scoped to the caller's providerId.
   LIST_ACCOUNTS: "listAccounts",
   GET_ACCOUNT: "getAccount",
+  // Changelog mutations — the queue lives at `folder.custom.changelog` and
+  // is owned by the host's built-in Thunderbird-event observer. Providers
+  // tag `*_by_server` entries before their own sync writes so the observer
+  // skips the resulting TB events (legacy's 1500 ms freeze), and clear
+  // `*_by_user` entries after successfully pushing them to the server.
   CHANGELOG_MARK_SERVER_WRITE: "changelogMarkServerWrite",
   CHANGELOG_REMOVE: "changelogRemove",
 };

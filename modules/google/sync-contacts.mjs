@@ -69,7 +69,12 @@ export async function syncFolderContacts({ accountId, providerAccountId, folderI
     await flushMaps(notify, accountId, folderId, gMap, cMap);
     return rv;
   } catch (err) {
-    await flushMaps(notify, accountId, folderId, gMap, cMap).catch(() => { });
+    // Best-effort flush of in-progress groupMap/contactMap so a retry can
+    // pick up where we left off. Log on failure so a broken flush doesn't
+    // silently accumulate drift.
+    await flushMaps(notify, accountId, folderId, gMap, cMap).catch(flushErr => {
+      console.warn("[google-4-tbsync] flushMaps during error handling failed:", flushErr?.message ?? flushErr);
+    });
     if (err?.code === "E:AUTH") {
       await notify.updateAccount({
         accountId,

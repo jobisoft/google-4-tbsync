@@ -8,6 +8,7 @@
  */
 
 import {
+  DEFAULT_RPC_TIMEOUT_MS,
   DISCOVERY, ERR, HOST_CMD, NO_TIMEOUT_CMDS,
   PORT_NAME, PROTOCOL_VERSION,
   PROVIDER_CMD, PROVIDER_NOTIFY, withCode,
@@ -26,7 +27,6 @@ const DEFAULT_SETUP_WIDTH = 520;
 const DEFAULT_SETUP_HEIGHT = 640;
 const DEFAULT_CONFIG_WIDTH = 520;
 const DEFAULT_CONFIG_HEIGHT = 580;
-const DEFAULT_RPC_TIMEOUT_MS = 30_000;
 
 // Host-availability retry schedule — first announce 250 ms after host flips
 // to enabled (it's still initialising its onMessageExternal listener), then
