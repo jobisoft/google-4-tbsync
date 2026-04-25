@@ -499,16 +499,27 @@ export class TbSyncProviderImplementation {
   #attachSetupCompletedListener() {
     browser.runtime.onMessage.addListener(msg => {
       if (msg?.type !== "tbsync-setup-completed") return;
-      const entry = this.#pendingSetups.get(msg.setupToken);
-      if (!entry) return;
-      this.#pendingSetups.delete(msg.setupToken);
-      entry.resolve({
-        providerAccountId: msg.providerAccountId,
-        accountName: msg.accountName,
-        initialFolders: msg.initialFolders ?? [],
-        custom: msg.custom ?? {},
-      });
+      this.completeSetup(msg);
     });
+  }
+
+  /** Resolve a pending setup programmatically. Used by subclasses that
+   *  finalise setup from the background page itself (e.g. an OAuth flow
+   *  that runs in-page rather than from a UI dialog), since
+   *  `runtime.sendMessage` is not delivered back to the calling frame
+   *  and the `tbsync-setup-completed` round-trip would otherwise be
+   *  needed. Returns true if a pending setup was matched. */
+  completeSetup({ setupToken, providerAccountId, accountName, initialFolders, custom }) {
+    const entry = this.#pendingSetups.get(setupToken);
+    if (!entry) return false;
+    this.#pendingSetups.delete(setupToken);
+    entry.resolve({
+      providerAccountId,
+      accountName,
+      initialFolders: initialFolders ?? [],
+      custom: custom ?? {},
+    });
+    return true;
   }
 
   /** Reject the pending setup promise when the window is closed. 500 ms
