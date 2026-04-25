@@ -41,6 +41,8 @@ export class TbSyncProviderImplementation {
   #port = null;
   #pending = new Map();           // requestId → {resolve, reject, timer}
   #pendingSetups = new Map();     // setupToken → {resolve, reject, windowId}
+  #pendingConfigs = new Map();    // accountId → windowId
+  #pendingReauths = new Map();    // accountId → windowId
   #announceInFlight = false;
 
   #name;
@@ -265,6 +267,19 @@ export class TbSyncProviderImplementation {
    *  bookkeeping. Return value is discarded. */
   async onRegisterSuccessful(_args) { return null; }
 
+  /** Bring an in-flight setup popup to the front. Manager calls this when
+   *  the user clicks the same provider while its setup is already open;
+   *  resolves quickly if no popup is in flight. */
+  async onFocusSetupPopup() {
+    for (const { windowId } of this.#pendingSetups.values()) {
+      if (windowId == null) continue;
+      try {
+        await browser.windows.update(windowId, { focused: true });
+      } catch { /* window already closed */ }
+    }
+    return null;
+  }
+
   /** Open the config popup with `accountId`, optional `providerAccountId`,
    *  `readOnly`, and `mode` URL params. Resolves when the popup closes. */
   async onOpenConfigPopup(args) {
@@ -281,8 +296,51 @@ export class TbSyncProviderImplementation {
       width: this.#configWidth,
       height: this.#configHeight,
     });
-    await waitForWindowClose(win.id);
+    // Register the windowId so onFocusConfigPopup can raise this window
+    // if the manager re-issues the click while it's still open.
+    this.#pendingConfigs.set(args.accountId, win.id);
+    try {
+      await waitForWindowClose(win.id);
+    } finally {
+      this.#pendingConfigs.delete(args.accountId);
+    }
     return null;
+  }
+
+  /** Bring an in-flight config popup to the front. Quick no-op when
+   *  there's no popup open for `args.accountId`. */
+  async onFocusConfigPopup(args) {
+    const windowId = this.#pendingConfigs.get(args.accountId);
+    if (windowId == null) return null;
+    try {
+      await browser.windows.update(windowId, { focused: true });
+    } catch { /* window already closed */ }
+    return null;
+  }
+
+  /** Symmetric focus for a reauth popup. Subclasses that drive their own
+   *  consent window (e.g. EAS's nativeclient flow) register the windowId
+   *  in `registerReauthWindow` while the popup is open; this method then
+   *  brings it to the front. Subclasses that delegate reauth to
+   *  `browser.identity.launchWebAuthFlow` (e.g. Google) never register —
+   *  the call is a deliberate no-op for them. */
+  async onFocusReauthPopup(args) {
+    const windowId = this.#pendingReauths.get(args.accountId);
+    if (windowId == null) return null;
+    try {
+      await browser.windows.update(windowId, { focused: true });
+    } catch { /* window already closed */ }
+    return null;
+  }
+
+  /** Subclass hook — track a reauth popup window for the duration of a
+   *  custom OAuth flow so `onFocusReauthPopup` can raise it. Always pair
+   *  with `unregisterReauthWindow` in a finally block. */
+  registerReauthWindow(accountId, windowId) {
+    if (windowId != null) this.#pendingReauths.set(accountId, windowId);
+  }
+  unregisterReauthWindow(accountId) {
+    this.#pendingReauths.delete(accountId);
   }
 
   /** Map host's accountId to the subclass's providerAccountId, or null. */
@@ -376,7 +434,10 @@ export class TbSyncProviderImplementation {
       case HOST_CMD.SYNC_FOLDER:              return this.onSyncFolder(args);
       case HOST_CMD.CANCEL_SYNC:              return this.onCancelSync(args);
       case HOST_CMD.OPEN_SETUP_POPUP:         return this.onOpenSetupPopup(args);
+      case HOST_CMD.FOCUS_SETUP_POPUP:        return this.onFocusSetupPopup(args);
       case HOST_CMD.OPEN_CONFIG_POPUP:        return this.onOpenConfigPopup(args);
+      case HOST_CMD.FOCUS_CONFIG_POPUP:       return this.onFocusConfigPopup(args);
+      case HOST_CMD.FOCUS_REAUTH_POPUP:       return this.onFocusReauthPopup(args);
       case HOST_CMD.REAUTHENTICATE:           return this.onReauthenticate(args);
       case HOST_CMD.ACCOUNT_ENABLED:          return this.onAccountEnabled(args);
       case HOST_CMD.ACCOUNT_DISABLED:         return this.onAccountDisabled(args);
