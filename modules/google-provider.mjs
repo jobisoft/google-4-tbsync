@@ -26,7 +26,7 @@ export class GoogleProvider extends TbSyncProviderImplementation {
   constructor() {
     super({
       name: "Google Contacts",
-      shortName: "google4tbsync",
+      shortName: "google",
       setupPath: "dialogs/setup/setup.html",
       setupWidth: 520,
       setupHeight: 640,

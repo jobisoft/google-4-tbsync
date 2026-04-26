@@ -125,6 +125,7 @@ export class TbSyncProviderImplementation {
       defaultAccountEntries: this.#defaultAccountEntries,
       defaultFolderEntries: this.#defaultFolderEntries,
     };
+    payload.shortName = this.#shortName;
     if (this.#maintainerEmail) payload.maintainerEmail = this.#maintainerEmail;
     if (this.#contributorsUrl) payload.contributorsUrl = this.#contributorsUrl;
 

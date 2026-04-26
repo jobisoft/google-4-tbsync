@@ -44,7 +44,7 @@ function logDebug(ctx, message, details) {
   });
 }
 
-export async function syncFolderContacts({ accountId, accountId, folderId, folder, account, notify }) {
+export async function syncFolderContacts({ accountId, folderId, folder, account, notify }) {
   const targetID = folder?.targetID;
   const readOnly = !!account?.custom?.readOnlyMode;
   const includeSystemGroups = !!account?.custom?.includeSystemContactGroups;
