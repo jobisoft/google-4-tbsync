@@ -30,7 +30,7 @@
     "message": "Anulează"
   },
   "setup.redirectHint": {
-    "message": "ID-ul de client trebuie să aparțină unui client OAuth de tip aplicație web, iar URI-urile de redirecționare autorizate trebuie să includă URL-ul de redirecționare al acestei extensii."
+    "message": "URL-ul de redirecționare al acestui supliment trebuie adăugat o singură dată în configurarea clientului OAuth pentru ca suplimentul să poată comunica cu clientul."
   },
   "setup.copyRedirect": {
     "message": "Copiază URL de redirecționare"
@@ -41,7 +41,10 @@
   "setup.error.copyFailed": {
     "message": "Copierea a eșuat: $ERROR$",
     "placeholders": {
-      "ERROR": { "content": "$1", "example": "permission denied" }
+      "ERROR": {
+        "content": "$1",
+        "example": "permission denied"
+      }
     }
   },
   "setup.error.accountNameRequired": {
@@ -97,5 +100,32 @@
   },
   "config.error.saveFailed": {
     "message": "Salvarea a eșuat"
+  },
+  "setup.clientType": {
+    "message": "Tip de client OAuth"
+  },
+  "setup.clientType.desktop": {
+    "message": "Client OAuth pentru desktop"
+  },
+  "setup.clientType.desktop.hint": {
+    "message": "Metodă moștenită. Învechită de Google. Clienții existenți pot continua să funcționeze."
+  },
+  "setup.clientType.web": {
+    "message": "Client OAuth pentru web"
+  },
+  "setup.clientType.web.hint": {
+    "message": "Metodă modernă. Necesită adăugarea URL-ului de redirecționare al acestui supliment la URI-urile de redirecționare autorizate ale clientului OAuth."
+  },
+  "config.clientType": {
+    "message": "Tip de client OAuth"
+  },
+  "config.clientSecret": {
+    "message": "Secretul clientului OAuth"
+  },
+  "config.clientSecret.placeholder": {
+    "message": "Lăsați gol pentru a păstra secretul existent"
+  },
+  "config.error.clientIdRequired": {
+    "message": "ID-ul clientului este obligatoriu."
   }
 }

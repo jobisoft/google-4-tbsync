@@ -30,7 +30,7 @@
     "message": "Annulla"
   },
   "setup.redirectHint": {
-    "message": "L'ID client deve appartenere a un client OAuth per applicazione web e i suoi URI di reindirizzamento autorizzati devono includere l'URL di reindirizzamento di questo componente aggiuntivo."
+    "message": "L'URL di reindirizzamento di questo componente aggiuntivo deve essere aggiunto una sola volta alla configurazione del client OAuth per consentire al componente di comunicare con esso."
   },
   "setup.copyRedirect": {
     "message": "Copia URL di reindirizzamento"
@@ -41,7 +41,10 @@
   "setup.error.copyFailed": {
     "message": "Copia non riuscita: $ERROR$",
     "placeholders": {
-      "ERROR": { "content": "$1", "example": "permission denied" }
+      "ERROR": {
+        "content": "$1",
+        "example": "permission denied"
+      }
     }
   },
   "setup.error.accountNameRequired": {
@@ -97,5 +100,32 @@
   },
   "config.error.saveFailed": {
     "message": "Salvataggio non riuscito"
+  },
+  "setup.clientType": {
+    "message": "Tipo di client OAuth"
+  },
+  "setup.clientType.desktop": {
+    "message": "Client OAuth desktop"
+  },
+  "setup.clientType.desktop.hint": {
+    "message": "Metodo legacy. Deprecato da Google. I client esistenti potrebbero continuare a funzionare."
+  },
+  "setup.clientType.web": {
+    "message": "Client OAuth web"
+  },
+  "setup.clientType.web.hint": {
+    "message": "Metodo moderno. Richiede l'aggiunta dell'URL di reindirizzamento di questo componente aggiuntivo agli URI di reindirizzamento autorizzati del client OAuth."
+  },
+  "config.clientType": {
+    "message": "Tipo di client OAuth"
+  },
+  "config.clientSecret": {
+    "message": "Segreto del client OAuth"
+  },
+  "config.clientSecret.placeholder": {
+    "message": "Lasciare vuoto per mantenere il segreto attuale"
+  },
+  "config.error.clientIdRequired": {
+    "message": "L'ID client è obbligatorio."
   }
 }

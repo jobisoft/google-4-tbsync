@@ -30,7 +30,7 @@
     "message": "Annuler"
   },
   "setup.redirectHint": {
-    "message": "L'identifiant client doit appartenir à une application web OAuth et ses URI de redirection autorisés doivent inclure l'URL de redirection de ce module."
+    "message": "L'URL de redirection de ce module doit être ajoutée une seule fois à la configuration du client OAuth pour que le module puisse communiquer avec lui."
   },
   "setup.copyRedirect": {
     "message": "Copier l'URL de redirection"
@@ -41,7 +41,10 @@
   "setup.error.copyFailed": {
     "message": "Échec de la copie : $ERROR$",
     "placeholders": {
-      "ERROR": { "content": "$1", "example": "permission denied" }
+      "ERROR": {
+        "content": "$1",
+        "example": "permission denied"
+      }
     }
   },
   "setup.error.accountNameRequired": {
@@ -97,5 +100,32 @@
   },
   "config.error.saveFailed": {
     "message": "Échec de l'enregistrement"
+  },
+  "setup.clientType": {
+    "message": "Type de client OAuth"
+  },
+  "setup.clientType.desktop": {
+    "message": "Client OAuth de bureau"
+  },
+  "setup.clientType.desktop.hint": {
+    "message": "Méthode héritée. Obsolète selon Google. Les clients existants peuvent continuer à fonctionner."
+  },
+  "setup.clientType.web": {
+    "message": "Client OAuth Web"
+  },
+  "setup.clientType.web.hint": {
+    "message": "Méthode moderne. Nécessite l'ajout de l'URL de redirection de ce module aux URI de redirection autorisés de votre client OAuth."
+  },
+  "config.clientType": {
+    "message": "Type de client OAuth"
+  },
+  "config.clientSecret": {
+    "message": "Secret du client OAuth"
+  },
+  "config.clientSecret.placeholder": {
+    "message": "Laisser vide pour conserver le secret existant"
+  },
+  "config.error.clientIdRequired": {
+    "message": "L'identifiant client est requis."
   }
 }

@@ -30,7 +30,7 @@
     "message": "Tühista"
   },
   "setup.redirectHint": {
-    "message": "Kliendi ID peab kuuluma OAuthi veebirakenduse kliendile ja selle volitatud ümbersuunamise URI-d peavad sisaldama selle lisamooduli ümbersuunamise URL-i."
+    "message": "Selle laienduse ümbersuunamise URL tuleb ühekordselt lisada OAuthi kliendi seadistusse, et laiendus saaks kliendiga suhelda."
   },
   "setup.copyRedirect": {
     "message": "Kopeeri ümbersuunamise URL"
@@ -41,7 +41,10 @@
   "setup.error.copyFailed": {
     "message": "Kopeerimine ebaõnnestus: $ERROR$",
     "placeholders": {
-      "ERROR": { "content": "$1", "example": "permission denied" }
+      "ERROR": {
+        "content": "$1",
+        "example": "permission denied"
+      }
     }
   },
   "setup.error.accountNameRequired": {
@@ -97,5 +100,32 @@
   },
   "config.error.saveFailed": {
     "message": "Salvestamine ebaõnnestus"
+  },
+  "setup.clientType": {
+    "message": "OAuthi kliendi tüüp"
+  },
+  "setup.clientType.desktop": {
+    "message": "OAuthi töölaua klient"
+  },
+  "setup.clientType.desktop.hint": {
+    "message": "Pärandtoiming. Google on selle aegunuks tunnistanud. Olemasolevad kliendid võivad endiselt töötada."
+  },
+  "setup.clientType.web": {
+    "message": "OAuthi veebiklient"
+  },
+  "setup.clientType.web.hint": {
+    "message": "Kaasaegne meetod. Selle laienduse ümbersuunamise URL tuleb lisada teie OAuthi kliendi lubatud ümbersuunamise URI-de loendisse."
+  },
+  "config.clientType": {
+    "message": "OAuthi kliendi tüüp"
+  },
+  "config.clientSecret": {
+    "message": "OAuthi kliendi saladus"
+  },
+  "config.clientSecret.placeholder": {
+    "message": "Olemasoleva saladuse säilitamiseks jätke tühjaks"
+  },
+  "config.error.clientIdRequired": {
+    "message": "Kliendi ID on kohustuslik."
   }
 }

@@ -37,6 +37,7 @@ export const UPGRADES = [
     id: "google.lift-legacy-stamps-and-backfill-email",
     run: async (provider) => {
       await liftLegacyStamps(provider);
+      await liftLegacyGroupStamps(provider);
       await backfillAuthenticatedUserEmail(provider);
       await mirrorReadOnlyModeToFolders(provider);
     },
@@ -186,6 +187,91 @@ async function liftLegacyStamps(provider) {
         level: "debug",
         accountId: acc.accountId, folderId: folder.folderId,
         message: `[upgrade] lifted ${lifted}/${stamps.length} legacy X-GOOGLE-RESOURCENAME stamp(s) onto vCards`,
+      });
+    }
+  }
+}
+
+/** Mailing-list parallel of `liftLegacyStamps`. Legacy stamped each
+ *  mailing list with `X-GOOGLE-RESOURCENAME` / `X-GOOGLE-ETAG` via the
+ *  same `setProperty()` API it used for contacts, but the new sync
+ *  layer keeps the server-resourceName → local-listId mapping in
+ *  `folder.custom.groupMap` rather than reading it back off the
+ *  mailing-list cards. Without this lift, the first sync after a
+ *  migration creates a fresh duplicate of every group.
+ *
+ *  `groupType` is intentionally left undefined on lifted entries —
+ *  the next pull pass overlays the correct value from the server. */
+async function liftLegacyGroupStamps(provider) {
+  const accounts = await provider.listAccounts();
+  for (const acc of accounts) {
+    const rv = await provider.getAccount(acc.accountId);
+    const folders = rv?.folders ?? [];
+    for (const folder of folders) {
+      if (!folder.targetID) continue;
+      const incoming = Array.isArray(folder.custom?.changelog) ? folder.custom.changelog : [];
+
+      // Legacy stored mailing-list X-GOOGLE-* via TbSync's wrapper,
+      // which routes mailing-list setProperty calls into TbSync's own
+      // changelog DB (see TbSync addressbook.js, "mailinglist properties
+      // cannot be stored in mailinglists themselves, so we store them
+      // in changelog"). Those entries have:
+      //
+      //   parentId: <bookUID>#<listUID>      (== `${targetID}#<listUID>`)
+      //   itemId:   "X-GOOGLE-RESOURCENAME"  | "X-GOOGLE-ETAG"
+      //   status:   the actual value
+      //
+      // The host's migration distributed them into folder.custom.changelog
+      // along with regular sync-state entries because parentId starts
+      // with folder.targetID. We pick them out here, group by parentId
+      // (one parentId per mailing list, two halves: resourceName + etag),
+      // build groupMap entries, and remove the consumed legacy entries
+      // from the changelog so they don't sit there as cruft forever.
+      const RESOURCENAME = "X-GOOGLE-RESOURCENAME";
+      const ETAG = "X-GOOGLE-ETAG";
+      const byParent = new Map();
+      const consumedIdx = new Set();
+      for (let i = 0; i < incoming.length; i++) {
+        const e = incoming[i];
+        if (e?.itemId !== RESOURCENAME && e?.itemId !== ETAG) continue;
+        if (typeof e.parentId !== "string" || !e.parentId.includes("#")) continue;
+        let bag = byParent.get(e.parentId);
+        if (!bag) { bag = {}; byParent.set(e.parentId, bag); }
+        if (e.itemId === RESOURCENAME) bag.resourceName = e.status;
+        else                            bag.etag         = e.status;
+        consumedIdx.add(i);
+      }
+      if (!byParent.size) continue;
+
+      const existing = folder.custom?.groupMap ?? {};
+      const groupMap = { ...existing };
+      let lifted = 0;
+      for (const [parentId, { resourceName, etag }] of byParent) {
+        if (!resourceName) continue;
+        const mailingListId = parentId.split("#", 2)[1];
+        if (!mailingListId) continue;
+        if (groupMap[resourceName]?.mailingListId === mailingListId) continue;
+        groupMap[resourceName] = { mailingListId, etag: etag ?? null };
+        lifted++;
+      }
+
+      // Strip the consumed legacy entries from the changelog regardless
+      // of whether each pair produced a groupMap entry — they're never
+      // useful to the new sync code.
+      const cleaned = incoming.filter((_, i) => !consumedIdx.has(i));
+
+      const patch = { custom: { changelog: cleaned } };
+      if (lifted) patch.custom.groupMap = groupMap;
+      await provider.updateFolder({
+        accountId: acc.accountId,
+        folderId: folder.folderId,
+        patch,
+      });
+
+      provider.reportEventLog({
+        level: "debug",
+        accountId: acc.accountId, folderId: folder.folderId,
+        message: `[upgrade] lifted ${lifted}/${byParent.size} legacy mailing-list stamp(s) from folder.custom.changelog into folder.custom.groupMap (${consumedIdx.size} legacy entries removed)`,
       });
     }
   }

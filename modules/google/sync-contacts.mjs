@@ -142,8 +142,18 @@ async function runFolderSync(ctx) {
     pushCounts.deleted = deleteStats.deleted;
   }
 
-  // 4. Groups — mirror contact flow.
+  // 4. Groups — mirror contact flow. Push-add-modify before pull so any
+  //    new local group exists server-side (and is in gMap) before the
+  //    pull pass walks the server's group list — otherwise the pull
+  //    would see the just-pushed group as "new on server" and create a
+  //    duplicate local list.
+  let groupPushAddMod = { added: 0, updated: 0 };
+  if (!ctx.readOnly) {
+    groupPushAddMod = await runGroupPushAddModifyPass(ctx, userEntries);
+  }
   const groupCounts = await runGroupPullPass(ctx, pull.byResourceName, pull.memberMap);
+  groupCounts.added   += groupPushAddMod.added;
+  groupCounts.updated += groupPushAddMod.updated;
   if (!ctx.readOnly) {
     const groupDelCounts = await runGroupPushDeletePass(ctx, userEntries);
     groupCounts.deleted += groupDelCounts.deleted;
@@ -539,6 +549,116 @@ async function applyMemberships(ctx, byResourceName, memberMap) {
   return { membersAdded, membersRemoved };
 }
 
+// ── Group push: add + modify ─────────────────────────────────────────────
+//
+// Mirrors the legacy provider's `synchronizeContactGroups` add/modify
+// loops. Walks `_by_user` group entries from the changelog and pushes
+// each to Google. The watcher annotates new entries with `kind: "list"`;
+// migrated legacy entries lack `kind` but use `contactGroups/…` as the
+// itemId, which `isContactEntry` recognises and routes here.
+
+async function runGroupPushAddModifyPass(ctx, userEntries) {
+  const groupEntries = userEntries.filter(e =>
+    !isContactEntry(e) && (
+      e.status === STATUS.ADDED_BY_USER ||
+      e.status === STATUS.MODIFIED_BY_USER
+    )
+  );
+  if (!groupEntries.length) return { added: 0, updated: 0 };
+
+  let added = 0, updated = 0;
+  for (const entry of groupEntries) {
+    try {
+      const ok = entry.status === STATUS.ADDED_BY_USER
+        ? await pushGroupAdd(ctx, entry)
+        : await pushGroupModify(ctx, entry);
+      if (!ok) continue;
+      if (entry.status === STATUS.ADDED_BY_USER) added++;
+      else                                       updated++;
+    } catch (err) {
+      console.warn(
+        `[google-4-tbsync] push.group failed (${entry.status} ${entry.itemId}):`,
+        err?.message ?? err,
+      );
+    }
+  }
+  return { added, updated };
+}
+
+async function pushGroupAdd(ctx, entry) {
+  const { accountId, gMap } = ctx;
+  // Post-watcher: itemId is the local mailing-list UID. Legacy never
+  // left ADDED_BY_USER group entries un-pushed across an upgrade
+  // (the legacy sync flushed them before the user updated the add-on).
+  const list = await addressBook.getMailingList(entry.itemId);
+  if (!list) {
+    await ctx.removeEntry(entry.parentId, entry.itemId);
+    return false;
+  }
+  logDebug(ctx, `push.group.add ${list.name}`);
+  const created = await peopleApi.createContactGroup(accountId, { name: list.name });
+  gMap.set(created.resourceName, {
+    mailingListId: list.id,
+    etag: created.etag,
+    groupType: created.groupType,
+  });
+  await ctx.removeEntry(entry.parentId, entry.itemId);
+  return true;
+}
+
+async function pushGroupModify(ctx, entry) {
+  const { accountId, gMap } = ctx;
+  // entry.itemId can be either:
+  //   - a local mailing-list UID (post-watcher entries)
+  //   - a Google resourceName "contactGroups/…" (migrated legacy
+  //     entries — TbSync's wrapper routed legacy mailing-list property
+  //     writes through the changelog DB keyed by the primary-key field,
+  //     which the Google provider set to X-GOOGLE-RESOURCENAME).
+  let mapping;
+  let resourceName;
+  let listId;
+  if (typeof entry.itemId === "string" && entry.itemId.startsWith("contactGroups/")) {
+    resourceName = entry.itemId;
+    mapping = gMap.get(resourceName);
+    if (!mapping) {
+      await ctx.removeEntry(entry.parentId, entry.itemId);
+      return false;
+    }
+    listId = mapping.mailingListId;
+  } else {
+    listId = entry.itemId;
+    mapping = gMap.getByListId(listId);
+    if (!mapping) {
+      await ctx.removeEntry(entry.parentId, entry.itemId);
+      return false;
+    }
+    resourceName = mapping.resourceName;
+  }
+  if (mapping.groupType === SYSTEM_GROUP) {
+    // System groups can't be renamed via the People API; just clear
+    // the changelog entry so the account doesn't sit in needs-sync.
+    await ctx.removeEntry(entry.parentId, entry.itemId);
+    return false;
+  }
+  const list = await addressBook.getMailingList(listId);
+  if (!list) {
+    await ctx.removeEntry(entry.parentId, entry.itemId);
+    return false;
+  }
+  logDebug(ctx, `push.group.modify ${resourceName}`);
+  const updatedGroup = await peopleApi.updateContactGroup(accountId, resourceName, {
+    name: list.name,
+    etag: mapping.etag,
+  });
+  gMap.set(updatedGroup.resourceName, {
+    mailingListId: listId,
+    etag: updatedGroup.etag,
+    groupType: updatedGroup.groupType ?? mapping.groupType,
+  });
+  await ctx.removeEntry(entry.parentId, entry.itemId);
+  return true;
+}
+
 // ── Group push-deletes ───────────────────────────────────────────────────
 
 async function runGroupPushDeletePass(ctx, userEntries) {
@@ -599,8 +719,14 @@ async function runGroupPushDeletePass(ctx, userEntries) {
  * per entry.
  */
 function isContactEntry(entry) {
-  // The watcher doesn't annotate kind, so we infer at sync time. Contacts
-  // dominate by volume in typical books; check the mailing-list kind as
-  // the explicit signal (set by onMailingList* handlers — see watcher).
-  return entry.kind !== "list";
+  // The watcher annotates contemporary entries with `kind`; migrated
+  // legacy entries lack it. For those we fall back to the itemId
+  // shape: Google's contact-group resource names start with
+  // `contactGroups/` — anything else is taken as a contact entry.
+  if (entry.kind === "list")    return false;
+  if (entry.kind === "contact") return true;
+  if (typeof entry.itemId === "string" && entry.itemId.startsWith("contactGroups/")) {
+    return false;
+  }
+  return true;
 }

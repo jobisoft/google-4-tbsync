@@ -30,7 +30,7 @@
     "message": "Mégse"
   },
   "setup.redirectHint": {
-    "message": "Az ügyfél-azonosítónak OAuth webalkalmazás-ügyfélhez kell tartoznia, és az engedélyezett átirányítási URI-knak tartalmazniuk kell ennek a kiegészítőnek az átirányítási URL-jét."
+    "message": "Ahhoz, hogy a bővítmény kommunikálni tudjon az ügyféllel, a bővítmény átirányítási URL-jét egyszer hozzá kell adni az OAuth-ügyfél konfigurációjához."
   },
   "setup.copyRedirect": {
     "message": "Átirányítási URL másolása"
@@ -41,7 +41,10 @@
   "setup.error.copyFailed": {
     "message": "A másolás sikertelen: $ERROR$",
     "placeholders": {
-      "ERROR": { "content": "$1", "example": "permission denied" }
+      "ERROR": {
+        "content": "$1",
+        "example": "permission denied"
+      }
     }
   },
   "setup.error.accountNameRequired": {
@@ -97,5 +100,32 @@
   },
   "config.error.saveFailed": {
     "message": "A mentés sikertelen"
+  },
+  "setup.clientType": {
+    "message": "OAuth-ügyfél típusa"
+  },
+  "setup.clientType.desktop": {
+    "message": "Asztali OAuth-ügyfél"
+  },
+  "setup.clientType.desktop.hint": {
+    "message": "Régi módszer. A Google elavultnak nyilvánította. A meglévő ügyfelek továbbra is működhetnek."
+  },
+  "setup.clientType.web": {
+    "message": "Webes OAuth-ügyfél"
+  },
+  "setup.clientType.web.hint": {
+    "message": "Modern módszer. A bővítmény átirányítási URL-jét hozzá kell adni az OAuth-ügyfél engedélyezett átirányítási URI-jaihoz."
+  },
+  "config.clientType": {
+    "message": "OAuth-ügyfél típusa"
+  },
+  "config.clientSecret": {
+    "message": "OAuth-ügyfél titkos kódja"
+  },
+  "config.clientSecret.placeholder": {
+    "message": "Hagyja üresen a meglévő titkos kód megtartásához"
+  },
+  "config.error.clientIdRequired": {
+    "message": "Az ügyfél-azonosító kötelező."
   }
 }

@@ -35,6 +35,7 @@ var LegacyAbProperties = class extends ExtensionCommon.ExtensionAPI {
           }
           return out;
         },
+
       },
     };
   }

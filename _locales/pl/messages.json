@@ -30,7 +30,7 @@
     "message": "Anuluj"
   },
   "setup.redirectHint": {
-    "message": "Identyfikator klienta musi należeć do klienta typu Aplikacja internetowa OAuth, a jego autoryzowane URI przekierowania muszą zawierać URL przekierowania tego dodatku."
+    "message": "Adres URL przekierowania tego dodatku musi zostać jednorazowo dodany do konfiguracji klienta OAuth, aby dodatek mógł komunikować się z klientem."
   },
   "setup.copyRedirect": {
     "message": "Kopiuj URL przekierowania"
@@ -41,7 +41,10 @@
   "setup.error.copyFailed": {
     "message": "Nie udało się skopiować: $ERROR$",
     "placeholders": {
-      "ERROR": { "content": "$1", "example": "permission denied" }
+      "ERROR": {
+        "content": "$1",
+        "example": "permission denied"
+      }
     }
   },
   "setup.error.accountNameRequired": {
@@ -97,5 +100,32 @@
   },
   "config.error.saveFailed": {
     "message": "Nie udało się zapisać"
+  },
+  "setup.clientType": {
+    "message": "Typ klienta OAuth"
+  },
+  "setup.clientType.desktop": {
+    "message": "Klient OAuth do aplikacji desktopowych"
+  },
+  "setup.clientType.desktop.hint": {
+    "message": "Starsza metoda. Wycofana przez Google. Istniejący klienci mogą nadal działać."
+  },
+  "setup.clientType.web": {
+    "message": "Klient OAuth do aplikacji webowych"
+  },
+  "setup.clientType.web.hint": {
+    "message": "Nowoczesna metoda. Wymaga dodania adresu URL przekierowania tego dodatku do autoryzowanych adresów URI przekierowania klienta OAuth."
+  },
+  "config.clientType": {
+    "message": "Typ klienta OAuth"
+  },
+  "config.clientSecret": {
+    "message": "Klucz tajny klienta OAuth"
+  },
+  "config.clientSecret.placeholder": {
+    "message": "Pozostaw puste, aby zachować istniejący klucz tajny"
+  },
+  "config.error.clientIdRequired": {
+    "message": "Identyfikator klienta jest wymagany."
   }
 }

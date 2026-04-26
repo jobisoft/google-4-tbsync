@@ -30,7 +30,7 @@
     "message": "Cancelar"
   },
   "setup.redirectHint": {
-    "message": "O ID de cliente debe pertencer a un cliente OAuth de aplicación web e os seus URI de redirección autorizados deben incluír a URL de redirección deste complemento."
+    "message": "O URL de redireccionamento deste complemento debe engadirse unha vez á configuración do cliente OAuth para que o complemento poida comunicarse con el."
   },
   "setup.copyRedirect": {
     "message": "Copiar URL de redirección"
@@ -41,7 +41,10 @@
   "setup.error.copyFailed": {
     "message": "Erro ao copiar: $ERROR$",
     "placeholders": {
-      "ERROR": { "content": "$1", "example": "permission denied" }
+      "ERROR": {
+        "content": "$1",
+        "example": "permission denied"
+      }
     }
   },
   "setup.error.accountNameRequired": {
@@ -97,5 +100,32 @@
   },
   "config.error.saveFailed": {
     "message": "Erro ao gardar"
+  },
+  "setup.clientType": {
+    "message": "Tipo de cliente OAuth"
+  },
+  "setup.clientType.desktop": {
+    "message": "Cliente OAuth de escritorio"
+  },
+  "setup.clientType.desktop.hint": {
+    "message": "Método herdado. Obsoleto segundo Google. Os clientes existentes poden seguir funcionando."
+  },
+  "setup.clientType.web": {
+    "message": "Cliente OAuth web"
+  },
+  "setup.clientType.web.hint": {
+    "message": "Método moderno. Require engadir o URL de redireccionamento deste complemento aos URI de redireccionamento autorizados do cliente OAuth."
+  },
+  "config.clientType": {
+    "message": "Tipo de cliente OAuth"
+  },
+  "config.clientSecret": {
+    "message": "Segredo do cliente OAuth"
+  },
+  "config.clientSecret.placeholder": {
+    "message": "Deixe en branco para manter o segredo existente"
+  },
+  "config.error.clientIdRequired": {
+    "message": "O ID de cliente é obrigatorio."
   }
 }

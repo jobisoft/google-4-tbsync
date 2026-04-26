@@ -30,7 +30,7 @@
     "message": "Zrušit"
   },
   "setup.redirectHint": {
-    "message": "ID klienta musí patřit klientovi typu OAuth Web application a jeho autorizované URI pro přesměrování musí obsahovat URL přesměrování tohoto doplňku."
+    "message": "Přesměrovací URL tohoto doplňku je třeba jednorázově přidat do konfigurace klienta OAuth, aby doplněk mohl s klientem komunikovat."
   },
   "setup.copyRedirect": {
     "message": "Zkopírovat URL přesměrování"
@@ -41,7 +41,10 @@
   "setup.error.copyFailed": {
     "message": "Kopírování selhalo: $ERROR$",
     "placeholders": {
-      "ERROR": { "content": "$1", "example": "permission denied" }
+      "ERROR": {
+        "content": "$1",
+        "example": "permission denied"
+      }
     }
   },
   "setup.error.accountNameRequired": {
@@ -97,5 +100,32 @@
   },
   "config.error.saveFailed": {
     "message": "Uložení selhalo"
+  },
+  "setup.clientType": {
+    "message": "Typ klienta OAuth"
+  },
+  "setup.clientType.desktop": {
+    "message": "Desktopový klient OAuth"
+  },
+  "setup.clientType.desktop.hint": {
+    "message": "Zastaralý způsob. Společností Google ukončen. Stávající klienti mohou nadále fungovat."
+  },
+  "setup.clientType.web": {
+    "message": "Webový klient OAuth"
+  },
+  "setup.clientType.web.hint": {
+    "message": "Moderní způsob. Vyžaduje přidání přesměrovací URL tohoto doplňku do autorizovaných přesměrovacích URI vašeho klienta OAuth."
+  },
+  "config.clientType": {
+    "message": "Typ klienta OAuth"
+  },
+  "config.clientSecret": {
+    "message": "Tajný klíč klienta OAuth"
+  },
+  "config.clientSecret.placeholder": {
+    "message": "Ponechte prázdné pro zachování stávajícího klíče"
+  },
+  "config.error.clientIdRequired": {
+    "message": "ID klienta je povinné."
   }
 }

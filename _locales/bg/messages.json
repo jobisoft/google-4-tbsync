@@ -30,7 +30,7 @@
     "message": "Отказ"
   },
   "setup.redirectHint": {
-    "message": "Идентификаторът на клиента трябва да принадлежи на клиент за OAuth уеб приложение и оторизираните URI за пренасочване трябва да включват URL адреса за пренасочване на тази добавка."
+    "message": "URL за пренасочване на това разширение трябва да се добави еднократно към конфигурацията на OAuth клиента, за да може разширението да комуникира с него."
   },
   "setup.copyRedirect": {
     "message": "Копиране на URL за пренасочване"
@@ -41,7 +41,10 @@
   "setup.error.copyFailed": {
     "message": "Копирането е неуспешно: $ERROR$",
     "placeholders": {
-      "ERROR": { "content": "$1", "example": "permission denied" }
+      "ERROR": {
+        "content": "$1",
+        "example": "permission denied"
+      }
     }
   },
   "setup.error.accountNameRequired": {
@@ -97,5 +100,32 @@
   },
   "config.error.saveFailed": {
     "message": "Запазването е неуспешно"
+  },
+  "setup.clientType": {
+    "message": "Тип OAuth клиент"
+  },
+  "setup.clientType.desktop": {
+    "message": "Настолен OAuth клиент"
+  },
+  "setup.clientType.desktop.hint": {
+    "message": "Остарял метод. Прекратен от Google. Съществуващите клиенти може да продължат да работят."
+  },
+  "setup.clientType.web": {
+    "message": "Уеб OAuth клиент"
+  },
+  "setup.clientType.web.hint": {
+    "message": "Модерен метод. Изисква добавяне на URL за пренасочване на това разширение към оторизираните URI за пренасочване на вашия OAuth клиент."
+  },
+  "config.clientType": {
+    "message": "Тип OAuth клиент"
+  },
+  "config.clientSecret": {
+    "message": "Тайна на OAuth клиента"
+  },
+  "config.clientSecret.placeholder": {
+    "message": "Оставете празно, за да запазите съществуващата тайна"
+  },
+  "config.error.clientIdRequired": {
+    "message": "Идентификаторът на клиента е задължителен."
   }
 }

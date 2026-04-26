@@ -30,7 +30,7 @@
     "message": "キャンセル"
   },
   "setup.redirectHint": {
-    "message": "クライアント ID は OAuth ウェブアプリケーション クライアントに属している必要があり、その承認済みリダイレクト URI にこのアドオンのリダイレクト URL を含める必要があります。"
+    "message": "この拡張機能がクライアントと通信できるようにするため、リダイレクト URL を OAuth クライアントの設定に一度だけ追加する必要があります。"
   },
   "setup.copyRedirect": {
     "message": "リダイレクト URL をコピー"
@@ -41,7 +41,10 @@
   "setup.error.copyFailed": {
     "message": "コピーに失敗しました: $ERROR$",
     "placeholders": {
-      "ERROR": { "content": "$1", "example": "permission denied" }
+      "ERROR": {
+        "content": "$1",
+        "example": "permission denied"
+      }
     }
   },
   "setup.error.accountNameRequired": {
@@ -97,5 +100,32 @@
   },
   "config.error.saveFailed": {
     "message": "保存に失敗しました"
+  },
+  "setup.clientType": {
+    "message": "OAuth クライアントの種類"
+  },
+  "setup.clientType.desktop": {
+    "message": "デスクトップ OAuth クライアント"
+  },
+  "setup.clientType.desktop.hint": {
+    "message": "従来の方式。Google により非推奨とされています。既存のクライアントは引き続き使用できる場合があります。"
+  },
+  "setup.clientType.web": {
+    "message": "Web OAuth クライアント"
+  },
+  "setup.clientType.web.hint": {
+    "message": "新しい方式。この拡張機能のリダイレクト URL を OAuth クライアントの承認済みリダイレクト URI に追加する必要があります。"
+  },
+  "config.clientType": {
+    "message": "OAuth クライアントの種類"
+  },
+  "config.clientSecret": {
+    "message": "OAuth クライアント シークレット"
+  },
+  "config.clientSecret.placeholder": {
+    "message": "既存のシークレットを保持する場合は空欄のままにしてください"
+  },
+  "config.error.clientIdRequired": {
+    "message": "クライアント ID は必須です。"
   }
 }

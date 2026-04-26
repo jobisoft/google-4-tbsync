@@ -30,7 +30,7 @@
     "message": "Abbrechen"
   },
   "setup.redirectHint": {
-    "message": "Die Client-ID muss zu einem OAuth-Webanwendungs-Client gehören und seine autorisierten Weiterleitungs-URIs müssen die Weiterleitungs-URL dieses Add-ons enthalten."
+    "message": "Die Weiterleitungs-URL dieses Add-ons muss einmalig zur OAuth-Client-Konfiguration hinzugefügt werden, damit das Add-on mit dem Client kommunizieren kann."
   },
   "setup.copyRedirect": {
     "message": "Weiterleitungs-URL kopieren"
@@ -41,7 +41,10 @@
   "setup.error.copyFailed": {
     "message": "Kopieren fehlgeschlagen: $ERROR$",
     "placeholders": {
-      "ERROR": { "content": "$1", "example": "permission denied" }
+      "ERROR": {
+        "content": "$1",
+        "example": "permission denied"
+      }
     }
   },
   "setup.error.accountNameRequired": {
@@ -97,5 +100,32 @@
   },
   "config.error.saveFailed": {
     "message": "Speichern fehlgeschlagen"
+  },
+  "setup.clientType": {
+    "message": "OAuth-Client-Typ"
+  },
+  "setup.clientType.desktop": {
+    "message": "Desktop-OAuth-Client"
+  },
+  "setup.clientType.desktop.hint": {
+    "message": "Veraltete Methode. Von Google nicht mehr unterstützt. Bestehende Clients funktionieren möglicherweise weiterhin."
+  },
+  "setup.clientType.web": {
+    "message": "Web-OAuth-Client"
+  },
+  "setup.clientType.web.hint": {
+    "message": "Moderne Methode. Erfordert das Hinzufügen der Weiterleitungs-URL dieses Add-ons zu den autorisierten Weiterleitungs-URIs Ihres OAuth-Clients."
+  },
+  "config.clientType": {
+    "message": "OAuth-Client-Typ"
+  },
+  "config.clientSecret": {
+    "message": "OAuth-Client-Schlüssel"
+  },
+  "config.clientSecret.placeholder": {
+    "message": "Leer lassen, um den vorhandenen Schlüssel beizubehalten"
+  },
+  "config.error.clientIdRequired": {
+    "message": "Client-ID ist erforderlich."
   }
 }
