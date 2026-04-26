@@ -114,6 +114,12 @@ export const PROVIDER_CMD = {
   // `*_by_user` entries after successfully pushing them to the server.
   CHANGELOG_MARK_SERVER_WRITE: "changelogMarkServerWrite",
   CHANGELOG_REMOVE: "changelogRemove",
+  // Provider-scoped upgrade lock. While locked, the host treats every
+  // account belonging to the provider as "upgrading" — refuses every
+  // user-initiated RPC and skips autosync ticks. Used by the provider's
+  // one-shot upgrade runner so user-visible actions don't race with
+  // upgrade work. Args: { locked: boolean }.
+  SET_PROVIDER_UPGRADE_LOCK: "setProviderUpgradeLock",
 };
 
 /** Provider → TbSync notification types (no response).

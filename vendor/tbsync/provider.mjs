@@ -44,6 +44,8 @@ export class TbSyncProviderImplementation {
   #pendingConfigs = new Map();    // accountId → windowId
   #pendingReauths = new Map();    // accountId → windowId
   #announceInFlight = false;
+  #firstConnect = false;          // flips true on the first onConnectedToHost
+  #onceConnectedCbs = [];         // queue drained on first connect
 
   #name;
   #shortName;
@@ -173,6 +175,17 @@ export class TbSyncProviderImplementation {
    *  status. Called after successfully pushing a `*_by_user` entry. */
   changelogRemove(args)          { return this.#sendCmd(PROVIDER_CMD.CHANGELOG_REMOVE, args); }
 
+  /** Provider-scoped upgrade lock. While `locked: true`, the host
+   *  refuses every user-initiated RPC against any account belonging to
+   *  this provider and skips autosync ticks — the manager surfaces the
+   *  state as "Provider is performing one-time upgrade work…". The
+   *  upgrade itself is exempt: provider→host commands like
+   *  `updateAccount` / `changelogMarkServerWrite` continue to flow.
+   *  Always pair a `true` call with a `false` call (use try/finally). */
+  setProviderUpgradeLock(locked) {
+    return this.#sendCmd(PROVIDER_CMD.SET_PROVIDER_UPGRADE_LOCK, { locked: !!locked });
+  }
+
   // ── Outbound: notifications ─────────────────────────────────────────────
 
   reportSyncState(payload)    { this.#notify(PROVIDER_NOTIFY.REPORT_SYNC_STATE, payload); }
@@ -218,6 +231,19 @@ export class TbSyncProviderImplementation {
    *  needs to read host state — listAccounts, getAccount, etc. — since the
    *  port is live from this point. Must be idempotent. */
   async onConnectedToHost()            { return null; }
+
+  /** One-shot wrapper around the first `onConnectedToHost`. `cb` fires
+   *  exactly once: immediately if the provider is already connected, or
+   *  on the next port-open otherwise. Used by independent boot paths
+   *  (e.g. the fixup runner) that need to wait for "provider is ready
+   *  for host RPC" without coupling to any other init path. */
+  onceConnectedToHost(cb) {
+    if (this.#firstConnect) {
+      queueMicrotask(cb);
+    } else {
+      this.#onceConnectedCbs.push(cb);
+    }
+  }
 
   /** Open the setup popup, wait for `tbsync-setup-completed`, register the
    *  account with the host, and return `{accountId, accountName, accountEntries}`. */
@@ -362,6 +388,20 @@ export class TbSyncProviderImplementation {
       this.onConnectedToHost().catch(err =>
         console.warn(`${this.#logPrefix} onConnectedToHost failed:`, err)
       );
+      // Drain any one-shot waiters registered via onceConnectedToHost,
+      // then mark the first-connect flag so future registrations fire
+      // immediately. Independent of the regular onConnectedToHost call
+      // above so a buggy hook can't starve the waiters.
+      if (!this.#firstConnect) {
+        this.#firstConnect = true;
+        const cbs = this.#onceConnectedCbs;
+        this.#onceConnectedCbs = [];
+        for (const cb of cbs) {
+          try { cb(); } catch (err) {
+            console.warn(`${this.#logPrefix} onceConnectedToHost callback threw:`, err);
+          }
+        }
+      }
     });
   }
 

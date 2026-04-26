@@ -67,27 +67,6 @@ export class GoogleProvider extends TbSyncProviderImplementation {
     // Prime OAuth auth so the people-api layer can refresh access tokens
     // without re-reading host state mid-sync.
     this.#primeAuth(ctx);
-    // Backfill `authenticatedUserEmail` for migrated accounts. Legacy
-    // never persisted this field, so the value comes back null on the
-    // first sync after migration. We grab it from the userinfo endpoint
-    // once we have a working access token. Best-effort — failures here
-    // shouldn't block sync.
-    if (!ctx.authenticatedUserEmail) {
-      try {
-        const accessToken = await oauth.getAccessToken(accountId);
-        const email = await oauth.fetchUserEmail(accessToken);
-        if (email) {
-          await this.updateAccount({
-            accountId,
-            patch: { custom: { authenticatedUserEmail: email } },
-          });
-          ctx.authenticatedUserEmail = email;
-          ctx.account.custom = { ...(ctx.account.custom ?? {}), authenticatedUserEmail: email };
-        }
-      } catch (err) {
-        console.warn(`[google-4-tbsync] backfill authenticatedUserEmail failed:`, err?.message ?? err);
-      }
-    }
     // Google surfaces a single contacts container — no server-side folder
     // discovery. The host's sync-coordinator proceeds to call onSyncFolder
     // for each selected folder. Dwell 250 ms so the manager can render

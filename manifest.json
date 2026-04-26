@@ -33,6 +33,16 @@
       "background.mjs"
     ]
   },
+  "experiment_apis": {
+    "LegacyAbProperties": {
+      "schema": "experiments/LegacyAbProperties/schema.json",
+      "parent": {
+        "scopes": ["addon_parent"],
+        "paths": [["LegacyAbProperties"]],
+        "script": "experiments/LegacyAbProperties/implementation.js"
+      }
+    }
+  },
   "web_accessible_resources": [
     "icons/icon-16.png",
     "icons/icon-32.png",
