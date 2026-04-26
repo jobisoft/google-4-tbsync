@@ -56,11 +56,11 @@ export const HOST_CMD = {
  * `custom: {}` object the host never interprets.
  *
  * Account universal fields (host-authored or host-interpreted):
- *   accountId, accountName, provider, providerAccountId, enabled,
- *   warning, error, lastSyncTime, autoSyncIntervalMinutes, custom
+ *   accountId, accountName, provider, enabled,
+ *   warning, error, lastSyncTime, autoSyncIntervalMinutes, noAutosyncUntil, custom
  *
  * Folder universal fields:
- *   folderId, accountId, folderType, displayName, selected, readOnly,
+ *   folderId, accountId, targetType, displayName, selected, readOnly,
  *   warning, error, lastSyncTime, orderIndex, targetID, targetName, custom
  *
  * `targetID` / `targetName` identify the local Thunderbird artifact bound
@@ -75,7 +75,7 @@ export const HOST_CMD = {
  *
  * ## RPC semantics
  *
- * REGISTER_ACCOUNT { accountName, providerAccountId, custom?, initialFolders? }
+ * REGISTER_ACCOUNT { accountName, custom?, initialFolders? }
  *   → creates a host account row. `custom` seeds the opaque blob atomically.
  *   `initialFolders` descriptors can carry `targetID`, `targetName`, `custom`
  *   on a per-folder basis.
@@ -87,7 +87,7 @@ export const HOST_CMD = {
  *   delete op. Other top-level fields are host-authored.
  *
  * UPDATE_FOLDER { accountId, folderId, patch }
- *   → patches top-level writable fields (`displayName`, `folderType`,
+ *   → patches top-level writable fields (`displayName`, `targetType`,
  *   `readOnly`, `warning`, `error`, `lastSyncTime`, `targetID`, `targetName`)
  *   and shallow-merges `patch.custom` like UPDATE_ACCOUNT.
  *

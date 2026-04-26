@@ -88,7 +88,6 @@ async function onSignIn() {
     await browser.runtime.sendMessage({
       type: "tbsync-setup-completed",
       setupToken,
-      providerAccountId: reply.result.providerAccountId,
       accountName: reply.result.accountName,
       initialFolders: reply.result.initialFolders,
       // Seeds the host row's opaque `custom` blob atomically with creation.

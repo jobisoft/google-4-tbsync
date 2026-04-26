@@ -54,7 +54,7 @@ const GROUP_PUSH_FIELDS = "name";
 const PAGE_SIZE = 1000;
 
 /** Fetch all of the user's contacts, following pagination. */
-export async function listAllConnections(providerAccountId) {
+export async function listAllConnections(accountId) {
   const all = [];
   let pageToken = null;
 
@@ -66,7 +66,7 @@ export async function listAllConnections(providerAccountId) {
     });
     if (pageToken) params.set("pageToken", pageToken);
 
-    const data = await fetchWithAuthRetry(providerAccountId, `${CONNECTIONS_ENDPOINT}?${params}`);
+    const data = await fetchWithAuthRetry(accountId, `${CONNECTIONS_ENDPOINT}?${params}`);
 
     if (Array.isArray(data.connections)) {
       all.push(...data.connections);
@@ -79,23 +79,23 @@ export async function listAllConnections(providerAccountId) {
 }
 
 /** Create a contact. Returns the stored Person with `resourceName` and `etag`. */
-export async function createContact(providerAccountId, person) {
+export async function createContact(accountId, person) {
   const params = new URLSearchParams({ personFields: PULL_FIELDS });
   const url = `${BASE}/people:createContact?${params}`;
-  return await fetchWithAuthRetry(providerAccountId, url, {
+  return await fetchWithAuthRetry(accountId, url, {
     method: "POST",
     body: JSON.stringify(person),
   });
 }
 
 /** Update a contact with optimistic locking on `etag`. Mismatch → PUSH_ERR.CONFLICT. */
-export async function updateContact(providerAccountId, resourceName, person, etag) {
+export async function updateContact(accountId, resourceName, person, etag) {
   const params = new URLSearchParams({
     updatePersonFields: PUSH_FIELDS,
     personFields: PULL_FIELDS,
   });
   const url = `${BASE}/${resourceName}:updateContact?${params}`;
-  return await fetchWithAuthRetry(providerAccountId, url, {
+  return await fetchWithAuthRetry(accountId, url, {
     method: "PATCH",
     body: JSON.stringify({ ...person, etag }),
   });
@@ -105,15 +105,15 @@ export async function updateContact(providerAccountId, resourceName, person, eta
  * DELETE /v1/<resourceName>:deleteContact. 404 is rethrown as ERR.NOT_FOUND
  * so the push pass can treat "already gone" as success.
  */
-export async function deleteContact(providerAccountId, resourceName) {
+export async function deleteContact(accountId, resourceName) {
   const url = `${BASE}/${resourceName}:deleteContact`;
-  await fetchWithAuthRetry(providerAccountId, url, { method: "DELETE" });
+  await fetchWithAuthRetry(accountId, url, { method: "DELETE" });
 }
 
 // ── Contact groups ────────────────────────────────────────────────────────
 
 /** Fetch all contact groups, following pagination. */
-export async function listAllContactGroups(providerAccountId) {
+export async function listAllContactGroups(accountId) {
   const all = [];
   let pageToken = null;
   while (true) {
@@ -122,7 +122,7 @@ export async function listAllContactGroups(providerAccountId) {
       pageSize: String(PAGE_SIZE),
     });
     if (pageToken) params.set("pageToken", pageToken);
-    const data = await fetchWithAuthRetry(providerAccountId, `${BASE}/contactGroups?${params}`);
+    const data = await fetchWithAuthRetry(accountId, `${BASE}/contactGroups?${params}`);
     if (Array.isArray(data.contactGroups)) all.push(...data.contactGroups);
     if (!data.nextPageToken) break;
     pageToken = data.nextPageToken;
@@ -131,19 +131,19 @@ export async function listAllContactGroups(providerAccountId) {
 }
 
 /** Create a user contact group. Returns the stored group with `resourceName` + `etag`. */
-export async function createContactGroup(providerAccountId, { name }) {
+export async function createContactGroup(accountId, { name }) {
   const params = new URLSearchParams({ readGroupFields: GROUP_PULL_FIELDS });
   const url = `${BASE}/contactGroups?${params}`;
-  return await fetchWithAuthRetry(providerAccountId, url, {
+  return await fetchWithAuthRetry(accountId, url, {
     method: "POST",
     body: JSON.stringify({ contactGroup: { name } }),
   });
 }
 
 /** Rename a user contact group. Etag required for optimistic locking. */
-export async function updateContactGroup(providerAccountId, resourceName, { name, etag }) {
+export async function updateContactGroup(accountId, resourceName, { name, etag }) {
   const url = `${BASE}/${resourceName}`;
-  return await fetchWithAuthRetry(providerAccountId, url, {
+  return await fetchWithAuthRetry(accountId, url, {
     method: "PUT",
     body: JSON.stringify({
       contactGroup: { etag, name },
@@ -154,9 +154,9 @@ export async function updateContactGroup(providerAccountId, resourceName, { name
 }
 
 /** Delete a user contact group. 404 → PUSH_ERR.NOT_FOUND. */
-export async function deleteContactGroup(providerAccountId, resourceName) {
+export async function deleteContactGroup(accountId, resourceName) {
   const url = `${BASE}/${resourceName}`;
-  await fetchWithAuthRetry(providerAccountId, url, { method: "DELETE" });
+  await fetchWithAuthRetry(accountId, url, { method: "DELETE" });
 }
 
 /** Internal error codes used by the push pass for control flow. These never
@@ -168,10 +168,10 @@ export const PUSH_ERR = {
 
 /** Authenticated People API fetch. Retries once on 401 with a fresh token.
  *  DELETE and empty bodies return null. */
-async function fetchWithAuthRetry(providerAccountId, url, opts = {}) {
+async function fetchWithAuthRetry(accountId, url, opts = {}) {
   const method = opts.method ?? "GET";
   for (let attempt = 1; attempt <= 2; attempt++) {
-    const token = await oauth.getAccessToken(providerAccountId);
+    const token = await oauth.getAccessToken(accountId);
     const headers = { Authorization: `Bearer ${token}` };
     if (opts.body) headers["Content-Type"] = "application/json";
     const resp = await fetch(url, { method, headers, body: opts.body });
@@ -188,7 +188,7 @@ async function fetchWithAuthRetry(providerAccountId, url, opts = {}) {
     }
 
     if (resp.status === 401 && attempt === 1) {
-      oauth.invalidateAccessToken(providerAccountId);
+      oauth.invalidateAccessToken(accountId);
       continue;
     }
 

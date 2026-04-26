@@ -44,7 +44,7 @@ function logDebug(ctx, message, details) {
   });
 }
 
-export async function syncFolderContacts({ accountId, providerAccountId, folderId, folder, account, notify }) {
+export async function syncFolderContacts({ accountId, accountId, folderId, folder, account, notify }) {
   const targetID = folder?.targetID;
   const readOnly = !!account?.custom?.readOnlyMode;
   const includeSystemGroups = !!account?.custom?.includeSystemContactGroups;
@@ -58,7 +58,7 @@ export async function syncFolderContacts({ accountId, providerAccountId, folderI
   // call we make must be preceded by a *_by_server entry so the host
   // observer drops the resulting TB event as self-inflicted.
   const ctx = {
-    accountId, providerAccountId, folderId, targetID,
+    accountId, folderId, targetID,
     notify, readOnly, includeSystemGroups,
     gMap, cMap, changelog,
     markServer: (parentId, itemId, status) =>
@@ -218,7 +218,7 @@ async function runPushAddModifyPass(ctx, userEntries) {
 }
 
 async function pushAdd(ctx, entry) {
-  const { providerAccountId, cMap } = ctx;
+  const { accountId, cMap } = ctx;
   const local = await addressBook.getContact(entry.itemId);
   if (!local) {
     // Card gone before we got to push it — add+del cancelled or something
@@ -228,7 +228,7 @@ async function pushAdd(ctx, entry) {
   }
   const person = mapper.vCardToPerson(local.vCard);
   logDebug(ctx, `push.add ${entry.itemId} — creating on Google`);
-  const serverPerson = await peopleApi.createContact(providerAccountId, person);
+  const serverPerson = await peopleApi.createContact(accountId, person);
   logDebug(ctx, `push.add ${entry.itemId} — server resourceName=${serverPerson.resourceName}`);
   await stampLocalCard(ctx, entry.itemId, local.vCard, serverPerson);
   cMap.set(entry.itemId, serverPerson.resourceName);
@@ -237,7 +237,7 @@ async function pushAdd(ctx, entry) {
 }
 
 async function pushModify(ctx, entry) {
-  const { providerAccountId, cMap } = ctx;
+  const { accountId, cMap } = ctx;
   const local = await addressBook.getContact(entry.itemId);
   if (!local) {
     await ctx.removeEntry(entry.parentId, entry.itemId);
@@ -248,7 +248,7 @@ async function pushModify(ctx, entry) {
     // No server identity yet — treat as a late add.
     const person = mapper.vCardToPerson(local.vCard);
     logDebug(ctx, `push.modify ${entry.itemId} — no server identity, creating instead`);
-    const serverPerson = await peopleApi.createContact(providerAccountId, person);
+    const serverPerson = await peopleApi.createContact(accountId, person);
     await stampLocalCard(ctx, entry.itemId, local.vCard, serverPerson);
     cMap.set(entry.itemId, serverPerson.resourceName);
     await ctx.removeEntry(entry.parentId, entry.itemId);
@@ -258,7 +258,7 @@ async function pushModify(ctx, entry) {
   logDebug(ctx, `push.modify ${identity.resourceName}`);
   try {
     const serverPerson = await peopleApi.updateContact(
-      providerAccountId, identity.resourceName, person, identity.etag
+      accountId, identity.resourceName, person, identity.etag
     );
     await stampLocalCard(ctx, entry.itemId, local.vCard, serverPerson);
     cMap.set(entry.itemId, serverPerson.resourceName);
@@ -297,11 +297,11 @@ async function stampLocalCard(ctx, contactId, originalVCard, serverPerson) {
 // ── Pull pass ────────────────────────────────────────────────────────────
 
 async function runPullPass(ctx) {
-  const { notify, accountId, folderId, providerAccountId, targetID, cMap } = ctx;
+  const { notify, accountId, folderId, targetID, cMap } = ctx;
 
   notify.reportSyncState({ accountId, folderId, syncState: "sync" });
   await new Promise(r => setTimeout(r, DEBUG_STATUS_DELAY_MS));
-  const people = await peopleApi.listAllConnections(providerAccountId);
+  const people = await peopleApi.listAllConnections(accountId);
   logDebug(ctx, `pull: server returned ${people.length} contact(s)`);
 
   notify.reportSyncState({ accountId, folderId, syncState: "sync" });
@@ -387,7 +387,7 @@ function indexMemberships(memberMap, contactResourceName, memberships) {
 // ── Push-delete reconciliation ───────────────────────────────────────────
 
 async function runPushDeletePass(ctx, userEntries, serverResourceNames) {
-  const { providerAccountId, cMap } = ctx;
+  const { accountId, cMap } = ctx;
   const deletions = userEntries.filter(
     e => isContactEntry(e) && e.status === STATUS.DELETED_BY_USER
   );
@@ -411,7 +411,7 @@ async function runPushDeletePass(ctx, userEntries, serverResourceNames) {
     }
     try {
       logDebug(ctx, `push.delete ${resourceName}`);
-      await peopleApi.deleteContact(providerAccountId, resourceName);
+      await peopleApi.deleteContact(accountId, resourceName);
       cMap.remove(entry.itemId);
       await ctx.removeEntry(entry.parentId, entry.itemId);
       deleted++;
@@ -435,11 +435,11 @@ async function runPushDeletePass(ctx, userEntries, serverResourceNames) {
 // ── Groups: pull + apply memberships ─────────────────────────────────────
 
 async function runGroupPullPass(ctx, byResourceName, memberMap) {
-  const { notify, accountId, folderId, providerAccountId, targetID, gMap, includeSystemGroups } = ctx;
+  const { notify, accountId, folderId, targetID, gMap, includeSystemGroups } = ctx;
   notify.reportSyncState({ accountId, folderId, syncState: "sync" });
   await new Promise(r => setTimeout(r, DEBUG_STATUS_DELAY_MS));
 
-  const serverGroups = await peopleApi.listAllContactGroups(providerAccountId);
+  const serverGroups = await peopleApi.listAllContactGroups(accountId);
   const eligible = serverGroups.filter(g =>
     includeSystemGroups || g.groupType !== SYSTEM_GROUP
   );
@@ -542,7 +542,7 @@ async function applyMemberships(ctx, byResourceName, memberMap) {
 // ── Group push-deletes ───────────────────────────────────────────────────
 
 async function runGroupPushDeletePass(ctx, userEntries) {
-  const { providerAccountId, gMap } = ctx;
+  const { accountId, gMap } = ctx;
   const deletions = userEntries.filter(
     e => !isContactEntry(e) && e.status === STATUS.DELETED_BY_USER
   );
@@ -563,7 +563,7 @@ async function runGroupPushDeletePass(ctx, userEntries) {
     }
     try {
       logDebug(ctx, `push.group.delete ${mapping.resourceName}`);
-      await peopleApi.deleteContactGroup(providerAccountId, mapping.resourceName);
+      await peopleApi.deleteContactGroup(accountId, mapping.resourceName);
       gMap.remove(mapping.resourceName);
       await ctx.removeEntry(entry.parentId, entry.itemId);
       deleted++;

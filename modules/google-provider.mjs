@@ -48,8 +48,8 @@ export class GoogleProvider extends TbSyncProviderImplementation {
 
   // ── Base-class hook: post-register ─────────────────────────────────────
 
-  /** Nothing to persist locally after registration — providerAccountId lives
-   *  on the host row and is looked up via getAccount() whenever needed. */
+  /** Nothing to persist locally after registration — the host's accountId
+   *  is the only identity we need and is looked up via getAccount(). */
   async onRegisterSuccessful() { return null; }
 
   /** Fired by the base class the first time the host opens the port (and on
@@ -101,7 +101,6 @@ export class GoogleProvider extends TbSyncProviderImplementation {
 
     return await syncFolderContacts({
       accountId,
-      providerAccountId: ctx.providerAccountId,
       folderId,
       // Pass the refreshed folder row so `sync-contacts` has `folder.targetID`
       // and `folder.custom.groupMap` — the latter is loaded once at the top
@@ -119,6 +118,9 @@ export class GoogleProvider extends TbSyncProviderImplementation {
   async onAccountEnabled({ accountId }) {
     const ctx = await this.#loadContext(accountId);
     if (!ctx) return null;
+    // Prime OAuth for this account in case `primeStartupState` hasn't
+    // had a chance to (e.g. the account was just created post-setup).
+    this.#primeAuth(ctx);
     // Re-enable after disable: push a fresh single-folder descriptor. The
     // book itself is created lazily (onFolderEnabled / onSyncFolder) since
     // the user may enable but not immediately sync. displayName mirrors
@@ -126,7 +128,7 @@ export class GoogleProvider extends TbSyncProviderImplementation {
     if (ctx.folders.length > 0) return null;
     const folder = {
       folderId: `f-${crypto.randomUUID()}`,
-      folderType: "contacts",
+      targetType: "contacts",
       displayName: ctx.authenticatedUserEmail?.trim() || ctx.account.accountName,
       // Mirror the account-level toggle so the ACL icon is correct from
       // the moment the folder is discovered, before the user enables it.
@@ -155,8 +157,8 @@ export class GoogleProvider extends TbSyncProviderImplementation {
         console.warn(`[google-4-tbsync] clear folder state on disable failed (folder=${folder.folderId}):`, err?.message ?? err);
       });
     }
-    oauth.invalidateAccessToken(ctx.providerAccountId);
-    oauth.forgetAuth(ctx.providerAccountId);
+    oauth.invalidateAccessToken(ctx.account.accountId);
+    oauth.forgetAuth(ctx.account.accountId);
     return null;
   }
 
@@ -170,8 +172,8 @@ export class GoogleProvider extends TbSyncProviderImplementation {
     if (purgeTargets !== false) {
       await this.#deleteAccountTargets(ctx.folders);
     }
-    oauth.invalidateAccessToken(ctx.providerAccountId);
-    oauth.forgetAuth(ctx.providerAccountId);
+    oauth.invalidateAccessToken(ctx.account.accountId);
+    oauth.forgetAuth(ctx.account.accountId);
     return null;
   }
 
@@ -252,7 +254,7 @@ export class GoogleProvider extends TbSyncProviderImplementation {
       .sort((a, b) => (a.orderIndex ?? 0) - (b.orderIndex ?? 0))
       .map(f => ({
         folderId: f.folderId,
-        folderType: f.folderType ?? "contacts",
+        targetType: f.targetType ?? "contacts",
         displayName: f.displayName,
         // Mirror the account-level "read-only mode" toggle onto every
         // folder row so the manager's ACL column surfaces the cause of a
@@ -305,8 +307,8 @@ export class GoogleProvider extends TbSyncProviderImplementation {
         accountId,
         patch: { custom: { refreshToken, authenticatedUserEmail: nextEmail } },
       });
-      oauth.primeAuth(ctx.providerAccountId, { clientID, clientSecret, refreshToken });
-      if (accessToken) oauth.primeAccessToken(ctx.providerAccountId, accessToken, expiresIn);
+      oauth.primeAuth(ctx.account.accountId, { clientID, clientSecret, refreshToken });
+      if (accessToken) oauth.primeAccessToken(ctx.account.accountId, accessToken, expiresIn);
       return ok();
     } catch (err) {
       return error(err.message ?? "Re-authentication failed", err.code ?? ERR.AUTH);
@@ -324,27 +326,25 @@ export class GoogleProvider extends TbSyncProviderImplementation {
   /** Setup popup flow:
    *    1. Run OAuth → refresh token + authenticated email.
    *    2. Return the payload the setup page forwards to the host: the
-   *       providerAccountId, the user-chosen account name, the opaque
-   *       `custom` blob (user-config + OAuth secrets + refresh token),
-   *       and one unselected contacts folder descriptor.
+   *       user-chosen account name, the opaque `custom` blob (user-config
+   *       + OAuth secrets + refresh token), and one unselected contacts
+   *       folder descriptor.
    *  The host row is created by the base-class `onOpenSetupPopup` after
-   *  the page posts `tbsync-setup-completed`. */
+   *  the page posts `tbsync-setup-completed`. The OAuth cache is primed
+   *  by `primeStartupState` on the next port-open, keyed by the host's
+   *  fresh accountId. */
   async authenticateAndCreateAccount({ label, clientID, clientSecret }) {
-    const { refreshToken, authenticatedUserEmail, accessToken, expiresIn } =
+    const { refreshToken, authenticatedUserEmail } =
       await oauth.startAuth({ clientID, clientSecret });
 
     const trimmedLabel = (label ?? "").trim();
     if (!trimmedLabel) {
       throw withCode(new Error("Account name is required"), ERR.UNKNOWN_ACCOUNT);
     }
-    const providerAccountId = `g-${crypto.randomUUID()}`;
-
-    oauth.primeAuth(providerAccountId, { clientID, clientSecret, refreshToken });
-    if (accessToken) oauth.primeAccessToken(providerAccountId, accessToken, expiresIn);
 
     const initialFolders = [{
       folderId: `f-${crypto.randomUUID()}`,
-      folderType: "contacts",
+      targetType: "contacts",
       displayName: authenticatedUserEmail?.trim() || trimmedLabel,
       // Mirrors `custom.readOnlyMode` default below so the ACL indicator
       // and push behavior agree from row zero.
@@ -353,7 +353,6 @@ export class GoogleProvider extends TbSyncProviderImplementation {
     }];
 
     return {
-      providerAccountId,
       accountName: trimmedLabel,
       initialFolders,
       custom: {
@@ -439,10 +438,10 @@ export class GoogleProvider extends TbSyncProviderImplementation {
   async primeStartupState() {
     const accounts = await this.listAccounts();
     for (const acc of accounts) {
-      const { providerAccountId, custom } = acc;
-      if (!providerAccountId) continue;
+      const { accountId, custom } = acc;
+      if (!accountId) continue;
       if (custom?.clientID && custom?.clientSecret && custom?.refreshToken) {
-        oauth.primeAuth(providerAccountId, {
+        oauth.primeAuth(accountId, {
           clientID: custom.clientID,
           clientSecret: custom.clientSecret,
           refreshToken: custom.refreshToken,
@@ -460,19 +459,17 @@ export class GoogleProvider extends TbSyncProviderImplementation {
   #primeAuth(ctx) {
     const { clientID, clientSecret, refreshToken } = ctx.account.custom ?? {};
     if (!clientID || !clientSecret || !refreshToken) return;
-    oauth.primeAuth(ctx.providerAccountId, { clientID, clientSecret, refreshToken });
+    oauth.primeAuth(ctx.account.accountId, { clientID, clientSecret, refreshToken });
   }
 
-  /** Load `{account, folders, providerAccountId, authenticatedUserEmail}`
-   *  for an on* hook. Returns null if the account doesn't exist or isn't
-   *  owned by us. */
+  /** Load `{account, folders, authenticatedUserEmail}` for an on* hook.
+   *  Returns null if the account doesn't exist or isn't owned by us. */
   async #loadContext(accountId) {
     const rv = await this.getAccount(accountId);
     if (!rv?.account) return null;
     return {
       account: rv.account,
       folders: rv.folders ?? [],
-      providerAccountId: rv.account.providerAccountId,
       authenticatedUserEmail: rv.account.custom?.authenticatedUserEmail ?? null,
     };
   }

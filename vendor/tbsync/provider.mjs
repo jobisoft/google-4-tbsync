@@ -237,7 +237,7 @@ export class TbSyncProviderImplementation {
       height: this.#setupHeight,
     });
 
-    const { providerAccountId, accountName, initialFolders, custom } =
+    const { accountName, initialFolders, custom } =
       await new Promise((resolve, reject) => {
         this.#pendingSetups.set(setupToken, { resolve, reject, windowId: win.id });
       });
@@ -246,25 +246,23 @@ export class TbSyncProviderImplementation {
     // atomically with the host row creation. See protocol.mjs PROVIDER_CMD.
     const { accountId } = await this.registerAccount({
       setupToken,
-      providerAccountId,
       accountName,
       initialFolders,
       custom,
     });
 
-    // Give the subclass a chance to link providerAccountId ↔ accountId.
+    // Give the subclass a chance to do any post-register bookkeeping
+    // (e.g. seed an in-memory cache keyed by accountId).
     await this.onRegisterSuccessful({
       accountId,
-      providerAccountId,
       accountName,
     });
 
     return { accountId, accountName };
   }
 
-  /** Called after registerAccount returns so a subclass can persist the
-   *  providerAccountId ↔ accountId mapping or do any other post-register
-   *  bookkeeping. Return value is discarded. */
+  /** Called after registerAccount returns so a subclass can do any
+   *  post-register bookkeeping. Return value is discarded. */
   async onRegisterSuccessful(_args) { return null; }
 
   /** Bring an in-flight setup popup to the front. Manager calls this when
@@ -280,14 +278,12 @@ export class TbSyncProviderImplementation {
     return null;
   }
 
-  /** Open the config popup with `accountId`, optional `providerAccountId`,
-   *  `readOnly`, and `mode` URL params. Resolves when the popup closes. */
+  /** Open the config popup with `accountId`, `readOnly`, and `mode` URL
+   *  params. Resolves when the popup closes. */
   async onOpenConfigPopup(args) {
     if (!this.#configPath) throw this.#notImplemented("onOpenConfigPopup (no configPath)");
-    const providerAccountId = await this.onResolveProviderAccountId(args.accountId);
     const url = new URL(browser.runtime.getURL(this.#configPath));
     url.searchParams.set("accountId", args.accountId);
-    if (providerAccountId) url.searchParams.set("providerAccountId", providerAccountId);
     if (args.readOnly) url.searchParams.set("readOnly", "1");
     if (args.mode) url.searchParams.set("mode", args.mode);
     const win = await browser.windows.create({
@@ -343,10 +339,7 @@ export class TbSyncProviderImplementation {
     this.#pendingReauths.delete(accountId);
   }
 
-  /** Map host's accountId to the subclass's providerAccountId, or null. */
-  async onResolveProviderAccountId(_tbsyncAccountId) { return null; }
-
-  // ── Private: port + dispatch ────────────────────────────────────────────
+// ── Private: port + dispatch ────────────────────────────────────────────
 
   #attachPort() {
     browser.runtime.onConnectExternal.addListener(incoming => {
@@ -509,12 +502,11 @@ export class TbSyncProviderImplementation {
    *  `runtime.sendMessage` is not delivered back to the calling frame
    *  and the `tbsync-setup-completed` round-trip would otherwise be
    *  needed. Returns true if a pending setup was matched. */
-  completeSetup({ setupToken, providerAccountId, accountName, initialFolders, custom }) {
+  completeSetup({ setupToken, accountName, initialFolders, custom }) {
     const entry = this.#pendingSetups.get(setupToken);
     if (!entry) return false;
     this.#pendingSetups.delete(setupToken);
     entry.resolve({
-      providerAccountId,
       accountName,
       initialFolders: initialFolders ?? [],
       custom: custom ?? {},
