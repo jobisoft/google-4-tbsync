@@ -409,51 +409,37 @@ function paramValue(prop, name) {
 }
 
 // ── Type normalisation (Google ↔ vCard) ─────────────────────────────────
+//
+// Each table maps lowercased input → canonical output; missing keys fall
+// through to the per-call `fallback` argument. `lookupType` is the only
+// branching code path — adding a new field family means adding a table,
+// not new helper functions.
 
-function normalizeEmailType(type) {
-  if (!type) return null;
-  const lower = type.toLowerCase();
-  if (lower === "home" || lower === "work") return lower;
-  return "other";
+const EMAIL_NORMALIZE   = { home: "home", work: "work" };
+const EMAIL_DENORMALIZE = { home: "home", work: "work" };
+
+const PHONE_NORMALIZE = {
+  home: "home", work: "work",
+  mobile: "cell", cell: "cell",
+  fax: "fax", workfax: "fax", homefax: "fax",
+  pager: "pager",
+};
+const PHONE_DENORMALIZE = {
+  home: "home", work: "work",
+  cell: "mobile", fax: "workFax", pager: "pager",
+};
+
+const ADDRESS_NORMALIZE   = { home: "home", work: "work" };
+const ADDRESS_DENORMALIZE = { home: "home", work: "work" };
+
+function lookupType(table, type, fallback) {
+  if (!type) return fallback;
+  return table[type.toLowerCase()] ?? fallback;
 }
 
-function denormalizeEmailType(type) {
-  if (!type) return undefined;
-  const lower = type.toLowerCase();
-  if (lower === "home" || lower === "work") return lower;
-  return "other";
-}
-
-function normalizePhoneType(type) {
-  if (!type) return null;
-  const lower = type.toLowerCase();
-  if (lower === "home" || lower === "work") return lower;
-  if (lower === "mobile" || lower === "cell") return "cell";
-  if (lower === "fax" || lower === "workfax" || lower === "homefax") return "fax";
-  if (lower === "pager") return "pager";
-  return null;
-}
-
-function denormalizePhoneType(type) {
-  if (!type) return undefined;
-  const lower = type.toLowerCase();
-  if (lower === "home" || lower === "work") return lower;
-  if (lower === "cell") return "mobile";
-  if (lower === "fax") return "workFax";
-  if (lower === "pager") return "pager";
-  return undefined;
-}
-
-function normalizeAddressType(type) {
-  if (!type) return null;
-  const lower = type.toLowerCase();
-  if (lower === "home" || lower === "work") return lower;
-  return null;
-}
-
-function denormalizeAddressType(type) {
-  if (!type) return undefined;
-  const lower = type.toLowerCase();
-  if (lower === "home" || lower === "work") return lower;
-  return undefined;
-}
+function normalizeEmailType(type)     { return lookupType(EMAIL_NORMALIZE,     type, type ? "other" : null); }
+function denormalizeEmailType(type)   { return lookupType(EMAIL_DENORMALIZE,   type, type ? "other" : undefined); }
+function normalizePhoneType(type)     { return lookupType(PHONE_NORMALIZE,     type, null); }
+function denormalizePhoneType(type)   { return lookupType(PHONE_DENORMALIZE,   type, undefined); }
+function normalizeAddressType(type)   { return lookupType(ADDRESS_NORMALIZE,   type, null); }
+function denormalizeAddressType(type) { return lookupType(ADDRESS_DENORMALIZE, type, undefined); }

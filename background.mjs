@@ -1,6 +1,7 @@
 import { getRedirectURL } from "./modules/google/oauth.mjs";
 import { GoogleProvider } from "./modules/google-provider.mjs";
 import { runUpgrades, enqueueUpgradesForUpdate } from "./modules/upgrades.mjs";
+import { stringifyError } from "./modules/errors.mjs";
 
 /**
  * Provider entry point. All port / handshake plumbing lives inside the
@@ -44,17 +45,22 @@ browser.runtime.onMessage.addListener(async msg => {
       });
       return { ok: true, result };
     } catch (err) {
-      return { ok: false, error: err.message ?? String(err), code: err.code ?? null };
+      return { ok: false, error: stringifyError(err), code: err.code ?? null };
     }
   }
   if (msg?.type === "google.getRedirectURL") {
-    return { redirectURL: getRedirectURL() };
+    try {
+      return { ok: true, result: { redirectURL: getRedirectURL() } };
+    } catch (err) {
+      return { ok: false, error: stringifyError(err), code: err.code ?? null };
+    }
   }
   if (msg?.type === "google.getLastCredentials") {
     try {
-      return await provider.getLastCredentials();
-    } catch {
-      return null;
+      const result = await provider.getLastCredentials();
+      return { ok: true, result };
+    } catch (err) {
+      return { ok: false, error: stringifyError(err), code: err.code ?? null };
     }
   }
   if (msg?.type === "google.getAccount") {
@@ -62,7 +68,7 @@ browser.runtime.onMessage.addListener(async msg => {
       const result = await provider.getAccountForConfig(msg.accountId);
       return { ok: true, result };
     } catch (err) {
-      return { ok: false, error: err.message ?? String(err), code: err.code ?? null };
+      return { ok: false, error: stringifyError(err), code: err.code ?? null };
     }
   }
   if (msg?.type === "google.saveAccount") {
@@ -73,7 +79,7 @@ browser.runtime.onMessage.addListener(async msg => {
       });
       return { ok: true, result };
     } catch (err) {
-      return { ok: false, error: err.message ?? String(err), code: err.code ?? null };
+      return { ok: false, error: stringifyError(err), code: err.code ?? null };
     }
   }
   return undefined;

@@ -22,6 +22,7 @@
 
 import * as addressBook from "./address-book.mjs";
 import * as mapper from "./google/contact-mapper.mjs";
+import { stringifyError } from "./errors.mjs";
 import * as oauth from "./google/oauth.mjs";
 
 const UPGRADE_QUEUE_KEY = "google.upgradeQueue";
@@ -98,7 +99,7 @@ export function runUpgrades(provider) {
         } catch (err) {
           provider.reportEventLog({
             level: "error",
-            message: `[upgrade] ${id} failed: ${err?.message ?? err}`,
+            message: `[upgrade] ${id} failed: ${stringifyError(err)}`,
           });
           remaining.push(id);
         }
@@ -108,7 +109,7 @@ export function runUpgrades(provider) {
     } finally {
       if (lockAcquired) {
         await provider.setProviderUpgradeLock(false).catch(err =>
-          console.warn("[google-4-tbsync] failed to release upgrade lock:", err?.message ?? err)
+          console.warn("[google-4-tbsync] failed to release upgrade lock:", stringifyError(err))
         );
         provider.reportEventLog({
           level: "debug",
@@ -161,7 +162,7 @@ async function liftLegacyStamps(provider) {
         provider.reportEventLog({
           level: "warning",
           accountId: acc.accountId, folderId: folder.folderId,
-          message: `[upgrade] readGoogleStamps failed: ${err?.message ?? err}`,
+          message: `[upgrade] readGoogleStamps failed: ${stringifyError(err)}`,
         });
         continue;
       }
@@ -331,7 +332,7 @@ async function backfillAuthenticatedUserEmail(provider) {
       provider.reportEventLog({
         level: "warning",
         accountId: acc.accountId,
-        message: `[upgrade] backfill authenticatedUserEmail failed: ${err?.message ?? err}`,
+        message: `[upgrade] backfill authenticatedUserEmail failed: ${stringifyError(err)}`,
       });
     }
   }

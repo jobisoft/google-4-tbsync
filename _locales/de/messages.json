@@ -9,7 +9,7 @@
     "message": "Google-Konto hinzufügen"
   },
   "setup.intro": {
-    "message": "Um eine Verbindung mit einem Google-Konto herzustellen, geben Sie eine OAuth-Client-ID und ein Geheimnis an, das Sie in der Google Cloud Console erstellt haben. Geben Sie eine Bezeichnung an, um das neue Konto in TbSync zu identifizieren."
+    "message": "Um eine Verbindung mit einem Google-Konto herzustellen, geben Sie eine OAuth-Client-ID und ein Client-Schlüssel an, das Sie in der Google Cloud Console erstellt haben. Geben Sie eine Bezeichnung an, um das neue Konto in TbSync zu identifizieren."
   },
   "setup.credentialsHelpLink": {
     "message": "So erstellen Sie Ihre Anmeldedaten für die Google Cloud Console"
@@ -21,7 +21,7 @@
     "message": "Client-ID"
   },
   "setup.clientSecret": {
-    "message": "Client-Geheimnis"
+    "message": "Client-Schlüssel"
   },
   "setup.authButton": {
     "message": "Mit Google anmelden"
@@ -30,10 +30,10 @@
     "message": "Abbrechen"
   },
   "setup.redirectHint": {
-    "message": "Die Weiterleitungs-URL dieses Add-ons muss einmalig zur OAuth-Client-Konfiguration hinzugefügt werden, damit das Add-on mit dem Client kommunizieren kann."
+    "message": "Die Redirect-URL dieses Add-ons muss einmalig zur OAuth-Client-Konfiguration hinzugefügt werden, damit das Add-on mit dem Client kommunizieren kann."
   },
   "setup.copyRedirect": {
-    "message": "Weiterleitungs-URL kopieren"
+    "message": "Redirect-URL kopieren"
   },
   "setup.copied": {
     "message": "Kopiert"
@@ -51,7 +51,7 @@
     "message": "Bitte geben Sie eine Kontobezeichnung ein."
   },
   "setup.error.credentialsRequired": {
-    "message": "Bitte geben Sie sowohl die Client-ID als auch das Client-Geheimnis ein."
+    "message": "Bitte geben Sie sowohl die Client-ID als auch das Client-Schlüssel ein."
   },
   "setup.error.missingToken": {
     "message": "Setup-Token fehlt. Öffnen Sie dieses Fenster über TbSync."
@@ -114,7 +114,7 @@
     "message": "Web-OAuth-Client"
   },
   "setup.clientType.web.hint": {
-    "message": "Moderne Methode. Erfordert das Hinzufügen der Weiterleitungs-URL dieses Add-ons zu den autorisierten Weiterleitungs-URIs Ihres OAuth-Clients."
+    "message": "Moderne Methode. Erfordert das Hinzufügen der Redirect-URL dieses Add-ons zu den autorisierten Redirect-URLs Ihres OAuth-Clients."
   },
   "config.clientType": {
     "message": "OAuth-Client-Typ"

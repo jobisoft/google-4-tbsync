@@ -4,6 +4,8 @@
  * manually). Contact writes all take a vCard string via `{ vCard }`.
  */
 
+import { stringifyError } from "./errors.mjs";
+
 /** Create a book and return its id. */
 export async function createBook(name) {
   if (!name || typeof name !== "string" || !name.trim()) {
@@ -42,7 +44,10 @@ export async function listContacts(bookId) {
     const list = await messenger.contacts.list(bookId);
     return list.map(normalizeCard);
   } catch (err) {
-    if (isNotFoundError(err)) return [];
+    if (isNotFoundError(err)) {
+      console.debug(`[google-4-tbsync] listContacts: book ${bookId} not found`);
+      return [];
+    }
     throw err;
   }
 }
@@ -54,7 +59,10 @@ export async function getContact(id) {
     const node = await messenger.contacts.get(id);
     return node ? normalizeCard(node) : null;
   } catch (err) {
-    if (isNotFoundError(err)) return null;
+    if (isNotFoundError(err)) {
+      console.debug(`[google-4-tbsync] getContact: ${id} not found`);
+      return null;
+    }
     throw err;
   }
 }
@@ -99,7 +107,10 @@ export async function listMailingLists(bookId) {
   try {
     return await messenger.mailingLists.list(bookId);
   } catch (err) {
-    if (isNotFoundError(err)) return [];
+    if (isNotFoundError(err)) {
+      console.debug(`[google-4-tbsync] listMailingLists: book ${bookId} not found`);
+      return [];
+    }
     throw err;
   }
 }
@@ -110,7 +121,10 @@ export async function getMailingList(id) {
   try {
     return await messenger.mailingLists.get(id);
   } catch (err) {
-    if (isNotFoundError(err)) return null;
+    if (isNotFoundError(err)) {
+      console.debug(`[google-4-tbsync] getMailingList: ${id} not found`);
+      return null;
+    }
     throw err;
   }
 }
@@ -145,35 +159,50 @@ export async function listMailingListMembers(listId) {
   try {
     return await messenger.mailingLists.listMembers(listId);
   } catch (err) {
-    if (isNotFoundError(err)) return [];
+    if (isNotFoundError(err)) {
+      console.debug(`[google-4-tbsync] listMailingListMembers: list ${listId} not found`);
+      return [];
+    }
     throw err;
   }
 }
 
-/** Add a contact to a mailing list, tolerating "not found". */
+/** Add a contact to a mailing list. Throws (with `code: "E:NOT_FOUND"`)
+ *  when either side has been removed — the caller must catch and surface
+ *  the drift; a silent return there would leave the membership delta
+ *  reporting a false positive. */
 export async function addMailingListMember(listId, contactId) {
   if (!listId || !contactId) return;
   try {
     await messenger.mailingLists.addMember(listId, contactId);
   } catch (err) {
-    if (isNotFoundError(err)) return;
+    if (isNotFoundError(err)) {
+      const wrapped = new Error(`addMailingListMember: list ${listId} or contact ${contactId} not found`);
+      wrapped.code = "E:NOT_FOUND";
+      throw wrapped;
+    }
     throw err;
   }
 }
 
-/** Remove a contact from a mailing list, tolerating "not found". */
+/** Remove a contact from a mailing list. Same semantics as
+ *  `addMailingListMember` — throws with `code: "E:NOT_FOUND"` when the
+ *  list or contact is gone so the caller can report drift. */
 export async function removeMailingListMember(listId, contactId) {
   if (!listId || !contactId) return;
   try {
     await messenger.mailingLists.removeMember(listId, contactId);
   } catch (err) {
-    if (isNotFoundError(err)) return;
+    if (isNotFoundError(err)) {
+      const wrapped = new Error(`removeMailingListMember: list ${listId} or contact ${contactId} not found`);
+      wrapped.code = "E:NOT_FOUND";
+      throw wrapped;
+    }
     throw err;
   }
 }
 
 /** Match Thunderbird's "unknown id" errors — wording varies across versions. */
 function isNotFoundError(err) {
-  const msg = String(err?.message ?? err ?? "");
-  return /no such|not found|invalid id/i.test(msg);
+  return /no such|not found|invalid id/i.test(stringifyError(err));
 }

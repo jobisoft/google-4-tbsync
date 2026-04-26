@@ -9,6 +9,7 @@
 
 import { localizeDocument } from "../../vendor/i18n/i18n.mjs";
 import { createDropdown } from "../shared/dropdown.mjs";
+import { stringifyError } from "../../modules/errors.mjs";
 
 /** Look up a localized message, falling back to the inline default if the
  *  key is missing. Optional third arg forwards substitutions to
@@ -42,7 +43,8 @@ function clearError() {
 
 async function loadLastCredentials() {
   try {
-    const creds = await browser.runtime.sendMessage({ type: "google.getLastCredentials" });
+    const reply = await browser.runtime.sendMessage({ type: "google.getLastCredentials" });
+    const creds = reply?.ok ? reply.result : null;
     if (creds && typeof creds === "object") {
       lastCredentials = {
         desktop: creds.desktop ?? null,
@@ -64,13 +66,16 @@ function applyCredentialsForType(type) {
 async function onCopyRedirectURL() {
   const btn = document.getElementById("btn-copy");
   try {
-    const { redirectURL } = await browser.runtime.sendMessage({ type: "google.getRedirectURL" });
-    await navigator.clipboard.writeText(redirectURL);
+    const reply = await browser.runtime.sendMessage({ type: "google.getRedirectURL" });
+    if (!reply?.ok) {
+      throw new Error(reply?.error ?? i18n("setup.error.copyFailed", "Copy failed", "unknown error"));
+    }
+    await navigator.clipboard.writeText(reply.result.redirectURL);
     const prior = btn.textContent;
     btn.textContent = i18n("setup.copied", "Copied");
     setTimeout(() => { btn.textContent = prior; }, 1200);
   } catch (err) {
-    const detail = err.message ?? String(err);
+    const detail = stringifyError(err);
     showError(i18n("setup.error.copyFailed", `Copy failed: ${detail}`, detail));
   }
 }
@@ -118,7 +123,7 @@ async function onSignIn() {
     window.close();
   } catch (err) {
     btn.disabled = false;
-    showError(err.message ?? String(err));
+    showError(stringifyError(err));
   }
 }
 

@@ -21,6 +21,7 @@ import * as oauth from "./google/oauth.mjs";
 import * as addressBook from "./address-book.mjs";
 import { syncFolderContacts } from "./google/sync-contacts.mjs";
 import { DEBUG_STATUS_DELAY_MS } from "./debug.mjs";
+import { stringifyError } from "./errors.mjs";
 
 export class GoogleProvider extends TbSyncProviderImplementation {
   constructor() {
@@ -156,7 +157,7 @@ export class GoogleProvider extends TbSyncProviderImplementation {
       }).catch(err => {
         // Re-enable will resurrect stale data if this fails; logging makes
         // the drift visible rather than silently accumulating.
-        console.warn(`[google-4-tbsync] clear folder state on disable failed (folder=${folder.folderId}):`, err?.message ?? err);
+        console.warn(`[google-4-tbsync] clear folder state on disable failed (folder=${folder.folderId}):`, stringifyError(err));
       });
     }
     oauth.invalidateAccessToken(ctx.account.accountId);
@@ -562,7 +563,7 @@ async function safeDeleteBook(targetID) {
   } catch (err) {
     console.warn(
       `[google-4-tbsync] could not delete address book ${targetID}:`,
-      err?.message ?? err
+      stringifyError(err)
     );
   }
 }

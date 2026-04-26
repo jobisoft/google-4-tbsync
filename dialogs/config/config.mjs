@@ -23,6 +23,7 @@
 
 import { localizeDocument } from "../../vendor/i18n/i18n.mjs";
 import { createDropdown } from "../shared/dropdown.mjs";
+import { stringifyError } from "../../modules/errors.mjs";
 
 let clientTypeDropdown;
 
@@ -145,7 +146,7 @@ async function onSave() {
     }
     window.close();
   } catch (err) {
-    showError(err.message ?? String(err));
+    showError(stringifyError(err));
     $("btn-save").disabled = false;
   }
 }

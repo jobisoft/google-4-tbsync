@@ -27,6 +27,7 @@
  */
 
 import { ERR, withCode } from "../../vendor/tbsync/provider.mjs";
+import { stringifyError } from "../errors.mjs";
 
 const AUTH_ENDPOINT = "https://accounts.google.com/o/oauth2/v2/auth";
 const TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token";
@@ -134,7 +135,7 @@ async function consentViaWebAuthFlow(authUrl) {
       interactive: true,
     });
   } catch (err) {
-    const msg = String(err?.message ?? err ?? "");
+    const msg = stringifyError(err);
     if (/cancel|close/i.test(msg)) {
       throw withCode(new Error("Sign-in cancelled"), ERR.CANCELLED);
     }
