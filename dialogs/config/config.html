@@ -3,13 +3,18 @@
   <head>
     <meta charset="utf-8" />
     <title data-i18n-content="config.title"></title>
+    <link rel="stylesheet" href="../shared/dropdown.css" />
     <script type="module" src="config.mjs"></script>
     <style>
       :root {
         --bg-page: #fff;
         --bg-card: #fff;
+        --bg-card-hover: #f6f9fd;
+        --bg-card-active: #e6efff;
         --bg-input-disabled: #f4f4f6;
         --bg-display: #f8f8f9;
+        --border-card: #d0d4d9;
+        --border-card-active: #2a7fd4;
         --text-primary: #222;
         --text-secondary: #555;
         --text-tertiary: #666;
@@ -34,8 +39,12 @@
         :root {
           --bg-page: #1e1f21;
           --bg-card: #2b2d30;
+          --bg-card-hover: #34373d;
+          --bg-card-active: #2a3e5a;
           --bg-input-disabled: #2a2c2f;
           --bg-display: #26282b;
+          --border-card: #4a4d52;
+          --border-card-active: #5fa6e8;
           --text-primary: #e8e9eb;
           --text-secondary: #b3b5ba;
           --text-tertiary: #9498a0;
@@ -96,6 +105,7 @@
         font-family: ui-monospace, monospace;
         word-break: break-all;
       }
+      .field .dropdown { margin-bottom: 0; }
 
       .checkbox-row { display: flex; align-items: center; gap: 8px; margin: 6px 0; }
       .checkbox-row label { font-size: 13px; color: var(--text-body); text-transform: none; letter-spacing: 0; margin: 0; }
@@ -146,6 +156,10 @@
     <div class="field">
       <label data-i18n-content="config.email"></label>
       <div id="email" class="display"></div>
+    </div>
+    <div class="field">
+      <label data-i18n-content="config.clientType"></label>
+      <div id="client-type"></div>
     </div>
     <div class="field">
       <label data-i18n-content="config.clientId"></label>

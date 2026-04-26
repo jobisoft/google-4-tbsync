@@ -8,6 +8,7 @@
  */
 
 import { localizeDocument } from "../../vendor/i18n/i18n.mjs";
+import { createDropdown } from "../shared/dropdown.mjs";
 
 /** Look up a localized message, falling back to the inline default if the
  *  key is missing. Optional third arg forwards substitutions to
@@ -17,6 +18,17 @@ const i18n = (key, fallback, substitutions) =>
 
 const params = new URLSearchParams(location.search);
 const setupToken = params.get("setupToken");
+
+const TYPE_DESKTOP = "desktop";
+const TYPE_WEB     = "web";
+
+let clientTypeDropdown;
+
+/** Cached per-type credential prefills, keyed by client type. Populated
+ *  once at boot from the host's account list; consulted on every
+ *  client-type change so the form swaps to the most-recent credentials
+ *  for the chosen type. */
+let lastCredentials = { desktop: null, web: null };
 
 function showError(message) {
   const el = document.getElementById("error");
@@ -28,16 +40,25 @@ function clearError() {
   document.getElementById("error").classList.remove("visible");
 }
 
-async function prefillCredentials() {
+async function loadLastCredentials() {
   try {
-    // Reads the host's accounts via `provider.listAccounts()` and picks the
-    // most recent entry's custom.clientID / custom.clientSecret — no more
-    // provider-local account storage to consult.
     const creds = await browser.runtime.sendMessage({ type: "google.getLastCredentials" });
-    if (!creds) return;
-    document.getElementById("client-id").value = creds.clientID ?? "";
-    document.getElementById("client-secret").value = creds.clientSecret ?? "";
+    if (creds && typeof creds === "object") {
+      lastCredentials = {
+        desktop: creds.desktop ?? null,
+        web:     creds.web     ?? null,
+      };
+    }
   } catch { /* ignore — fields stay blank */ }
+  applyCredentialsForType(clientTypeDropdown.getValue());
+}
+
+/** Replace the credential fields with the most-recent values for the
+ *  given client type, or blank them out when there are none on file. */
+function applyCredentialsForType(type) {
+  const creds = lastCredentials[type];
+  document.getElementById("client-id").value     = creds?.clientID     ?? "";
+  document.getElementById("client-secret").value = creds?.clientSecret ?? "";
 }
 
 async function onCopyRedirectURL() {
@@ -59,6 +80,7 @@ async function onSignIn() {
   const label = document.getElementById("account-name").value.trim();
   const clientID = document.getElementById("client-id").value.trim();
   const clientSecret = document.getElementById("client-secret").value.trim();
+  const clientType = clientTypeDropdown.getValue();
   if (!label) {
     showError(i18n("setup.error.accountNameRequired", "Please enter an account name."));
     document.getElementById("account-name").focus();
@@ -78,7 +100,7 @@ async function onSignIn() {
   try {
     const reply = await browser.runtime.sendMessage({
       type: "google.authenticate",
-      label, clientID, clientSecret,
+      label, clientID, clientSecret, clientType,
     });
     if (!reply?.ok) {
       if (reply?.code === "E:CANCELLED") { btn.disabled = false; return; }
@@ -100,8 +122,31 @@ async function onSignIn() {
   }
 }
 
+function applyClientType(type) {
+  document.getElementById("redirect-hint").hidden = type !== TYPE_WEB;
+  applyCredentialsForType(type);
+}
+
 localizeDocument();
-prefillCredentials();
+clientTypeDropdown = createDropdown(document.getElementById("client-type"), {
+  options: [
+    {
+      value: TYPE_WEB,
+      label: i18n("setup.clientType.web", "Web OAuth Client"),
+      hint:  i18n("setup.clientType.web.hint", ""),
+    },
+    {
+      value: TYPE_DESKTOP,
+      label: i18n("setup.clientType.desktop", "Desktop OAuth Client"),
+      hint:  i18n("setup.clientType.desktop.hint", ""),
+    },
+  ],
+  value: TYPE_WEB,
+  onChange: applyClientType,
+});
+applyClientType(clientTypeDropdown.getValue());
+
+loadLastCredentials();
 document.getElementById("btn-copy").addEventListener("click", onCopyRedirectURL);
 document.getElementById("btn-cancel").addEventListener("click", () => window.close());
 document.getElementById("btn-sign-in").addEventListener("click", onSignIn);

@@ -17,6 +17,7 @@
  */
 
 import { localizeDocument } from "../../vendor/i18n/i18n.mjs";
+import { createDropdown } from "../shared/dropdown.mjs";
 
 /** Look up a localized message, falling back to the inline default if the
  *  key is missing. Optional third arg forwards substitutions to
@@ -57,6 +58,25 @@ async function load() {
   document.getElementById("client-id").textContent = account.clientID ?? "—";
   document.getElementById("read-only-mode").checked = !!account.readOnlyMode;
   document.getElementById("include-system-groups").checked = !!account.includeSystemContactGroups;
+
+  // Locked: set at setup and immutable here (changing the type would
+  // invalidate the stored refresh token, which lives on disk).
+  createDropdown(document.getElementById("client-type"), {
+    options: [
+      {
+        value: "web",
+        label: i18n("setup.clientType.web", "Web OAuth Client"),
+        hint:  i18n("setup.clientType.web.hint", ""),
+      },
+      {
+        value: "desktop",
+        label: i18n("setup.clientType.desktop", "Desktop OAuth Client"),
+        hint:  i18n("setup.clientType.desktop.hint", ""),
+      },
+    ],
+    value: account.clientType === "web" ? "web" : "desktop",
+    locked: true,
+  });
 
   applyReadOnly();
 }

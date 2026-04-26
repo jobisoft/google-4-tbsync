@@ -3,14 +3,21 @@
   <head>
     <meta charset="utf-8" />
     <title data-i18n-content="setup.title"></title>
+    <link rel="stylesheet" href="../shared/dropdown.css" />
     <script type="module" src="setup.mjs"></script>
     <style>
       :root {
         --bg-page: #fff;
+        --bg-card: #fff;
+        --bg-card-hover: #f6f9fd;
+        --bg-card-active: #e6efff;
+        --bg-input-disabled: #f4f4f6;
         --text-primary: #222;
         --text-secondary: #555;
         --text-tertiary: #777;
         --border-input: #ccc;
+        --border-card: #d0d4d9;
+        --border-card-active: #2a7fd4;
         --accent: #2a7fd4;
         --accent-hover: #1a6fc4;
         --btn-secondary-bg: #e5e5e7;
@@ -21,10 +28,16 @@
       @media (prefers-color-scheme: dark) {
         :root {
           --bg-page: #1e1f21;
+          --bg-card: #2b2d30;
+          --bg-card-hover: #34373d;
+          --bg-card-active: #2a3e5a;
+          --bg-input-disabled: #2a2c2f;
           --text-primary: #e8e9eb;
           --text-secondary: #b3b5ba;
           --text-tertiary: #9498a0;
           --border-input: #4a4d52;
+          --border-card: #4a4d52;
+          --border-card-active: #5fa6e8;
           --accent: #5fa6e8;
           --accent-hover: #7ab5ec;
           --btn-secondary-bg: #3a3c40;
@@ -57,14 +70,17 @@
         padding: 5px 8px; border: 1px solid var(--border-input); border-radius: 4px; font-size: 13px;
         background: var(--bg-page); color: var(--text-primary);
       }
+      /* Strip the dropdown widget's own bottom margin so the .field's
+         margin-bottom is the single source of inter-field spacing,
+         identical whether or not the redirect-hint sits below it. */
+      .field .dropdown { margin-bottom: 0; }
 
       .redirect-hint {
-        margin: 10px 0 0;
+        margin: 4px 0 0;
         font-size: 11px;
         color: var(--text-tertiary);
         line-height: 1.5;
       }
-      .redirect-hint strong { color: var(--text-secondary); }
       .redirect-copy-btn {
         display: inline-block;
         margin-left: 4px;
@@ -112,6 +128,15 @@
       <input id="account-name" type="text" required />
     </div>
     <div class="field">
+      <label data-i18n-content="setup.clientType"></label>
+      <div id="client-type"></div>
+      <p id="redirect-hint" class="redirect-hint" hidden>
+        <em data-i18n-content="setup.redirectHint"></em>
+        <button type="button" id="btn-copy" class="redirect-copy-btn" data-i18n-content="setup.copyRedirect"></button>
+      </p>
+    </div>
+
+    <div class="field">
       <label data-i18n-content="setup.clientID"></label>
       <input id="client-id" type="text" autocomplete="off" spellcheck="false" />
     </div>
@@ -119,11 +144,6 @@
       <label data-i18n-content="setup.clientSecret"></label>
       <input id="client-secret" type="password" autocomplete="off" spellcheck="false" />
     </div>
-
-    <p class="redirect-hint">
-      <em data-i18n-content="setup.redirectHint"></em>
-      <button type="button" id="btn-copy" class="redirect-copy-btn" data-i18n-content="setup.copyRedirect"></button>
-    </p>
 
     <div id="error" class="error"></div>
 

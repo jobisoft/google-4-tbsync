@@ -28,6 +28,7 @@ browser.runtime.onMessage.addListener(async msg => {
         label: msg.label,
         clientID: msg.clientID,
         clientSecret: msg.clientSecret,
+        clientType: msg.clientType,
       });
       return { ok: true, result };
     } catch (err) {

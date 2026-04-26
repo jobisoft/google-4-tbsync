@@ -284,7 +284,7 @@ export class GoogleProvider extends TbSyncProviderImplementation {
   async onReauthenticate({ accountId }) {
     const ctx = await this.#loadContext(accountId);
     if (!ctx) return error("Unknown account", ERR.UNKNOWN_ACCOUNT);
-    const { clientID, clientSecret } = ctx.account.custom;
+    const { clientID, clientSecret, clientType } = ctx.account.custom;
     if (!clientID || !clientSecret) {
       return error("Missing OAuth credentials", ERR.AUTH);
     }
@@ -293,6 +293,7 @@ export class GoogleProvider extends TbSyncProviderImplementation {
         await oauth.startAuth({
           clientID,
           clientSecret,
+          clientType,
           loginHint: ctx.authenticatedUserEmail,
         });
       if (ctx.authenticatedUserEmail && authenticatedUserEmail &&
@@ -333,9 +334,9 @@ export class GoogleProvider extends TbSyncProviderImplementation {
    *  the page posts `tbsync-setup-completed`. The OAuth cache is primed
    *  by `primeStartupState` on the next port-open, keyed by the host's
    *  fresh accountId. */
-  async authenticateAndCreateAccount({ label, clientID, clientSecret }) {
+  async authenticateAndCreateAccount({ label, clientID, clientSecret, clientType }) {
     const { refreshToken, authenticatedUserEmail } =
-      await oauth.startAuth({ clientID, clientSecret });
+      await oauth.startAuth({ clientID, clientSecret, clientType });
 
     const trimmedLabel = (label ?? "").trim();
     if (!trimmedLabel) {
@@ -358,6 +359,11 @@ export class GoogleProvider extends TbSyncProviderImplementation {
       custom: {
         clientID,
         clientSecret,
+        // Persist the chosen flow so re-auth and the config popup know
+        // which redirect-URI / popup-vs-launchWebAuthFlow path to use.
+        // Migrated profiles arrive without this field — `oauth.startAuth`
+        // treats anything other than "web" as desktop, matching legacy.
+        clientType: clientType === "web" ? "web" : "desktop",
         refreshToken,
         authenticatedUserEmail: authenticatedUserEmail ?? null,
         readOnlyMode: true,
@@ -366,17 +372,23 @@ export class GoogleProvider extends TbSyncProviderImplementation {
     };
   }
 
-  /** Most recent provider account, for prefilling clientID/clientSecret in
-   *  the setup popup. Scans the host's account list. */
+  /** Most recent provider account credentials, grouped by OAuth client
+   *  type. Setup popup uses this to prefill the form when the user picks
+   *  a type from the dropdown. Migrated accounts have no `clientType`
+   *  field — they're treated as `"desktop"` to match the OAuth layer. */
   async getLastCredentials() {
     const list = await this.listAccounts();
-    const mine = list
+    const sorted = list
       .filter(a => a.custom?.clientID && a.custom?.clientSecret)
       .sort((a, b) => (b.lastSyncTime ?? 0) - (a.lastSyncTime ?? 0));
-    const last = mine[0];
-    return last
-      ? { clientID: last.custom.clientID, clientSecret: last.custom.clientSecret }
-      : null;
+    const out = { desktop: null, web: null };
+    for (const acc of sorted) {
+      const type = acc.custom.clientType === "web" ? "web" : "desktop";
+      if (out[type]) continue;
+      out[type] = { clientID: acc.custom.clientID, clientSecret: acc.custom.clientSecret };
+      if (out.desktop && out.web) break;
+    }
+    return out;
   }
 
   /** Returns a sanitized view of the account record for the config popup.
@@ -389,6 +401,9 @@ export class GoogleProvider extends TbSyncProviderImplementation {
       accountName: ctx.account.accountName,
       authenticatedUserEmail: ctx.authenticatedUserEmail ?? null,
       clientID: ctx.account.custom.clientID ?? "",
+      // Migrated profiles never set this — surface "desktop" to match
+      // what the OAuth layer will actually use.
+      clientType: ctx.account.custom.clientType === "web" ? "web" : "desktop",
       readOnlyMode: !!ctx.account.custom.readOnlyMode,
       includeSystemContactGroups: !!ctx.account.custom.includeSystemContactGroups,
     };

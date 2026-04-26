@@ -17,6 +17,21 @@
   "setup.accountName": {
     "message": "Account label"
   },
+  "setup.clientType": {
+    "message": "OAuth client type"
+  },
+  "setup.clientType.desktop": {
+    "message": "Desktop OAuth Client"
+  },
+  "setup.clientType.desktop.hint": {
+    "message": "Legacy flow. Deprecated by Google. Existing clients may continue to work."
+  },
+  "setup.clientType.web": {
+    "message": "Web OAuth Client"
+  },
+  "setup.clientType.web.hint": {
+    "message": "Modern flow. Requires this add-on's redirect URL to be added to your OAuth client's Authorized redirect URIs."
+  },
   "setup.clientID": {
     "message": "Client ID"
   },
@@ -30,7 +45,7 @@
     "message": "Cancel"
   },
   "setup.redirectHint": {
-    "message": "The Client ID must belong to an OAuth Web application client, and its Authorized redirect URIs must include this add-on's redirect URL."
+    "message": "The redirect URL of this add-on needs to be added once to the OAuth client configuration to allow the add-on to communicate with it."
   },
   "setup.copyRedirect": {
     "message": "Copy redirect URL"
@@ -64,6 +79,9 @@
   },
   "config.email": {
     "message": "Google account"
+  },
+  "config.clientType": {
+    "message": "OAuth client type"
   },
   "config.clientId": {
     "message": "OAuth Client ID"
