@@ -67,6 +67,27 @@ export class GoogleProvider extends TbSyncProviderImplementation {
     // Prime OAuth auth so the people-api layer can refresh access tokens
     // without re-reading host state mid-sync.
     this.#primeAuth(ctx);
+    // Backfill `authenticatedUserEmail` for migrated accounts. Legacy
+    // never persisted this field, so the value comes back null on the
+    // first sync after migration. We grab it from the userinfo endpoint
+    // once we have a working access token. Best-effort — failures here
+    // shouldn't block sync.
+    if (!ctx.authenticatedUserEmail) {
+      try {
+        const accessToken = await oauth.getAccessToken(accountId);
+        const email = await oauth.fetchUserEmail(accessToken);
+        if (email) {
+          await this.updateAccount({
+            accountId,
+            patch: { custom: { authenticatedUserEmail: email } },
+          });
+          ctx.authenticatedUserEmail = email;
+          ctx.account.custom = { ...(ctx.account.custom ?? {}), authenticatedUserEmail: email };
+        }
+      } catch (err) {
+        console.warn(`[google-4-tbsync] backfill authenticatedUserEmail failed:`, err?.message ?? err);
+      }
+    }
     // Google surfaces a single contacts container — no server-side folder
     // discovery. The host's sync-coordinator proceeds to call onSyncFolder
     // for each selected folder. Dwell 250 ms so the manager can render
@@ -85,13 +106,15 @@ export class GoogleProvider extends TbSyncProviderImplementation {
     this.#primeAuth(ctx);
 
     // Defensive: the stored targetID may be stale if the user deleted the
-    // address book manually from Thunderbird's UI. Recreate on the fly so
-    // the sync can still proceed — push the new ID back to the host. The
-    // host-side watcher picks up the new targetID via the folders-changed
-    // broadcast that follows the updateFolder call.
+    // address book manually from Thunderbird's UI, or the book was torn
+    // down by `onAccountDisabled` and we're now syncing post-reconnect.
+    // Recreate on the fly so the sync can still proceed — push the new
+    // ID back to the host. The host-side watcher picks up the new
+    // targetID via the folders-changed broadcast that follows the
+    // updateFolder call.
     let targetID = folder.targetID;
     if (!targetID || !(await addressBook.bookExists(targetID))) {
-      const bookName = computeBookName(ctx.account.accountName, ctx.authenticatedUserEmail);
+      const bookName = bookNameForFolder(folder, ctx);
       targetID = await addressBook.createBook(bookName);
       await this.updateFolder({
         accountId, folderId,
@@ -188,7 +211,7 @@ export class GoogleProvider extends TbSyncProviderImplementation {
     if (folder.targetID && await addressBook.bookExists(folder.targetID)) {
       return null;
     }
-    const bookName = computeBookName(ctx.account.accountName, ctx.authenticatedUserEmail);
+    const bookName = bookNameForFolder(folder, ctx);
     const targetID = await addressBook.createBook(bookName);
     await this.updateFolder({
       accountId, folderId,
@@ -536,11 +559,21 @@ export class GoogleProvider extends TbSyncProviderImplementation {
 
 // ── Module-local helpers ─────────────────────────────────────────────────
 
-/** Book name includes the email so users with multiple Google accounts
- *  under the same label can tell them apart in the Thunderbird sidebar. */
-function computeBookName(accountName, authenticatedUserEmail) {
-  const email = authenticatedUserEmail?.trim?.() || null;
-  return email ? `${accountName} (${email})` : accountName;
+/** Book name for a (re)created Thunderbird address book, picking the most
+ *  authoritative source available:
+ *
+ *    1. The folder's `targetName` — preserved across disable/enable and
+ *       carried over from legacy by the host's migration.
+ *    2. The folder's `displayName` — set when the folder row was first
+ *       pushed by the provider.
+ *    3. A computed fallback combining the account name + authenticated
+ *       email, so users with multiple Google accounts under the same
+ *       label can tell them apart in the Thunderbird sidebar. */
+function bookNameForFolder(folder, ctx) {
+  const stored = folder?.targetName?.trim?.() || folder?.displayName?.trim?.();
+  if (stored) return stored;
+  const email = ctx.authenticatedUserEmail?.trim?.() || null;
+  return email ? `${ctx.account.accountName} (${email})` : ctx.account.accountName;
 }
 
 /** `addressBook.deleteBook` with a warn-and-continue catch. */

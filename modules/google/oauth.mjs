@@ -292,7 +292,10 @@ export function primeAccessToken(accountId, token, expiresIn) {
   });
 }
 
-async function fetchUserEmail(accessToken) {
+/** Hit /userinfo with the given access token and return the email
+ *  address. Used both at sign-in and as a backfill for migrated accounts
+ *  that never had `authenticatedUserEmail` persisted. */
+export async function fetchUserEmail(accessToken) {
   const resp = await fetch(USERINFO_ENDPOINT, {
     headers: { Authorization: `Bearer ${accessToken}` },
   });
