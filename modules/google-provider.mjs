@@ -32,7 +32,7 @@ export class GoogleProvider extends TbSyncProviderImplementation {
       setupHeight: 640,
       configPath: "dialogs/config/config.html",
       configWidth: 520,
-      configHeight: 580,
+      configHeight: 630,
       capabilities: {
         folderTypes: ["contacts"],
         supportsReadOnly: true,
@@ -391,8 +391,7 @@ export class GoogleProvider extends TbSyncProviderImplementation {
     return out;
   }
 
-  /** Returns a sanitized view of the account record for the config popup.
-   *  clientSecret never leaves the background context. */
+  /** Sanitized account record view for the config popup. */
   async getAccountForConfig(accountId) {
     const ctx = await this.#loadContext(accountId);
     if (!ctx) throw withCode(new Error("Unknown account"), ERR.UNKNOWN_ACCOUNT);
@@ -410,8 +409,17 @@ export class GoogleProvider extends TbSyncProviderImplementation {
   }
 
   /** Write allow-listed fields from the config popup to the host via
-   *  UPDATE_ACCOUNT. Account name goes to the top-level; toggles go into
-   *  `custom` (shallow-merged on the host side). */
+   *  UPDATE_ACCOUNT. Account name goes to the top-level; everything else
+   *  goes into `custom` (shallow-merged on the host side).
+   *
+   *  OAuth credentials (`clientID` / `clientSecret`) are editable only
+   *  when the account is disconnected — the popup enforces that via the
+   *  `readOnly` URL param, and the host gates `readOnly` on
+   *  `account.enabled`. When the user changes either, the stored
+   *  `refreshToken` becomes meaningless (it was issued for the old
+   *  client), so we drop it; the next sync will surface "Sign in again"
+   *  via the standard auth-error path. The `clientType` is locked in
+   *  the popup and never travels through here. */
   async saveAccountFromConfig({ accountId, patch }) {
     const ctx = await this.#loadContext(accountId);
     if (!ctx) throw withCode(new Error("Unknown account"), ERR.UNKNOWN_ACCOUNT);
@@ -423,8 +431,31 @@ export class GoogleProvider extends TbSyncProviderImplementation {
       if (!trimmed) throw withCode(new Error("Account name is required"), ERR.UNKNOWN_ACCOUNT);
       topLevelPatch.accountName = trimmed;
     }
+    if ("clientID" in patch) {
+      const trimmed = String(patch.clientID ?? "").trim();
+      if (!trimmed) throw withCode(new Error("Client ID is required"), ERR.AUTH);
+      customPatch.clientID = trimmed;
+    }
+    if ("clientSecret" in patch) {
+      // Empty values are filtered out at the popup; if a value reaches
+      // here it's an explicit replacement.
+      customPatch.clientSecret = String(patch.clientSecret);
+    }
     for (const key of ["readOnlyMode", "includeSystemContactGroups"]) {
       if (key in patch) customPatch[key] = !!patch[key];
+    }
+
+    // Detect a credentials change: clientID or clientSecret differs from
+    // what's on disk. Invalidate refresh token + cached email so the
+    // user re-authenticates.
+    const credsChanged =
+      ("clientID"     in customPatch && customPatch.clientID     !== ctx.account.custom?.clientID) ||
+      ("clientSecret" in customPatch && customPatch.clientSecret !== ctx.account.custom?.clientSecret);
+    if (credsChanged) {
+      customPatch.refreshToken = null;
+      customPatch.authenticatedUserEmail = null;
+      oauth.invalidateAccessToken(accountId);
+      oauth.forgetAuth(accountId);
     }
 
     const outgoing = { ...topLevelPatch };

@@ -86,6 +86,15 @@
   "config.clientId": {
     "message": "OAuth Client ID"
   },
+  "config.clientSecret": {
+    "message": "OAuth Client secret"
+  },
+  "config.clientSecret.placeholder": {
+    "message": "Leave blank to keep the existing secret"
+  },
+  "config.error.clientIdRequired": {
+    "message": "Client ID is required."
+  },
   "config.readOnlyMode": {
     "message": "Read-only (do not push local changes to Google)"
   },

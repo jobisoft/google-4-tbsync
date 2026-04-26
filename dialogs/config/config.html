@@ -90,11 +90,13 @@
       .readonly-banner.visible { display: block; }
 
       .field { display: flex; flex-direction: column; margin-bottom: 10px; }
+      .field[hidden] { display: none; }
       .field label {
         font-size: 11px; color: var(--text-secondary); text-transform: uppercase;
         letter-spacing: .04em; margin-bottom: 4px;
       }
-      .field input[type="text"] {
+      .field input[type="text"],
+      .field input[type="password"] {
         padding: 5px 8px; border: 1px solid var(--border-input); border-radius: 4px; font-size: 13px;
         background: var(--bg-card); color: var(--text-primary);
       }
@@ -163,7 +165,12 @@
     </div>
     <div class="field">
       <label data-i18n-content="config.clientId"></label>
-      <div id="client-id" class="display"></div>
+      <input id="client-id" type="text" autocomplete="off" spellcheck="false" />
+    </div>
+    <div class="field" id="client-secret-field">
+      <label data-i18n-content="config.clientSecret"></label>
+      <input id="client-secret" type="password" autocomplete="off" spellcheck="false"
+             data-i18n-placeholder="config.clientSecret.placeholder" />
     </div>
     <div class="checkbox-row">
       <input id="read-only-mode" type="checkbox" />
