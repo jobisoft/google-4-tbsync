@@ -57,7 +57,8 @@ export const HOST_CMD = {
  *
  * Folder universal fields:
  *   folderId, accountId, targetType, displayName, selected, readOnly,
- *   status, warning, error, lastSyncTime, orderIndex, targetID, targetName, custom
+ *   status, warning, error, lastSyncTime, orderIndex, targetID, targetName,
+ *   changelog, custom
  *
  * `targetID` / `targetName` identify the local Thunderbird artifact bound
  * to the remote resource (address-book id, calendar id, task-list id, …).
@@ -107,8 +108,8 @@ export const PROVIDER_CMD = {
   // needs it. Both are scoped to the caller's providerId.
   LIST_ACCOUNTS: "listAccounts",
   GET_ACCOUNT: "getAccount",
-  // Changelog mutations - the queue lives at `folder.custom.changelog` and
-  // is owned by the host's built-in Thunderbird-event observer. Providers
+  // Changelog mutations - the queue lives at `folder.changelog` and is
+  // owned by the host's built-in Thunderbird-event observer. Providers
   // tag `*_by_server` entries before their own sync writes so the observer
   // skips the resulting TB events (legacy's 1500 ms freeze), and clear
   // `*_by_user` entries after successfully pushing them to the server.

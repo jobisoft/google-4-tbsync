@@ -192,12 +192,12 @@ export class GoogleProvider extends TbSyncProviderImplementation {
       });
       await safeDeleteBook(folder.targetID);
     }
-    // Clear the provider-owned maps + pending changelog: the TB ids they
-    // hold reference the book we just deleted. The host wipes the
-    // universal sync-status fields itself.
+    // Clear the provider-owned maps: the TB ids they hold reference the
+    // book we just deleted. The host wipes the changelog and the
+    // universal sync-status fields itself in `setFolderSelected`.
     await this.updateFolder({
       accountId, folderId,
-      patch: { custom: { groupMap: {}, contactMap: {}, changelog: [] } },
+      patch: { custom: { groupMap: {}, contactMap: {} } },
     });
     return null;
   }

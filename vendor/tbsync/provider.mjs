@@ -161,8 +161,8 @@ export class TbSyncProviderImplementation {
   /** `{account, folders}` for one account, or `null` if it doesn't exist
    *  or isn't owned by this provider. */
   getAccount(accountId)          { return this.#sendCmd(PROVIDER_CMD.GET_ACCOUNT, { accountId }); }
-  /** Stamp a `*_by_server` pre-tag on `folder.custom.changelog` so the
-   *  host's observer drops the next Thunderbird event for this item as
+  /** Stamp a `*_by_server` pre-tag on `folder.changelog` so the host's
+   *  observer drops the next Thunderbird event for this item as
    *  self-inflicted (1500 ms freeze). Pass `itemId: null` for creates
    *  where the TB-assigned id isn't known pre-call. Must be awaited
    *  BEFORE the actual `messenger.contacts.*` / `messenger.mailingLists.*`

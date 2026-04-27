@@ -53,7 +53,7 @@ export async function syncFolderContacts({ accountId, folderId, folder, account,
   const includeSystemGroups = !!account?.custom.includeSystemContactGroups;
 
   // Host-owned changelog and the in-memory provider maps (flushed at end).
-  const changelog = Array.isArray(folder?.custom.changelog) ? folder.custom.changelog : [];
+  const changelog = Array.isArray(folder?.changelog) ? folder.changelog : [];
   const gMap = new GroupMap(folder?.custom.groupMap);
   const cMap = new ContactMap(folder?.custom.contactMap);
 

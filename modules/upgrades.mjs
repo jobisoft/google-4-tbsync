@@ -211,12 +211,12 @@ async function liftLegacyGroupStamps(provider) {
     const folders = rv?.folders ?? [];
     for (const folder of folders) {
       if (!folder.targetID) continue;
-      const incoming = Array.isArray(folder.custom.changelog) ? folder.custom.changelog : [];
+      const incoming = Array.isArray(folder.changelog) ? folder.changelog : [];
 
       // Legacy stored mailing-list X-GOOGLE-* in TbSync's changelog DB
       // (mailing lists can't carry properties of their own). The
-      // migration carried those rows into folder.custom.changelog
-      // because parentId starts with folder.targetID. Each row has:
+      // migration carried those rows into folder.changelog because
+      // parentId starts with folder.targetID. Each row has:
       //   parentId: <bookUID>#<listUID>
       //   itemId:   "X-GOOGLE-RESOURCENAME" | "X-GOOGLE-ETAG"
       //   status:   the actual value
@@ -225,16 +225,15 @@ async function liftLegacyGroupStamps(provider) {
       const RESOURCENAME = "X-GOOGLE-RESOURCENAME";
       const ETAG = "X-GOOGLE-ETAG";
       const byParent = new Map();
-      const consumedIdx = new Set();
-      for (let i = 0; i < incoming.length; i++) {
-        const e = incoming[i];
+      const consumed = [];
+      for (const e of incoming) {
         if (e?.itemId !== RESOURCENAME && e?.itemId !== ETAG) continue;
         if (typeof e.parentId !== "string" || !e.parentId.includes("#")) continue;
         let bag = byParent.get(e.parentId);
         if (!bag) { bag = {}; byParent.set(e.parentId, bag); }
         if (e.itemId === RESOURCENAME) bag.resourceName = e.status;
         else                            bag.etag         = e.status;
-        consumedIdx.add(i);
+        consumed.push({ parentId: e.parentId, itemId: e.itemId });
       }
       if (!byParent.size) continue;
 
@@ -250,23 +249,30 @@ async function liftLegacyGroupStamps(provider) {
         lifted++;
       }
 
-      // Strip the consumed legacy entries from the changelog regardless
-      // of whether each pair produced a groupMap entry - they're never
-      // useful to the new sync code.
-      const cleaned = incoming.filter((_, i) => !consumedIdx.has(i));
+      if (lifted) {
+        await provider.updateFolder({
+          accountId: acc.accountId,
+          folderId: folder.folderId,
+          patch: { custom: { groupMap } },
+        });
+      }
 
-      const patch = { custom: { changelog: cleaned } };
-      if (lifted) patch.custom.groupMap = groupMap;
-      await provider.updateFolder({
-        accountId: acc.accountId,
-        folderId: folder.folderId,
-        patch,
-      });
+      // Drop the consumed legacy entries from the host-owned changelog
+      // regardless of whether each pair produced a groupMap entry -
+      // they're never useful to the new sync code.
+      for (const { parentId, itemId } of consumed) {
+        await provider.changelogRemove({
+          accountId: acc.accountId,
+          folderId: folder.folderId,
+          parentId,
+          itemId,
+        });
+      }
 
       provider.reportEventLog({
         level: "debug",
         accountId: acc.accountId, folderId: folder.folderId,
-        message: `[upgrade] lifted ${lifted}/${byParent.size} legacy mailing-list stamp(s) from folder.custom.changelog into folder.custom.groupMap (${consumedIdx.size} legacy entries removed)`,
+        message: `[upgrade] lifted ${lifted}/${byParent.size} legacy mailing-list stamp(s) into folder.custom.groupMap (${consumed.length} legacy entries removed from folder.changelog)`,
       });
     }
   }
