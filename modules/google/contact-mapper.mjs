@@ -17,9 +17,14 @@ const X_ETAG = "x-google-etag";
 
 // ── Public API ───────────────────────────────────────────────────────────
 
-/** Build a vCard 4.0 string from a Google Person. */
-export function personToVCard(person) {
+/** Build a vCard 4.0 string from a Google Person. When `uid` is provided
+ *  it's written as the vCard `UID` property; TB derives the contact's
+ *  `id` from that, so callers can pre-tag the changelog with a known
+ *  itemId before calling `messenger.contacts.create`. Omit for paths
+ *  that don't need to control the id. */
+export function personToVCard(person, uid) {
   const comp = newVCard();
+  if (uid) comp.addPropertyWithValue("uid", uid);
   writeNames(comp, person);
   writeNickname(comp, person);
   writeEmails(comp, person);

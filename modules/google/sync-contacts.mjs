@@ -327,12 +327,15 @@ async function runPullPass(ctx) {
 
     const existing = byResourceName.get(resourceName);
     if (!existing) {
-      // Pull-create: book wasn't aware of this contact.
-      const vCard = mapper.personToVCard(person);
-      // Wildcard pre-tag: we don't know the new itemId yet. Watcher
-      // upgrades this to a concrete tag when onCreated fires.
-      await ctx.markServer(targetID, null, STATUS.ADDED_BY_SERVER);
-      const newId = await addressBook.createContact(targetID, vCard);
+      // Pull-create: book wasn't aware of this contact. Pre-generate the
+      // UID so the changelog pre-tag can use a concrete itemId.
+      const newId = crypto.randomUUID();
+      const vCard = mapper.personToVCard(person, newId);
+      await ctx.markServer(targetID, newId, STATUS.ADDED_BY_SERVER);
+      const createdId = await addressBook.createContact(targetID, vCard);
+      if (createdId !== newId) {
+        throw new Error(`createContact id mismatch: expected ${newId}, got ${createdId}`);
+      }
       byResourceName.set(resourceName, { id: newId, etag: person.etag });
       cMap.set(newId, resourceName);
       added++;
@@ -455,6 +458,7 @@ async function runGroupPullPass(ctx, byResourceName, memberMap) {
     const existing = mapping?.mailingListId ? localByListId.get(mapping.mailingListId) : null;
 
     if (!existing) {
+      // Wildcard because mailing lists are not created with a UID.
       await ctx.markServer(targetID, null, STATUS.ADDED_BY_SERVER);
       const listId = await addressBook.createMailingList(targetID, { name: group.name });
       gMap.set(resourceName, {
@@ -508,13 +512,11 @@ async function applyMemberships(ctx, byResourceName, memberMap) {
     const current = await addressBook.listMailingListMembers(listId);
     const currentIds = new Set(current.map(c => c.id));
 
+    // Membership changes are not tracked in the changelog: the host
+    // watcher subscribes to mailingLists.onCreated/onUpdated/onDeleted
+    // but not to onMemberAdded/onMemberRemoved.
     for (const id of expectedIds) {
       if (!currentIds.has(id)) {
-        // Note: mailingLists.addMember doesn't emit a contact-level event
-        // we need to suppress - mailing-list member changes fire their
-        // own event type (onMemberAdded/onMemberRemoved) that we don't
-        // track. Still, pre-tag defensively in case TB changes behaviour.
-        await ctx.markServer(listId, id, STATUS.MODIFIED_BY_SERVER);
         try {
           await addressBook.addMailingListMember(listId, id);
           membersAdded++;
@@ -534,7 +536,6 @@ async function applyMemberships(ctx, byResourceName, memberMap) {
     }
     for (const id of currentIds) {
       if (!expectedIds.has(id)) {
-        await ctx.markServer(listId, id, STATUS.MODIFIED_BY_SERVER);
         try {
           await addressBook.removeMailingListMember(listId, id);
           membersRemoved++;
