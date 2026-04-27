@@ -118,7 +118,7 @@ export const PROVIDER_CMD = {
   // Changelog mutations - the queue lives at `folder.changelog` and is
   // owned by the host's built-in Thunderbird-event observer. Providers
   // tag `*_by_server` entries before their own sync writes so the observer
-  // skips the resulting TB events (legacy's 1500 ms freeze), and clear
+  // skips the resulting TB events (all events within a 1500 ms window), and clear
   // `*_by_user` entries after successfully pushing them to the server.
   CHANGELOG_MARK_SERVER_WRITE: "changelogMarkServerWrite",
   CHANGELOG_REMOVE: "changelogRemove",
