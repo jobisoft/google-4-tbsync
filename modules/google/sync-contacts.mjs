@@ -34,9 +34,9 @@ const SYSTEM_GROUP = "SYSTEM_CONTACT_GROUP";
 
 // ── Entry point ─────────────────────────────────────────────────────────
 
-/** Push a debug-level entry into the host's session event log. Verbosity is
- *  now driven by the host-level capture gate (settings.logLevel); the provider
- *  always emits, the host decides whether to retain. */
+/** Push a debug-level entry into the host's session event log. The provider
+ *  always emits; the host's capture gate (settings.logLevel) decides what
+ *  to retain. */
 function logDebug(ctx, message, details) {
   ctx.notify.reportEventLog({
     level: "debug",
@@ -584,11 +584,8 @@ async function applyMemberships(ctx, byResourceName, memberMap) {
 
 // ── Group push: add + modify ─────────────────────────────────────────────
 //
-// Mirrors the legacy provider's `synchronizeContactGroups` add/modify
-// loops. Walks `_by_user` group entries from the changelog and pushes
-// each to Google. The watcher annotates new entries with `kind: "list"`;
-// migrated legacy entries lack `kind` but use `contactGroups/…` as the
-// itemId, which `isContactEntry` recognises and routes here.
+// Walks `_by_user` group entries from the changelog and pushes each to
+// Google.
 
 async function runGroupPushAddModifyPass(ctx, userEntries) {
   const groupEntries = userEntries.filter(e =>
@@ -621,9 +618,7 @@ async function runGroupPushAddModifyPass(ctx, userEntries) {
 
 async function pushGroupAdd(ctx, entry) {
   const { accountId, gMap } = ctx;
-  // Post-watcher: itemId is the local mailing-list UID. Legacy never
-  // left ADDED_BY_USER group entries un-pushed across an upgrade
-  // (the legacy sync flushed them before the user updated the add-on).
+  // entry.itemId is the local mailing-list UID.
   const list = await addressBook.getMailingList(entry.itemId);
   if (!list) {
     await ctx.removeEntry(entry.parentId, entry.itemId);
@@ -642,12 +637,9 @@ async function pushGroupAdd(ctx, entry) {
 
 async function pushGroupModify(ctx, entry) {
   const { accountId, gMap } = ctx;
-  // entry.itemId can be either:
-  //   - a local mailing-list UID (post-watcher entries)
-  //   - a Google resourceName "contactGroups/…" (migrated legacy
-  //     entries - TbSync's wrapper routed legacy mailing-list property
-  //     writes through the changelog DB keyed by the primary-key field,
-  //     which the Google provider set to X-GOOGLE-RESOURCENAME).
+  // entry.itemId is either a local mailing-list UID or a Google
+  // resourceName starting with "contactGroups/" (the latter from
+  // migrated profiles).
   let mapping;
   let resourceName;
   let listId;
@@ -741,24 +733,11 @@ async function runGroupPushDeletePass(ctx, userEntries) {
 
 // ── Helpers ──────────────────────────────────────────────────────────────
 
-/**
- * Contact vs. group discrimination from the host's agnostic entry shape.
- * The changelog entry only knows `parentId` (bookId for contacts, bookId
- * for lists too) and `itemId`. We distinguish by asking the address book:
- * mailing lists have their own `messenger.mailingLists.*` namespace.
- *
- * In practice the watcher dispatches both kinds into the same folder's
- * queue; we check if the itemId resolves to a mailing list to route.
- *
- * Performance: the observer could mark `kind` on the entry, but keeping
- * it provider-interpreted avoids host-side coupling. We cache the lookup
- * per entry.
- */
+/** Decide whether a changelog entry refers to a contact or a mailing
+ *  list (group). Prefers the watcher-supplied `kind`; falls back to the
+ *  `contactGroups/…` resource-name shape for entries from migrated
+ *  profiles that lack `kind`. */
 function isContactEntry(entry) {
-  // The watcher annotates contemporary entries with `kind`; migrated
-  // legacy entries lack it. For those we fall back to the itemId
-  // shape: Google's contact-group resource names start with
-  // `contactGroups/` - anything else is taken as a contact entry.
   if (entry.kind === "list")    return false;
   if (entry.kind === "contact") return true;
   if (typeof entry.itemId === "string" && entry.itemId.startsWith("contactGroups/")) {

@@ -85,13 +85,9 @@ export class GoogleProvider extends TbSyncProviderImplementation {
 
     this.#primeAuth(ctx);
 
-    // Defensive: the stored targetID may be stale if the user deleted the
-    // address book manually from Thunderbird's UI, or the book was torn
-    // down by `onAccountDisabled` and we're now syncing post-reconnect.
-    // Recreate on the fly so the sync can still proceed - push the new
-    // ID back to the host. The host-side watcher picks up the new
-    // targetID via the folders-changed broadcast that follows the
-    // updateFolder call.
+    // The stored targetID may be stale (book deleted in TB's UI, or torn
+    // down by `onAccountDisabled`). Recreate and persist the new id; the
+    // host's watcher picks it up via the folders-changed broadcast.
     let targetID = folder.targetID;
     if (!targetID || !(await addressBook.bookExists(targetID))) {
       const bookName = bookNameForFolder(folder, ctx);
@@ -362,8 +358,7 @@ export class GoogleProvider extends TbSyncProviderImplementation {
         clientSecret,
         // Persist the chosen flow so re-auth and the config popup know
         // which redirect-URI / popup-vs-launchWebAuthFlow path to use.
-        // Migrated profiles arrive without this field - `oauth.startAuth`
-        // treats anything other than "web" as desktop, matching legacy.
+        // `oauth.startAuth` treats anything other than "web" as desktop.
         clientType: clientType === "web" ? "web" : "desktop",
         refreshToken,
         authenticatedUserEmail: authenticatedUserEmail ?? null,
@@ -401,8 +396,8 @@ export class GoogleProvider extends TbSyncProviderImplementation {
       accountName: ctx.account.accountName,
       authenticatedUserEmail: ctx.authenticatedUserEmail ?? null,
       clientID: ctx.account.custom.clientID ?? "",
-      // Migrated profiles never set this - surface "desktop" to match
-      // what the OAuth layer will actually use.
+      // If `clientType` is unset, we are dealing with a migrated google account
+      // from the legacy era, which only supported "desktop".
       clientType: ctx.account.custom.clientType === "web" ? "web" : "desktop",
       readOnlyMode: !!ctx.account.custom.readOnlyMode,
       includeSystemContactGroups: !!ctx.account.custom.includeSystemContactGroups,
@@ -464,9 +459,7 @@ export class GoogleProvider extends TbSyncProviderImplementation {
       await this.updateAccount({ accountId, patch: outgoing });
     }
 
-    // Mirror a read-only toggle onto every folder row immediately so the
-    // manager's ACL column updates without waiting for the next sync's
-    // onGetSortedFolders pass.
+    // Mirror onto each folder so the ACL column is updated.
     if ("readOnlyMode" in patch) {
       const readOnly = !!patch.readOnlyMode;
       await Promise.all(ctx.folders.map(f =>
@@ -479,8 +472,7 @@ export class GoogleProvider extends TbSyncProviderImplementation {
   /** Re-prime the in-memory OAuth auth cache for every account on startup
    *  from host-stored credentials. Fired by the base class from
    *  `onConnectedToHost` (first port-open + every reconnect). Safe to run
-   *  multiple times. Book observation is host-owned now, so nothing to
-   *  do for the watcher here. */
+   *  multiple times. Book observation is host-owned. */
   async primeStartupState() {
     const accounts = await this.listAccounts();
     for (const acc of accounts) {
@@ -494,8 +486,6 @@ export class GoogleProvider extends TbSyncProviderImplementation {
         });
       }
     }
-    // Book observation + identity caches are host-owned now; the host
-    // watcher seeds its registry from the folders storage blob at boot.
   }
 
   // ── Private ────────────────────────────────────────────────────────────

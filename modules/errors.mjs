@@ -1,8 +1,6 @@
 /**
  * Stringify any thrown / rejected value for inclusion in user-facing
- * messages (event log, dialog error banners, console hints). Centralised
- * to avoid the slight-variation `err?.message ?? err` / `err.message ??
- * String(err)` drift that accumulated across modules.
+ * messages (event log, dialog error banners, console hints).
  */
 
 export function stringifyError(err) {

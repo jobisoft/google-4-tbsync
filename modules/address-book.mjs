@@ -69,8 +69,7 @@ export async function getContact(id) {
 }
 
 /** Re-emit the contact node with `vCard` guaranteed present (`null` if
- *  the API returned no vCard). The manifest's `strict_min_version: 140`
- *  postdates the old `properties.vCard` shape, so no compat fallback. */
+ *  the API returned no vCard). */
 function normalizeCard(node) {
   if (!node) return node;
   return { ...node, vCard: node.vCard ?? null };

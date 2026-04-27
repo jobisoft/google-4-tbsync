@@ -213,22 +213,15 @@ async function liftLegacyGroupStamps(provider) {
       if (!folder.targetID) continue;
       const incoming = Array.isArray(folder.custom.changelog) ? folder.custom.changelog : [];
 
-      // Legacy stored mailing-list X-GOOGLE-* via TbSync's wrapper,
-      // which routes mailing-list setProperty calls into TbSync's own
-      // changelog DB (see TbSync addressbook.js, "mailinglist properties
-      // cannot be stored in mailinglists themselves, so we store them
-      // in changelog"). Those entries have:
-      //
-      //   parentId: <bookUID>#<listUID>      (== `${targetID}#<listUID>`)
-      //   itemId:   "X-GOOGLE-RESOURCENAME"  | "X-GOOGLE-ETAG"
+      // Legacy stored mailing-list X-GOOGLE-* in TbSync's changelog DB
+      // (mailing lists can't carry properties of their own). The
+      // migration carried those rows into folder.custom.changelog
+      // because parentId starts with folder.targetID. Each row has:
+      //   parentId: <bookUID>#<listUID>
+      //   itemId:   "X-GOOGLE-RESOURCENAME" | "X-GOOGLE-ETAG"
       //   status:   the actual value
-      //
-      // The host's migration distributed them into folder.custom.changelog
-      // along with regular sync-state entries because parentId starts
-      // with folder.targetID. We pick them out here, group by parentId
-      // (one parentId per mailing list, two halves: resourceName + etag),
-      // build groupMap entries, and remove the consumed legacy entries
-      // from the changelog so they don't sit there as cruft forever.
+      // Group by parentId (two halves per list), build groupMap entries,
+      // and drop the consumed rows from the changelog.
       const RESOURCENAME = "X-GOOGLE-RESOURCENAME";
       const ETAG = "X-GOOGLE-ETAG";
       const byParent = new Map();

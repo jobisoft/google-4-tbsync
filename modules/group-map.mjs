@@ -4,11 +4,8 @@
  * + `groupType` alongside so the push pass can detect conflicts and skip
  * system groups without a round-trip.
  *
- * Constructed from `folder.custom.groupMap` at the start of a sync and
- * flushed back via one UPDATE_FOLDER at the end if any mutations happened.
- * No provider-side persistent storage - the host's folder row is the
- * source of truth, which means uninstalling/reinstalling the provider
- * doesn't lose mapping state and never creates duplicate mailing lists.
+ * Loaded from `folder.custom.groupMap` at sync start, flushed back via
+ * one UPDATE_FOLDER at sync end if dirty.
  */
 
 export class GroupMap {

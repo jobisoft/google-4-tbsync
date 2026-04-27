@@ -1,15 +1,11 @@
 /**
- * In-memory mapping between a Thunderbird contact `itemId` and the Google
- * `resourceName` it was synced under, scoped to a single sync pass. Sole
- * purpose: resolve `deleted_by_user` changelog entries to a resourceName
- * at push-delete time, when the local card is gone and its vCard stamp
- * with it.
+ * In-memory mapping between a Thunderbird contact `itemId` and its Google
+ * `resourceName`, scoped to a single sync pass. Lets `deleted_by_user`
+ * entries resolve to a resourceName at push-delete time, when the local
+ * card and its vCard stamp are gone.
  *
- * Constructed from `folder.custom.contactMap` at sync start, mutated
- * in-memory (add on push-add / pull-create, drop on push-delete /
- * pull-delete), flushed back via one UPDATE_FOLDER at sync end if dirty.
- * No provider-side persistent storage - host's folder row is the source
- * of truth.
+ * Loaded from `folder.custom.contactMap` at sync start, flushed back via
+ * one UPDATE_FOLDER at sync end if dirty.
  */
 
 export class ContactMap {

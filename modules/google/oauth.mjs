@@ -16,8 +16,7 @@
  *               The user must add that exact URL to the OAuth client's
  *               Authorized redirect URIs in the GCP console.
  *
- * Default is "desktop" - matches the legacy add-on's flow and works
- * without any redirect-URI configuration.
+ * Default is the modern "web" flow for new accounts.
  *
  * Access tokens are cached in-memory per accountId, never persisted.
  * OAuth credentials + the refresh token live on the host account row
@@ -84,10 +83,6 @@ export function getRedirectURL() {
 /**
  * Open the Google consent screen, exchange the code for tokens, and fetch
  * the authenticated user's email.
- *
- * `clientType` defaults to "desktop" - matches the legacy flow and works
- * without redirect-URI configuration in the GCP console. "web" uses the
- * `launchWebAuthFlow` loopback path.
  *
  * `loginHint` pre-selects a Google account on the consent screen. Google
  * treats it as a hint, not a lock - the caller must still verify the
@@ -299,8 +294,8 @@ export function primeAccessToken(accountId, token, expiresIn) {
 }
 
 /** Hit /userinfo with the given access token and return the email
- *  address. Used both at sign-in and as a backfill for migrated accounts
- *  that never had `authenticatedUserEmail` persisted. */
+ *  address. Used at sign-in and to backfill `authenticatedUserEmail`
+ *  for accounts where it isn't on file yet. */
 export async function fetchUserEmail(accessToken) {
   const resp = await fetch(USERINFO_ENDPOINT, {
     headers: { Authorization: `Bearer ${accessToken}` },
