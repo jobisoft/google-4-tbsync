@@ -74,16 +74,20 @@ let inFlight = null;
  *    - A throw inside an upgrade still releases the lock; the failed
  *      upgrade ID stays in the queue and is retried next boot. */
 export function runUpgrades(provider) {
+  console.log("[google-4-tbsync] runUpgrades: entered, inFlight =", !!inFlight);
   if (inFlight) return inFlight;
   inFlight = (async () => {
     const rv = await browser.storage.local.get({ [UPGRADE_QUEUE_KEY]: [] });
     const queue = rv[UPGRADE_QUEUE_KEY];
+    console.log("[google-4-tbsync] runUpgrades: queue =", queue);
     if (!queue.length) return;
 
     let lockAcquired = false;
     try {
+      console.log("[google-4-tbsync] runUpgrades: acquiring upgrade lock");
       await provider.setProviderUpgradeLock(true);
       lockAcquired = true;
+      console.log("[google-4-tbsync] runUpgrades: lock acquired");
       provider.reportEventLog({
         level: "debug",
         message: `[upgrade] entering upgrade mode - sync and account/resource modifications are paused (${queue.length} upgrade(s) pending)`,
@@ -94,10 +98,13 @@ export function runUpgrades(provider) {
         const upgrade = UPGRADES.find(u => u.id === id);
         if (!upgrade) continue;  // unknown id - silently drop
         try {
+          console.log(`[google-4-tbsync] runUpgrades: ${id} starting`);
           provider.reportEventLog({ level: "debug", message: `[upgrade] ${id} starting` });
           await upgrade.run(provider);
+          console.log(`[google-4-tbsync] runUpgrades: ${id} done`);
           provider.reportEventLog({ level: "debug", message: `[upgrade] ${id} done` });
         } catch (err) {
+          console.warn(`[google-4-tbsync] runUpgrades: ${id} failed`, err);
           provider.reportEventLog({
             level: "error",
             message: `[upgrade] ${id} failed: ${stringifyError(err)}`,
@@ -106,6 +113,7 @@ export function runUpgrades(provider) {
         }
       }
 
+      console.log("[google-4-tbsync] runUpgrades: releasing upgrade lock, remaining =", remaining);
       await browser.storage.local.set({ [UPGRADE_QUEUE_KEY]: remaining });
     } finally {
       if (lockAcquired) {
@@ -133,6 +141,7 @@ export async function enqueueUpgradesForUpdate(previousVersion, currentVersion) 
       && compareVersions(u.splitVersion, currentVersion) <= 0
     )
     .map(u => u.id);
+  console.log("[google-4-tbsync] enqueueUpgradesForUpdate", { previousVersion, currentVersion, triggered });
   if (!triggered.length) return 0;
   const rv = await browser.storage.local.get({ [UPGRADE_QUEUE_KEY]: [] });
   const next = Array.from(new Set([...rv[UPGRADE_QUEUE_KEY], ...triggered]));
