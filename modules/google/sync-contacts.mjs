@@ -13,7 +13,7 @@
  * for monotonic progress.
  */
 
-import { ERR, ok, warning } from "../../vendor/tbsync/provider.mjs";
+import { ok, warning } from "../../vendor/tbsync/provider.mjs";
 import * as peopleApi from "./people-api.mjs";
 import * as mapper from "./contact-mapper.mjs";
 import * as addressBook from "../address-book.mjs";
@@ -70,12 +70,6 @@ export async function syncFolderContacts({ accountId, folderId, folder, account,
       notify.changelogRemove({ accountId, folderId, parentId, itemId }),
   };
 
-  // Clear any stale folder-level warning/error from a prior sync.
-  await notify.updateFolder({
-    accountId, folderId,
-    patch: { warning: null, error: null },
-  });
-
   try {
     const rv = await runFolderSync(ctx);
     await flushMaps(notify, accountId, folderId, gMap, cMap);
@@ -83,21 +77,11 @@ export async function syncFolderContacts({ accountId, folderId, folder, account,
   } catch (err) {
     // Best-effort flush of in-progress groupMap/contactMap so a retry can
     // pick up where we left off. Log on failure so a broken flush doesn't
-    // silently accumulate drift.
+    // silently accumulate drift. The host writes folder.error / account.error
+    // from the thrown code; we only need to rethrow.
     await flushMaps(notify, accountId, folderId, gMap, cMap).catch(flushErr => {
       console.warn("[google-4-tbsync] flushMaps during error handling failed:", stringifyError(flushErr));
     });
-    if (err?.code === ERR.AUTH) {
-      await notify.updateAccount({
-        accountId,
-        patch: { error: ERR.AUTH },
-      }).catch(() => { });
-    } else {
-      await notify.updateFolder({
-        accountId, folderId,
-        patch: { error: err?.code ?? err?.message ?? "Sync failed" },
-      }).catch(() => { });
-    }
     throw err;
   }
 }
@@ -172,18 +156,9 @@ async function runFolderSync(ctx) {
   const groupSummary = `groups: ${groupCounts.added}+${groupCounts.updated} ↓, ${groupCounts.deleted} delete; members: ${groupCounts.membersAdded}+${groupCounts.membersRemoved}`;
   const summary = `${pushSummary}; ${pullSummary}; ${groupSummary}`;
 
-  const now = Date.now();
   if (pull.itemsTotal === 0 && pull.localCount > 0 && pull.added === 0 && pull.updated === 0) {
-    await notify.updateFolder({
-      accountId, folderId,
-      patch: { warning: "Server returned 0 contacts", lastSyncTime: now },
-    });
     return warning("Server returned 0 contacts", summary);
   }
-  await notify.updateFolder({
-    accountId, folderId,
-    patch: { lastSyncTime: now },
-  });
   return ok(summary);
 }
 

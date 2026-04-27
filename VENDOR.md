@@ -23,5 +23,5 @@ This file lists files that were not created by this project and are maintained u
 
 ## tbsync
 
-- **File** : `/vendor/tbsync/*`
-- **Source** : not published yet
+- **Files** : `/vendor/tbsync/protocol.mjs`, `/vendor/tbsync/status.mjs`, `/vendor/tbsync/provider.mjs`
+- **Source** : `tbsync-new/tbsync/` in the TbSync host repo (canonical). Mirror byte-for-byte; do not edit in this provider.

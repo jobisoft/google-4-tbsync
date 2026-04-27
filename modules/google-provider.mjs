@@ -141,21 +141,10 @@ export class GoogleProvider extends TbSyncProviderImplementation {
   async onAccountDisabled({ accountId }) {
     const ctx = await this.#loadContext(accountId);
     if (!ctx) return null;
-    // Disable always releases Thunderbird resources so re-enable starts
-    // from a clean slate. Clear each folder's groupMap, contactMap, and
-    // pending changelog too - the TB ids they hold reference books we
-    // just deleted.
+    // Release Thunderbird resources so re-enable starts from a clean
+    // slate. The host wipes its folder rows right after this returns,
+    // so per-folder custom.* doesn't need clearing here.
     await this.#deleteAccountTargets(ctx.folders);
-    for (const folder of ctx.folders) {
-      await this.updateFolder({
-        accountId, folderId: folder.folderId,
-        patch: { custom: { groupMap: {}, contactMap: {}, changelog: [] } },
-      }).catch(err => {
-        // Re-enable will resurrect stale data if this fails; logging makes
-        // the drift visible rather than silently accumulating.
-        console.warn(`[google-4-tbsync] clear folder state on disable failed (folder=${folder.folderId}):`, stringifyError(err));
-      });
-    }
     oauth.forgetAuth(ctx.account.accountId);
     return null;
   }
@@ -196,19 +185,12 @@ export class GoogleProvider extends TbSyncProviderImplementation {
       });
       await safeDeleteBook(folder.targetID);
     }
-    // Dropping the book invalidates every pending changelog entry and
-    // both provider-maintained maps - the TB ids they hold reference
-    // the book we just deleted. Wipe the sync status fields too so the
-    // resource list doesn't show stale lastSyncTime/error/warning after
-    // re-enable.
+    // Clear the provider-owned maps + pending changelog: the TB ids they
+    // hold reference the book we just deleted. The host wipes the
+    // universal sync-status fields itself.
     await this.updateFolder({
       accountId, folderId,
-      patch: {
-        lastSyncTime: 0,
-        error: null,
-        warning: null,
-        custom: { groupMap: {}, contactMap: {}, changelog: [] },
-      },
+      patch: { custom: { groupMap: {}, contactMap: {}, changelog: [] } },
     });
     return null;
   }
