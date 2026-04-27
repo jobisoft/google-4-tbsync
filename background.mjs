@@ -85,9 +85,7 @@ browser.runtime.onMessage.addListener(async msg => {
   return undefined;
 });
 
-provider.init().catch(err =>
-  console.warn("[google-4-tbsync] provider.init failed:", stringifyError(err))
-);
+provider.init();
 
 // Startup priming runs inside `provider.onConnectedToHost` (fired by the
 // base class when the host opens the port), not here - at this point the
