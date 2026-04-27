@@ -68,11 +68,13 @@ export async function getContact(id) {
   }
 }
 
-/** Re-emit the contact node with `vCard` guaranteed present (`null` if
- *  the API returned no vCard). */
+/** Re-emit the contact node with `vCard` lifted to the top level. The MV2
+ *  contacts API exposes the vCard at `node.properties.vCard` (both ESR and
+ *  Beta); we surface it at `node.vCard` so caller sites can use a single
+ *  read path. */
 function normalizeCard(node) {
   if (!node) return node;
-  return { ...node, vCard: node.vCard ?? null };
+  return { ...node, vCard: node.properties?.vCard ?? null };
 }
 
 /** Create a contact from a vCard. Returns the new id. */

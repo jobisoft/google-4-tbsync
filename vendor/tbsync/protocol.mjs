@@ -56,9 +56,12 @@ export const HOST_CMD = {
  *   error, lastSyncTime, autoSyncIntervalMinutes, noAutosyncUntil, custom
  *
  * Folder universal fields:
- *   folderId, accountId, targetType, displayName, selected, readOnly,
+ *   folderId, accountId, targetType, displayName, selected, readOnly, hidden,
  *   status, warning, error, lastSyncTime, orderIndex, targetID, targetName,
  *   changelog, custom
+ *
+ * `hidden` is provider-authored on every push. Rows with `hidden: true`
+ * are kept in storage but excluded from the manager UI's folder list.
  *
  * `targetID` / `targetName` identify the local Thunderbird artifact bound
  * to the remote resource (address-book id, calendar id, task-list id, …).
@@ -73,9 +76,12 @@ export const HOST_CMD = {
  * ## RPC semantics
  *
  * REGISTER_ACCOUNT { accountName, custom?, initialFolders? }
- *   → creates a host account row. `custom` seeds the opaque blob atomically.
- *   `initialFolders` descriptors can carry `targetID`, `targetName`, `custom`
- *   on a per-folder basis.
+ *   → creates a host account row in the disabled state. `custom` seeds
+ *   the opaque blob atomically. `initialFolders` descriptors can carry
+ *   `targetID`, `targetName`, `custom` on a per-folder basis. The user
+ *   clicks Connect in the manager when ready; that fires ACCOUNT_ENABLED
+ *   and is the provider's first chance to talk to the server (folder
+ *   discovery, version negotiation, etc.).
  *
  * UPDATE_ACCOUNT { accountId, patch }
  *   → patches top-level writable fields (`accountName`, `noAutosyncUntil`)
@@ -96,7 +102,8 @@ export const HOST_CMD = {
  *   → replaces the account's folder list. `selected`, `lastSyncTime`,
  *   `targetID`, `targetName`, and `custom` are preserved from prior rows
  *   when the descriptor omits them, so the provider can re-push folder
- *   lists freely without wiping locally-bound state.
+ *   lists freely without wiping locally-bound state. `hidden` is taken
+ *   straight from the descriptor (default `false` if omitted).
  */
 export const PROVIDER_CMD = {
   REGISTER_ACCOUNT: "registerAccount",
