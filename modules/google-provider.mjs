@@ -197,26 +197,6 @@ export class GoogleProvider extends TbSyncProviderImplementation {
 
   // ── Display + folder-list queries ──────────────────────────────────────
 
-  async onGetAccountDisplayInfo({ accountId }) {
-    const ctx = await this.#loadContext(accountId);
-    if (!ctx) {
-      return {
-        displayName: accountId,
-        iconUrl: browser.runtime.getURL("icons/icon-16.png"),
-        connectionState: "disconnected",
-        lastSyncTime: 0,
-        extraRows: [],
-      };
-    }
-    return {
-      displayName: ctx.account.accountName,
-      iconUrl: browser.runtime.getURL("icons/icon-16.png"),
-      connectionState: ctx.account.custom.refreshToken ? "connected" : "disconnected",
-      lastSyncTime: ctx.account.lastSyncTime ?? 0,
-      extraRows: [],
-    };
-  }
-
   async onGetSortedFolders({ accountId }) {
     const ctx = await this.#loadContext(accountId);
     if (!ctx) return [];
@@ -234,19 +214,6 @@ export class GoogleProvider extends TbSyncProviderImplementation {
         readOnly,
         selected: f.selected ?? false,
       }));
-  }
-
-  async onSetFolderSelected() {
-    // The host owns `selected` - it stores the user's choice in its folder
-    // row and calls onFolderEnabled / onFolderDisabled when the flip
-    // triggers a side-effect. Nothing to do here.
-    return null;
-  }
-
-  async onSetAccountEntry() {
-    // Account entries are written by the config popup via UPDATE_ACCOUNT.
-    // The host never dispatches SET_ACCOUNT_ENTRY against this provider.
-    return null;
   }
 
   // ── Re-authentication ──────────────────────────────────────────────────
