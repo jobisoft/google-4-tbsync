@@ -227,7 +227,6 @@ export class TbSyncProviderImplementation {
   async onSetAccountEntry(_args)       { return null; }
 
   async onReauthenticate(_args)        { throw this.#notImplemented("onReauthenticate"); }
-  async onImportLegacyData(_args)      { throw this.#notImplemented("onImportLegacyData"); }
 
   /** Called each time the host opens a port to us (initial boot + every
    *  reconnect after a host restart). Safe place for startup work that
@@ -485,7 +484,6 @@ export class TbSyncProviderImplementation {
       case HOST_CMD.GET_SORTED_FOLDERS:       return this.onGetSortedFolders(args);
       case HOST_CMD.SET_FOLDER_SELECTED:      return this.onSetFolderSelected(args);
       case HOST_CMD.SET_ACCOUNT_ENTRY:        return this.onSetAccountEntry(args);
-      case HOST_CMD.IMPORT_LEGACY_DATA:       return this.onImportLegacyData(args);
       default:
         throw withCode(new Error(`Unknown command: ${cmd}`), ERR.UNKNOWN_COMMAND);
     }

@@ -288,12 +288,6 @@ export class GoogleProvider extends TbSyncProviderImplementation {
     }
   }
 
-  // ── Migration ──────────────────────────────────────────────────────────
-
-  async onImportLegacyData(_args) {
-    throw withCode(new Error("migration not implemented yet"), ERR.UNKNOWN_COMMAND);
-  }
-
   // ── Internal-message entry points ──────────────────────────────────────
 
   /** Setup popup flow:

@@ -45,7 +45,6 @@ export const HOST_CMD = {
   GET_SORTED_FOLDERS: "getSortedFolders",
   SET_FOLDER_SELECTED: "setFolderSelected",
   SET_ACCOUNT_ENTRY: "setAccountEntry",
-  IMPORT_LEGACY_DATA: "importLegacyData",
 };
 
 /** Provider → TbSync command names (RPC).
