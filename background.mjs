@@ -99,18 +99,12 @@ provider.init();
 // once the provider is connected to the host. Fresh installs short-circuit
 // at the reason check so no upgrade ever runs on a clean profile.
 browser.runtime.onInstalled.addListener(async (details) => {
-  console.log("[google-4-tbsync] runtime.onInstalled fired", details);
   if (details.reason !== "update" || !details.previousVersion) return;
   const cur = browser.runtime.getManifest().version;
-  console.log("[google-4-tbsync] onInstalled: update", details.previousVersion, "→", cur);
   const enqueued = await enqueueUpgradesForUpdate(details.previousVersion, cur);
-  console.log("[google-4-tbsync] onInstalled: enqueued queue length =", enqueued);
   if (!enqueued) return;
-  console.log("[google-4-tbsync] onInstalled: awaiting providerReady");
   await providerReady;
-  console.log("[google-4-tbsync] onInstalled: providerReady resolved, calling runUpgrades");
   await runUpgrades(provider);
-  console.log("[google-4-tbsync] onInstalled: runUpgrades returned");
 });
 
 // Boot-time stale-queue drain. `runtime.onInstalled` only fires on the
@@ -118,12 +112,4 @@ browser.runtime.onInstalled.addListener(async (details) => {
 // failed mid-flight, the queue persists in storage and we need a second,
 // independent trigger to retry. `runUpgrades` is idempotent + self-
 // coalescing, so a same-boot collision with the listener above is safe.
-providerReady.then(async () => {
-  console.log("[google-4-tbsync] boot-drain: providerReady resolved, calling runUpgrades");
-  try {
-    await runUpgrades(provider);
-    console.log("[google-4-tbsync] boot-drain: runUpgrades returned");
-  } catch (err) {
-    console.warn("[google-4-tbsync] boot-drain: runUpgrades threw", err);
-  }
-});
+providerReady.then(() => runUpgrades(provider));
