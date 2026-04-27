@@ -5,7 +5,7 @@ import { stringifyError } from "./modules/errors.mjs";
 
 /**
  * Provider entry point. All port / handshake plumbing lives inside the
- * TbSyncProviderImplementation base class — this file constructs the
+ * TbSyncProviderImplementation base class - this file constructs the
  * concrete GoogleProvider, calls its init(), and routes internal
  * runtime.onMessage traffic (from setup.html / config.html) to the
  * appropriate provider method.
@@ -21,11 +21,11 @@ const provider = new GoogleProvider();
 /** Resolves once the provider has finished its boot sequence (instance
  *  constructed, `init()` returned, host port open). Any code that needs
  *  to do RPC work against the host without coupling to other init
- *  paths (the fixup runner, in particular) awaits this. */
+ *  paths (the upgrade runner, in particular) awaits this. */
 export const providerReady = (async () => {
-  // provider.init() is fire-and-forget below; it returns void
-  // synchronously. The actual readiness signal we care about is the
-  // first port-open, surfaced via onceConnectedToHost.
+  // The actual readiness signal we care about is the first port-open;
+  // `provider.init()` itself runs below as a side-effect and resolves
+  // independently. We listen for the port via the base-class one-shot.
   await new Promise(resolve => provider.onceConnectedToHost(resolve));
 })();
 
@@ -85,19 +85,21 @@ browser.runtime.onMessage.addListener(async msg => {
   return undefined;
 });
 
-provider.init();
+provider.init().catch(err =>
+  console.warn("[google-4-tbsync] provider.init failed:", stringifyError(err))
+);
 
 // Startup priming runs inside `provider.onConnectedToHost` (fired by the
-// base class when the host opens the port), not here — at this point the
+// base class when the host opens the port), not here - at this point the
 // port isn't open yet, so listAccounts/getAccount would fail with
 // "host not connected".
 
-// ── One-shot fixup runner ──────────────────────────────────────────────────
+// ── One-shot upgrade runner ──────────────────────────────────────────────
 //
-// `runtime.onInstalled` enqueues the IDs of every fixup whose split version
-// falls in `(previousVersion, currentVersion]`, then drains them once the
-// provider is connected to the host. Fresh installs short-circuit at the
-// reason check so no fixup ever runs on a clean profile.
+// `runtime.onInstalled` enqueues the IDs of every upgrade whose split
+// version falls in `(previousVersion, currentVersion]`, then drains them
+// once the provider is connected to the host. Fresh installs short-circuit
+// at the reason check so no upgrade ever runs on a clean profile.
 browser.runtime.onInstalled.addListener(async (details) => {
   if (details.reason !== "update" || !details.previousVersion) return;
   const cur = browser.runtime.getManifest().version;
@@ -108,7 +110,7 @@ browser.runtime.onInstalled.addListener(async (details) => {
 });
 
 // Boot-time stale-queue drain. `runtime.onInstalled` only fires on the
-// boot where the install/update *actually* happened — if a previous run
+// boot where the install/update *actually* happened - if a previous run
 // failed mid-flight, the queue persists in storage and we need a second,
 // independent trigger to retry. `runUpgrades` is idempotent + self-
 // coalescing, so a same-boot collision with the listener above is safe.

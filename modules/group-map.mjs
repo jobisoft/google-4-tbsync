@@ -6,7 +6,7 @@
  *
  * Constructed from `folder.custom.groupMap` at the start of a sync and
  * flushed back via one UPDATE_FOLDER at the end if any mutations happened.
- * No provider-side persistent storage — the host's folder row is the
+ * No provider-side persistent storage - the host's folder row is the
  * source of truth, which means uninstalling/reinstalling the provider
  * doesn't lose mapping state and never creates duplicate mailing lists.
  */

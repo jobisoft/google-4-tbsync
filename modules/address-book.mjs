@@ -4,7 +4,7 @@
  * manually). Contact writes all take a vCard string via `{ vCard }`.
  */
 
-import { stringifyError } from "./errors.mjs";
+import { stringifyError, PUSH_ERR } from "./errors.mjs";
 
 /** Create a book and return its id. */
 export async function createBook(name) {
@@ -30,8 +30,9 @@ export async function bookExists(id) {
   try {
     const node = await messenger.addressBooks.get(id);
     return !!node;
-  } catch {
-    return false;
+  } catch (err) {
+    if (isNotFoundError(err)) return false;
+    throw err;
   }
 }
 
@@ -67,11 +68,12 @@ export async function getContact(id) {
   }
 }
 
-/** Promote `properties.vCard` (older Thunderbird versions) to a top-level field. */
+/** Re-emit the contact node with `vCard` guaranteed present (`null` if
+ *  the API returned no vCard). The manifest's `strict_min_version: 140`
+ *  postdates the old `properties.vCard` shape, so no compat fallback. */
 function normalizeCard(node) {
   if (!node) return node;
-  const vCard = node.vCard ?? node.properties?.vCard ?? null;
-  return { ...node, vCard };
+  return { ...node, vCard: node.vCard ?? null };
 }
 
 /** Create a contact from a vCard. Returns the new id. */
@@ -167,8 +169,8 @@ export async function listMailingListMembers(listId) {
   }
 }
 
-/** Add a contact to a mailing list. Throws (with `code: "E:NOT_FOUND"`)
- *  when either side has been removed — the caller must catch and surface
+/** Add a contact to a mailing list. Throws with `code: PUSH_ERR.NOT_FOUND`
+ *  when either side has been removed - the caller must catch and surface
  *  the drift; a silent return there would leave the membership delta
  *  reporting a false positive. */
 export async function addMailingListMember(listId, contactId) {
@@ -178,7 +180,7 @@ export async function addMailingListMember(listId, contactId) {
   } catch (err) {
     if (isNotFoundError(err)) {
       const wrapped = new Error(`addMailingListMember: list ${listId} or contact ${contactId} not found`);
-      wrapped.code = "E:NOT_FOUND";
+      wrapped.code = PUSH_ERR.NOT_FOUND;
       throw wrapped;
     }
     throw err;
@@ -186,8 +188,8 @@ export async function addMailingListMember(listId, contactId) {
 }
 
 /** Remove a contact from a mailing list. Same semantics as
- *  `addMailingListMember` — throws with `code: "E:NOT_FOUND"` when the
- *  list or contact is gone so the caller can report drift. */
+ *  `addMailingListMember` - throws with `code: PUSH_ERR.NOT_FOUND` when
+ *  the list or contact is gone so the caller can report drift. */
 export async function removeMailingListMember(listId, contactId) {
   if (!listId || !contactId) return;
   try {
@@ -195,14 +197,14 @@ export async function removeMailingListMember(listId, contactId) {
   } catch (err) {
     if (isNotFoundError(err)) {
       const wrapped = new Error(`removeMailingListMember: list ${listId} or contact ${contactId} not found`);
-      wrapped.code = "E:NOT_FOUND";
+      wrapped.code = PUSH_ERR.NOT_FOUND;
       throw wrapped;
     }
     throw err;
   }
 }
 
-/** Match Thunderbird's "unknown id" errors — wording varies across versions. */
+/** Match Thunderbird's "unknown id" errors - wording varies across versions. */
 function isNotFoundError(err) {
   return /no such|not found|invalid id/i.test(stringifyError(err));
 }

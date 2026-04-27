@@ -81,7 +81,10 @@ export function vCardToPerson(vCard) {
 }
 
 /** Extract the two X-GOOGLE-* identity properties from a vCard string.
- *  Returns null when neither is present. */
+ *  Returns null when the vCard can't be parsed or carries no
+ *  X-GOOGLE-RESOURCENAME (the `resourceName` is the primary key - etag
+ *  alone is meaningless without it, so we treat the resourceName as
+ *  load-bearing). */
 export function readIdentity(vCard) {
   const comp = parseVCard(vCard);
   if (!comp) return null;
@@ -412,7 +415,7 @@ function paramValue(prop, name) {
 //
 // Each table maps lowercased input → canonical output; missing keys fall
 // through to the per-call `fallback` argument. `lookupType` is the only
-// branching code path — adding a new field family means adding a table,
+// branching code path - adding a new field family means adding a table,
 // not new helper functions.
 
 const EMAIL_NORMALIZE   = { home: "home", work: "work" };

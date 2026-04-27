@@ -13,15 +13,14 @@
  * for monotonic progress.
  */
 
-import { ok, warning } from "../../vendor/tbsync/provider.mjs";
+import { ERR, ok, warning } from "../../vendor/tbsync/provider.mjs";
 import * as peopleApi from "./people-api.mjs";
-import { PUSH_ERR } from "./people-api.mjs";
 import * as mapper from "./contact-mapper.mjs";
 import * as addressBook from "../address-book.mjs";
 import { GroupMap } from "../group-map.mjs";
 import { ContactMap } from "../contact-map.mjs";
 import { DEBUG_STATUS_DELAY_MS } from "../debug.mjs";
-import { stringifyError } from "../errors.mjs";
+import { stringifyError, PUSH_ERR } from "../errors.mjs";
 
 const STATUS = {
   ADDED_BY_USER:      "added_by_user",
@@ -50,13 +49,13 @@ function logDebug(ctx, message, details) {
 
 export async function syncFolderContacts({ accountId, folderId, folder, account, notify }) {
   const targetID = folder?.targetID;
-  const readOnly = !!account?.custom?.readOnlyMode;
-  const includeSystemGroups = !!account?.custom?.includeSystemContactGroups;
+  const readOnly = !!account?.custom.readOnlyMode;
+  const includeSystemGroups = !!account?.custom.includeSystemContactGroups;
 
   // Host-owned changelog and the in-memory provider maps (flushed at end).
-  const changelog = Array.isArray(folder?.custom?.changelog) ? folder.custom.changelog : [];
-  const gMap = new GroupMap(folder?.custom?.groupMap);
-  const cMap = new ContactMap(folder?.custom?.contactMap);
+  const changelog = Array.isArray(folder?.custom.changelog) ? folder.custom.changelog : [];
+  const gMap = new GroupMap(folder?.custom.groupMap);
+  const cMap = new ContactMap(folder?.custom.contactMap);
 
   // Pre-tag helper: every messenger.contacts.* / messenger.mailingLists.*
   // call we make must be preceded by a *_by_server entry so the host
@@ -88,10 +87,10 @@ export async function syncFolderContacts({ accountId, folderId, folder, account,
     await flushMaps(notify, accountId, folderId, gMap, cMap).catch(flushErr => {
       console.warn("[google-4-tbsync] flushMaps during error handling failed:", stringifyError(flushErr));
     });
-    if (err?.code === "E:AUTH") {
+    if (err?.code === ERR.AUTH) {
       await notify.updateAccount({
         accountId,
-        patch: { error: "E:AUTH" },
+        patch: { error: ERR.AUTH },
       }).catch(() => { });
     } else {
       await notify.updateFolder({
@@ -136,19 +135,19 @@ async function runFolderSync(ctx) {
     pushCounts = await runPushAddModifyPass(ctx, userEntries);
   }
 
-  // 2. Pull contacts — server → local reconciliation.
+  // 2. Pull contacts - server → local reconciliation.
   const pull = await runPullPass(ctx);
 
-  // 3. Push-delete reconciliation — user-deleted cards whose resourceName
+  // 3. Push-delete reconciliation - user-deleted cards whose resourceName
   //    is still on the server.
   if (!readOnly) {
     const deleteStats = await runPushDeletePass(ctx, userEntries, pull.serverResourceNames);
     pushCounts.deleted = deleteStats.deleted;
   }
 
-  // 4. Groups — mirror contact flow. Push-add-modify before pull so any
+  // 4. Groups - mirror contact flow. Push-add-modify before pull so any
   //    new local group exists server-side (and is in gMap) before the
-  //    pull pass walks the server's group list — otherwise the pull
+  //    pull pass walks the server's group list - otherwise the pull
   //    would see the just-pushed group as "new on server" and create a
   //    duplicate local list.
   let groupPushAddMod = { added: 0, updated: 0 };
@@ -218,7 +217,7 @@ async function runPushAddModifyPass(ctx, userEntries) {
       if (outcome === "updated")  updated++;
       if (outcome === "conflict") conflicts++;
     } catch (err) {
-      // Leave entry in the changelog — next sync retries.
+      // Leave entry in the changelog - next sync retries.
       ctx.notify.reportEventLog({
         level: "warning",
         accountId: ctx.accountId,
@@ -237,15 +236,15 @@ async function pushAdd(ctx, entry) {
   const { accountId, cMap } = ctx;
   const local = await addressBook.getContact(entry.itemId);
   if (!local) {
-    // Card gone before we got to push it — add+del cancelled or something
+    // Card gone before we got to push it - add+del cancelled or something
     // external dropped it. Nothing to do.
     await ctx.removeEntry(entry.parentId, entry.itemId);
     return "dropped";
   }
   const person = mapper.vCardToPerson(local.vCard);
-  logDebug(ctx, `push.add ${entry.itemId} — creating on Google`);
+  logDebug(ctx, `push.add ${entry.itemId} - creating on Google`);
   const serverPerson = await peopleApi.createContact(accountId, person);
-  logDebug(ctx, `push.add ${entry.itemId} — server resourceName=${serverPerson.resourceName}`);
+  logDebug(ctx, `push.add ${entry.itemId} - server resourceName=${serverPerson.resourceName}`);
   await stampLocalCard(ctx, entry.itemId, local.vCard, serverPerson);
   cMap.set(entry.itemId, serverPerson.resourceName);
   await ctx.removeEntry(entry.parentId, entry.itemId);
@@ -261,9 +260,9 @@ async function pushModify(ctx, entry) {
   }
   const identity = mapper.readIdentity(local.vCard);
   if (!identity?.resourceName) {
-    // No server identity yet — treat as a late add.
+    // No server identity yet - treat as a late add.
     const person = mapper.vCardToPerson(local.vCard);
-    logDebug(ctx, `push.modify ${entry.itemId} — no server identity, creating instead`);
+    logDebug(ctx, `push.modify ${entry.itemId} - no server identity, creating instead`);
     const serverPerson = await peopleApi.createContact(accountId, person);
     await stampLocalCard(ctx, entry.itemId, local.vCard, serverPerson);
     cMap.set(entry.itemId, serverPerson.resourceName);
@@ -282,12 +281,12 @@ async function pushModify(ctx, entry) {
     return "updated";
   } catch (err) {
     if (err?.code === PUSH_ERR.CONFLICT) {
-      logDebug(ctx, `push.modify ${identity.resourceName} — CONFLICT, dropping (pull will reconcile)`);
+      logDebug(ctx, `push.modify ${identity.resourceName} - CONFLICT, dropping (pull will reconcile)`);
       await ctx.removeEntry(entry.parentId, entry.itemId);
       return "conflict";
     }
     if (err?.code === PUSH_ERR.NOT_FOUND) {
-      logDebug(ctx, `push.modify ${identity.resourceName} — server contact gone, deleting local`);
+      logDebug(ctx, `push.modify ${identity.resourceName} - server contact gone, deleting local`);
       await ctx.markServer(entry.parentId, entry.itemId, STATUS.DELETED_BY_SERVER);
       await addressBook.deleteContact(entry.itemId);
       cMap.remove(entry.itemId);
@@ -376,7 +375,7 @@ async function runPullPass(ctx) {
     await new Promise(r => setTimeout(r, DEBUG_STATUS_DELAY_MS));
   }
 
-  // Pull-delete: server dropped contacts we still have — mirror locally.
+  // Pull-delete: server dropped contacts we still have - mirror locally.
   for (const [resourceName, entry] of byResourceName) {
     if (serverResourceNames.has(resourceName)) continue;
     await ctx.markServer(targetID, entry.id, STATUS.DELETED_BY_SERVER);
@@ -414,13 +413,13 @@ async function runPushDeletePass(ctx, userEntries, serverResourceNames) {
     const resourceName = cMap.get(entry.itemId);
     if (!resourceName) {
       // Never-synced-or-already-gone → just drop the entry.
-      logDebug(ctx, `push.delete ${entry.itemId} — no resourceName on file, dropping`);
+      logDebug(ctx, `push.delete ${entry.itemId} - no resourceName on file, dropping`);
       await ctx.removeEntry(entry.parentId, entry.itemId);
       continue;
     }
     if (!serverResourceNames.has(resourceName)) {
       // Server already dropped it; nothing to push.
-      logDebug(ctx, `push.delete ${resourceName} — already gone on server`);
+      logDebug(ctx, `push.delete ${resourceName} - already gone on server`);
       cMap.remove(entry.itemId);
       await ctx.removeEntry(entry.parentId, entry.itemId);
       continue;
@@ -537,7 +536,7 @@ async function applyMemberships(ctx, byResourceName, memberMap) {
     for (const id of expectedIds) {
       if (!currentIds.has(id)) {
         // Note: mailingLists.addMember doesn't emit a contact-level event
-        // we need to suppress — mailing-list member changes fire their
+        // we need to suppress - mailing-list member changes fire their
         // own event type (onMemberAdded/onMemberRemoved) that we don't
         // track. Still, pre-tag defensively in case TB changes behaviour.
         await ctx.markServer(listId, id, STATUS.MODIFIED_BY_SERVER);
@@ -545,12 +544,12 @@ async function applyMemberships(ctx, byResourceName, memberMap) {
           await addressBook.addMailingListMember(listId, id);
           membersAdded++;
         } catch (err) {
-          if (err?.code === "E:NOT_FOUND") {
+          if (err?.code === PUSH_ERR.NOT_FOUND) {
             ctx.notify.reportEventLog({
               level: "warning",
               accountId: ctx.accountId,
               folderId: ctx.folderId,
-              message: `Mailing list membership add skipped — list ${listId} or contact ${id} no longer exists`,
+              message: `Mailing list membership add skipped - list ${listId} or contact ${id} no longer exists`,
             });
             continue;
           }
@@ -565,12 +564,12 @@ async function applyMemberships(ctx, byResourceName, memberMap) {
           await addressBook.removeMailingListMember(listId, id);
           membersRemoved++;
         } catch (err) {
-          if (err?.code === "E:NOT_FOUND") {
+          if (err?.code === PUSH_ERR.NOT_FOUND) {
             ctx.notify.reportEventLog({
               level: "warning",
               accountId: ctx.accountId,
               folderId: ctx.folderId,
-              message: `Mailing list membership remove skipped — list ${listId} or contact ${id} no longer exists`,
+              message: `Mailing list membership remove skipped - list ${listId} or contact ${id} no longer exists`,
             });
             continue;
           }
@@ -646,7 +645,7 @@ async function pushGroupModify(ctx, entry) {
   // entry.itemId can be either:
   //   - a local mailing-list UID (post-watcher entries)
   //   - a Google resourceName "contactGroups/…" (migrated legacy
-  //     entries — TbSync's wrapper routed legacy mailing-list property
+  //     entries - TbSync's wrapper routed legacy mailing-list property
   //     writes through the changelog DB keyed by the primary-key field,
   //     which the Google provider set to X-GOOGLE-RESOURCENAME).
   let mapping;
@@ -759,7 +758,7 @@ function isContactEntry(entry) {
   // The watcher annotates contemporary entries with `kind`; migrated
   // legacy entries lack it. For those we fall back to the itemId
   // shape: Google's contact-group resource names start with
-  // `contactGroups/` — anything else is taken as a contact entry.
+  // `contactGroups/` - anything else is taken as a contact entry.
   if (entry.kind === "list")    return false;
   if (entry.kind === "contact") return true;
   if (typeof entry.itemId === "string" && entry.itemId.startsWith("contactGroups/")) {

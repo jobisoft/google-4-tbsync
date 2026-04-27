@@ -11,6 +11,7 @@
 
 import { ERR, withCode } from "../../vendor/tbsync/provider.mjs";
 import * as oauth from "./oauth.mjs";
+import { PUSH_ERR } from "../errors.mjs";
 
 const BASE = "https://people.googleapis.com/v1";
 const CONNECTIONS_ENDPOINT = `${BASE}/people/me/connections`;
@@ -30,7 +31,7 @@ const PULL_FIELDS = [
   "memberships",
 ].join(",");
 
-// Push mask excludes `memberships` — memberships are server→local only.
+// Push mask excludes `memberships` - memberships are server→local only.
 const PUSH_FIELDS = [
   "names",
   "nicknames",
@@ -45,7 +46,7 @@ const PUSH_FIELDS = [
   "biographies",
 ].join(",");
 
-// Group members are NOT derived from here — they come from each Person's
+// Group members are NOT derived from here - they come from each Person's
 // `memberships` field on the connections list. `memberResourceNames` isn't
 // a valid groupFields value anyway (only batchGet returns it).
 const GROUP_PULL_FIELDS = "name,groupType";
@@ -101,10 +102,9 @@ export async function updateContact(accountId, resourceName, person, etag) {
   });
 }
 
-/**
- * DELETE /v1/<resourceName>:deleteContact. 404 is rethrown as ERR.NOT_FOUND
- * so the push pass can treat "already gone" as success.
- */
+/** DELETE /v1/<resourceName>:deleteContact. 404 → PUSH_ERR.NOT_FOUND
+ *  via `fetchWithAuthRetry`'s shared 404 mapping below - the push pass
+ *  treats "already gone" as success. */
 export async function deleteContact(accountId, resourceName) {
   const url = `${BASE}/${resourceName}:deleteContact`;
   await fetchWithAuthRetry(accountId, url, { method: "DELETE" });
@@ -159,13 +159,6 @@ export async function deleteContactGroup(accountId, resourceName) {
   await fetchWithAuthRetry(accountId, url, { method: "DELETE" });
 }
 
-/** Internal error codes used by the push pass for control flow. These never
- *  cross the wire. */
-export const PUSH_ERR = {
-  CONFLICT: "E:CONFLICT",
-  NOT_FOUND: "E:NOT_FOUND",
-};
-
 /** Authenticated People API fetch. Retries once on 401 with a fresh token.
  *  DELETE and empty bodies return null. */
 async function fetchWithAuthRetry(accountId, url, opts = {}) {
@@ -216,5 +209,4 @@ async function fetchWithAuthRetry(accountId, url, opts = {}) {
       code
     );
   }
-  throw withCode(new Error("People API retry fell through"), ERR.NETWORK);
 }

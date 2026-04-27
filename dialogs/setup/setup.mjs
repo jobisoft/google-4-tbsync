@@ -10,6 +10,7 @@
 import { localizeDocument } from "../../vendor/i18n/i18n.mjs";
 import { createDropdown } from "../shared/dropdown.mjs";
 import { stringifyError } from "../../modules/errors.mjs";
+import { ERR } from "../../vendor/tbsync/provider.mjs";
 
 /** Look up a localized message, falling back to the inline default if the
  *  key is missing. Optional third arg forwards substitutions to
@@ -51,7 +52,7 @@ async function loadLastCredentials() {
         web:     creds.web     ?? null,
       };
     }
-  } catch { /* ignore — fields stay blank */ }
+  } catch { /* ignore - fields stay blank */ }
   applyCredentialsForType(clientTypeDropdown.getValue());
 }
 
@@ -108,7 +109,7 @@ async function onSignIn() {
       label, clientID, clientSecret, clientType,
     });
     if (!reply?.ok) {
-      if (reply?.code === "E:CANCELLED") { btn.disabled = false; return; }
+      if (reply?.code === ERR.CANCELLED) { btn.disabled = false; return; }
       throw new Error(reply?.error ?? i18n("setup.error.signInFailed", "Sign-in failed"));
     }
 

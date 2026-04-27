@@ -70,7 +70,7 @@ export const HOST_CMD = {
  *
  * `custom` is opaque to the host and lets each provider stash its own
  * per-row configuration without host-schema changes. The host stores and
- * round-trips it unchanged. All reads never need to check presence — the
+ * round-trips it unchanged. All reads never need to check presence - the
  * host defaults `custom` to `{}` on create and across pushes.
  *
  * ## RPC semantics
@@ -83,7 +83,7 @@ export const HOST_CMD = {
  * UPDATE_ACCOUNT { accountId, patch }
  *   → patches top-level writable fields (`accountName`, `warning`, `error`)
  *   and shallow-merges `patch.custom` into the existing `custom` blob.
- *   Drop a `custom` key by patching it to `null` — there is no explicit
+ *   Drop a `custom` key by patching it to `null` - there is no explicit
  *   delete op. Other top-level fields are host-authored.
  *
  * UPDATE_FOLDER { accountId, folderId, patch }
@@ -107,7 +107,7 @@ export const PROVIDER_CMD = {
   // needs it. Both are scoped to the caller's providerId.
   LIST_ACCOUNTS: "listAccounts",
   GET_ACCOUNT: "getAccount",
-  // Changelog mutations — the queue lives at `folder.custom.changelog` and
+  // Changelog mutations - the queue lives at `folder.custom.changelog` and
   // is owned by the host's built-in Thunderbird-event observer. Providers
   // tag `*_by_server` entries before their own sync writes so the observer
   // skips the resulting TB events (legacy's 1500 ms freeze), and clear
@@ -115,7 +115,7 @@ export const PROVIDER_CMD = {
   CHANGELOG_MARK_SERVER_WRITE: "changelogMarkServerWrite",
   CHANGELOG_REMOVE: "changelogRemove",
   // Provider-scoped upgrade lock. While locked, the host treats every
-  // account belonging to the provider as "upgrading" — refuses every
+  // account belonging to the provider as "upgrading" - refuses every
   // user-initiated RPC and skips autosync ticks. Used by the provider's
   // one-shot upgrade runner so user-visible actions don't race with
   // upgrade work. Args: { locked: boolean }.
@@ -139,17 +139,17 @@ export const PROVIDER_NOTIFY = {
 };
 
 /**
- * Sync-state protocol — the status cell's wire format.
+ * Sync-state protocol - the status cell's wire format.
  *
  * A provider emits REPORT_SYNC_STATE { accountId, folderId, syncState, label? }
  * during any sync phase it wants visible in the manager.
  *
  * ## Base syncstates (localised on the host)
  * The host ships `syncstate.*` translations for these four bases only:
- *   - syncstate.sync          — generic active sync
- *   - syncstate.prepare       — preparation phase (may be extended)
- *   - syncstate.send          — awaiting network response (may be extended)
- *   - syncstate.eval          — processing response (may be extended)
+ *   - syncstate.sync          - generic active sync
+ *   - syncstate.prepare       - preparation phase (may be extended)
+ *   - syncstate.send          - awaiting network response (may be extended)
+ *   - syncstate.eval          - processing response (may be extended)
  *
  * ## Extended syncstates (provider-granular)
  * A provider may extend `send`, `eval`, or `prepare` with a dot-suffix, e.g.
@@ -160,7 +160,7 @@ export const PROVIDER_NOTIFY = {
  *   1. If `label` is present, show it.
  *   2. Else if `syncState` is an exact base key, show its host translation.
  *   3. Else if `syncState`'s first segment is a base key, show
- *      "{localised-base} ({suffix})" — the suffix appears verbatim in
+ *      "{localised-base} ({suffix})" - the suffix appears verbatim in
  *      parentheses as a diagnostic hint.
  *   4. Else show the raw `syncState`.
  *
@@ -187,7 +187,7 @@ export const SYNCSTATE_BASE_KEYS = new Set([
 ]);
 
 /**
- * Warning / error messages on accounts + folders — the provider's channel
+ * Warning / error messages on accounts + folders - the provider's channel
  * for surfacing persistent, visible state (distinct from transient syncstate
  * or one-shot event-log entries).
  *
@@ -198,10 +198,10 @@ export const SYNCSTATE_BASE_KEYS = new Set([
  *
  * `null` means "no message". A non-null string is resolved for display in
  * this order:
- *   1. `browser.i18n.getMessage("error." + s)` — host-shipped predefined
+ *   1. `browser.i18n.getMessage("error." + s)` - host-shipped predefined
  *      error code.
- *   2. `browser.i18n.getMessage("warning." + s)` — predefined warning code.
- *   3. Raw `s` — verbatim free-text fallback.
+ *   2. `browser.i18n.getMessage("warning." + s)` - predefined warning code.
+ *   3. Raw `s` - verbatim free-text fallback.
  *
  * The provider picks one or the other per message: a predefined code for
  * the common localised cases, or a free-text string when context is more
@@ -212,12 +212,12 @@ export const SYNCSTATE_BASE_KEYS = new Set([
  * of them as-is in a `warning` / `error` field and the UI will render the
  * localised label.
  *
- *   error.E:AUTH              — "Authentication failed" (refresh token
+ *   error.E:AUTH              - "Authentication failed" (refresh token
  *                                revoked or credentials wrong). In addition
  *                                to showing the localised message, the host
  *                                treats `error: "E:AUTH"` on an *account*
  *                                record as the trigger for the Sign-in-again
- *                                button affordance in the manager — so
+ *                                button affordance in the manager - so
  *                                providers should write this exact code on
  *                                the account, not on a folder, when auth is
  *                                the root cause.
@@ -226,7 +226,7 @@ export const SYNCSTATE_BASE_KEYS = new Set([
  * warning; the UI renders it verbatim until the host adds a key.
  *
  * As providers emerge with shared failure modes, we add more entries here
- * (e.g. `error.E:NETWORK`, `error.E:QUOTA`) — additive, no wire change.
+ * (e.g. `error.E:NETWORK`, `error.E:QUOTA`) - additive, no wire change.
  *
  * ## Clearing
  * The host never mutates these fields. The provider is expected to pass

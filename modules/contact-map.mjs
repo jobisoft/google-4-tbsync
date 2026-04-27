@@ -8,7 +8,7 @@
  * Constructed from `folder.custom.contactMap` at sync start, mutated
  * in-memory (add on push-add / pull-create, drop on push-delete /
  * pull-delete), flushed back via one UPDATE_FOLDER at sync end if dirty.
- * No provider-side persistent storage — host's folder row is the source
+ * No provider-side persistent storage - host's folder row is the source
  * of truth.
  */
 

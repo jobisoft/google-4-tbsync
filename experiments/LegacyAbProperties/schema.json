@@ -6,7 +6,7 @@
         "name": "readGoogleStamps",
         "type": "function",
         "async": true,
-        "description": "Walk every contact card in the given address book and read the legacy X-GOOGLE-RESOURCENAME / X-GOOGLE-ETAG properties off the underlying nsIAbCard's userProperty bag — the place legacy google-4-tbsync wrote them via setProperty(). Modern Thunderbird does not always surface these properties in the WebExtension-visible vCard, so we have to reach for them via XPCOM.",
+        "description": "Walk every contact card in the given address book and read the legacy X-GOOGLE-RESOURCENAME / X-GOOGLE-ETAG properties off the underlying nsIAbCard's userProperty bag - the place legacy google-4-tbsync wrote them via setProperty(). Modern Thunderbird does not always surface these properties in the WebExtension-visible vCard, so we have to reach for them via XPCOM.",
         "parameters": [
           {
             "name": "bookId",

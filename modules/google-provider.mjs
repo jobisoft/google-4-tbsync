@@ -6,7 +6,7 @@
  * `this.getAccount(accountId)`, reads user-config, OAuth credentials and
  * the refresh token from `account.custom.*`, and writes state back via
  * UPDATE_ACCOUNT / UPDATE_FOLDER RPCs. The provider has no persistent
- * storage of its own — even the changelog and the contact-group map
+ * storage of its own - even the changelog and the contact-group map
  * live on the host's folder rows.
  *
  * `authenticateAndCreateAccount` and `saveAccountFromConfig` are plain
@@ -49,12 +49,12 @@ export class GoogleProvider extends TbSyncProviderImplementation {
 
   // ── Base-class hook: post-register ─────────────────────────────────────
 
-  /** Nothing to persist locally after registration — the host's accountId
+  /** Nothing to persist locally after registration - the host's accountId
    *  is the only identity we need and is looked up via getAccount(). */
   async onRegisterSuccessful() { return null; }
 
   /** Fired by the base class the first time the host opens the port (and on
-   *  every subsequent reconnect). Safe to call more than once — priming is
+   *  every subsequent reconnect). Safe to call more than once - priming is
    *  idempotent. */
   async onConnectedToHost() {
     await this.primeStartupState();
@@ -68,7 +68,7 @@ export class GoogleProvider extends TbSyncProviderImplementation {
     // Prime OAuth auth so the people-api layer can refresh access tokens
     // without re-reading host state mid-sync.
     this.#primeAuth(ctx);
-    // Google surfaces a single contacts container — no server-side folder
+    // Google surfaces a single contacts container - no server-side folder
     // discovery. The host's sync-coordinator proceeds to call onSyncFolder
     // for each selected folder. Dwell 250 ms so the manager can render
     // the "Preparing…" transition.
@@ -88,7 +88,7 @@ export class GoogleProvider extends TbSyncProviderImplementation {
     // Defensive: the stored targetID may be stale if the user deleted the
     // address book manually from Thunderbird's UI, or the book was torn
     // down by `onAccountDisabled` and we're now syncing post-reconnect.
-    // Recreate on the fly so the sync can still proceed — push the new
+    // Recreate on the fly so the sync can still proceed - push the new
     // ID back to the host. The host-side watcher picks up the new
     // targetID via the folders-changed broadcast that follows the
     // updateFolder call.
@@ -106,7 +106,7 @@ export class GoogleProvider extends TbSyncProviderImplementation {
       accountId,
       folderId,
       // Pass the refreshed folder row so `sync-contacts` has `folder.targetID`
-      // and `folder.custom.groupMap` — the latter is loaded once at the top
+      // and `folder.custom.groupMap` - the latter is loaded once at the top
       // of the sync and flushed back via one UPDATE_FOLDER at the end.
       folder: { ...folder, targetID },
       account: ctx.account,
@@ -135,7 +135,7 @@ export class GoogleProvider extends TbSyncProviderImplementation {
       displayName: ctx.authenticatedUserEmail?.trim() || ctx.account.accountName,
       // Mirror the account-level toggle so the ACL icon is correct from
       // the moment the folder is discovered, before the user enables it.
-      readOnly: !!ctx.account.custom?.readOnlyMode,
+      readOnly: !!ctx.account.custom.readOnlyMode,
       selected: false,
     };
     await this.pushFolderList({ accountId, folders: [folder] });
@@ -147,7 +147,7 @@ export class GoogleProvider extends TbSyncProviderImplementation {
     if (!ctx) return null;
     // Disable always releases Thunderbird resources so re-enable starts
     // from a clean slate. Clear each folder's groupMap, contactMap, and
-    // pending changelog too — the TB ids they hold reference books we
+    // pending changelog too - the TB ids they hold reference books we
     // just deleted.
     await this.#deleteAccountTargets(ctx.folders);
     for (const folder of ctx.folders) {
@@ -160,7 +160,6 @@ export class GoogleProvider extends TbSyncProviderImplementation {
         console.warn(`[google-4-tbsync] clear folder state on disable failed (folder=${folder.folderId}):`, stringifyError(err));
       });
     }
-    oauth.invalidateAccessToken(ctx.account.accountId);
     oauth.forgetAuth(ctx.account.accountId);
     return null;
   }
@@ -171,11 +170,10 @@ export class GoogleProvider extends TbSyncProviderImplementation {
     // `purgeTargets` travels over the protocol from the host. Default to
     // true: removing an account normally means the books go too. The host
     // row (including custom.{groupMap,contactMap,changelog} and OAuth
-    // secrets) is wiped right after we return — no explicit patch needed.
+    // secrets) is wiped right after we return - no explicit patch needed.
     if (purgeTargets !== false) {
       await this.#deleteAccountTargets(ctx.folders);
     }
-    oauth.invalidateAccessToken(ctx.account.accountId);
     oauth.forgetAuth(ctx.account.accountId);
     return null;
   }
@@ -185,7 +183,7 @@ export class GoogleProvider extends TbSyncProviderImplementation {
     if (!ctx) throw withCode(new Error("unknown account"), ERR.UNKNOWN_ACCOUNT);
     const folder = ctx.folders.find(f => f.folderId === folderId);
     if (!folder) throw withCode(new Error("unknown folder"), ERR.UNKNOWN_FOLDER);
-    // Idempotent: if the book is already present, nothing to do — the
+    // Idempotent: if the book is already present, nothing to do - the
     // host's watcher is already registered for this targetID via the
     // folder-row registry.
     if (folder.targetID && await addressBook.bookExists(folder.targetID)) {
@@ -216,7 +214,7 @@ export class GoogleProvider extends TbSyncProviderImplementation {
       await safeDeleteBook(folder.targetID);
     }
     // Dropping the book invalidates every pending changelog entry and
-    // both provider-maintained maps — the TB ids they hold reference
+    // both provider-maintained maps - the TB ids they hold reference
     // the book we just deleted. Clear in one patch so re-enable starts
     // fresh.
     await this.updateFolder({
@@ -251,7 +249,7 @@ export class GoogleProvider extends TbSyncProviderImplementation {
   async onGetSortedFolders({ accountId }) {
     const ctx = await this.#loadContext(accountId);
     if (!ctx) return [];
-    const readOnly = !!ctx.account.custom?.readOnlyMode;
+    const readOnly = !!ctx.account.custom.readOnlyMode;
     return ctx.folders
       .slice()
       .sort((a, b) => (a.orderIndex ?? 0) - (b.orderIndex ?? 0))
@@ -268,7 +266,7 @@ export class GoogleProvider extends TbSyncProviderImplementation {
   }
 
   async onSetFolderSelected() {
-    // The host owns `selected` — it stores the user's choice in its folder
+    // The host owns `selected` - it stores the user's choice in its folder
     // row and calls onFolderEnabled / onFolderDisabled when the flip
     // triggers a side-effect. Nothing to do here.
     return null;
@@ -364,7 +362,7 @@ export class GoogleProvider extends TbSyncProviderImplementation {
         clientSecret,
         // Persist the chosen flow so re-auth and the config popup know
         // which redirect-URI / popup-vs-launchWebAuthFlow path to use.
-        // Migrated profiles arrive without this field — `oauth.startAuth`
+        // Migrated profiles arrive without this field - `oauth.startAuth`
         // treats anything other than "web" as desktop, matching legacy.
         clientType: clientType === "web" ? "web" : "desktop",
         refreshToken,
@@ -378,11 +376,11 @@ export class GoogleProvider extends TbSyncProviderImplementation {
   /** Most recent provider account credentials, grouped by OAuth client
    *  type. Setup popup uses this to prefill the form when the user picks
    *  a type from the dropdown. Migrated accounts have no `clientType`
-   *  field — they're treated as `"desktop"` to match the OAuth layer. */
+   *  field - they're treated as `"desktop"` to match the OAuth layer. */
   async getLastCredentials() {
     const list = await this.listAccounts();
     const sorted = list
-      .filter(a => a.custom?.clientID && a.custom?.clientSecret)
+      .filter(a => a.custom.clientID && a.custom.clientSecret)
       .sort((a, b) => (b.lastSyncTime ?? 0) - (a.lastSyncTime ?? 0));
     const out = { desktop: null, web: null };
     for (const acc of sorted) {
@@ -403,7 +401,7 @@ export class GoogleProvider extends TbSyncProviderImplementation {
       accountName: ctx.account.accountName,
       authenticatedUserEmail: ctx.authenticatedUserEmail ?? null,
       clientID: ctx.account.custom.clientID ?? "",
-      // Migrated profiles never set this — surface "desktop" to match
+      // Migrated profiles never set this - surface "desktop" to match
       // what the OAuth layer will actually use.
       clientType: ctx.account.custom.clientType === "web" ? "web" : "desktop",
       readOnlyMode: !!ctx.account.custom.readOnlyMode,
@@ -416,7 +414,7 @@ export class GoogleProvider extends TbSyncProviderImplementation {
    *  goes into `custom` (shallow-merged on the host side).
    *
    *  OAuth credentials (`clientID` / `clientSecret`) are editable only
-   *  when the account is disconnected — the popup enforces that via the
+   *  when the account is disconnected - the popup enforces that via the
    *  `readOnly` URL param, and the host gates `readOnly` on
    *  `account.enabled`. When the user changes either, the stored
    *  `refreshToken` becomes meaningless (it was issued for the old
@@ -452,12 +450,11 @@ export class GoogleProvider extends TbSyncProviderImplementation {
     // what's on disk. Invalidate refresh token + cached email so the
     // user re-authenticates.
     const credsChanged =
-      ("clientID"     in customPatch && customPatch.clientID     !== ctx.account.custom?.clientID) ||
-      ("clientSecret" in customPatch && customPatch.clientSecret !== ctx.account.custom?.clientSecret);
+      ("clientID"     in customPatch && customPatch.clientID     !== ctx.account.custom.clientID) ||
+      ("clientSecret" in customPatch && customPatch.clientSecret !== ctx.account.custom.clientSecret);
     if (credsChanged) {
       customPatch.refreshToken = null;
       customPatch.authenticatedUserEmail = null;
-      oauth.invalidateAccessToken(accountId);
       oauth.forgetAuth(accountId);
     }
 
@@ -489,7 +486,7 @@ export class GoogleProvider extends TbSyncProviderImplementation {
     for (const acc of accounts) {
       const { accountId, custom } = acc;
       if (!accountId) continue;
-      if (custom?.clientID && custom?.clientSecret && custom?.refreshToken) {
+      if (custom.clientID && custom.clientSecret && custom.refreshToken) {
         oauth.primeAuth(accountId, {
           clientID: custom.clientID,
           clientSecret: custom.clientSecret,
@@ -503,7 +500,7 @@ export class GoogleProvider extends TbSyncProviderImplementation {
 
   // ── Private ────────────────────────────────────────────────────────────
 
-  /** Prime OAuth for a context — clientID, clientSecret, and refresh token
+  /** Prime OAuth for a context - clientID, clientSecret, and refresh token
    *  all live on the host row under `custom.*`. */
   #primeAuth(ctx) {
     const { clientID, clientSecret, refreshToken } = ctx.account.custom ?? {};
@@ -519,14 +516,14 @@ export class GoogleProvider extends TbSyncProviderImplementation {
     return {
       account: rv.account,
       folders: rv.folders ?? [],
-      authenticatedUserEmail: rv.account.custom?.authenticatedUserEmail ?? null,
+      authenticatedUserEmail: rv.account.custom.authenticatedUserEmail ?? null,
     };
   }
 
   /** Delete every Thunderbird address book bound to these folder rows,
    *  tolerating per-folder failures (log and continue). The host watcher
    *  unregisters each book on the next folders-changed broadcast (when
-   *  targetID drops to null) — callers that care about avoiding orphan
+   *  targetID drops to null) - callers that care about avoiding orphan
    *  delete entries should null targetID *before* calling this helper. */
   async #deleteAccountTargets(folderList) {
     for (const folder of folderList) {
@@ -542,9 +539,9 @@ export class GoogleProvider extends TbSyncProviderImplementation {
 /** Book name for a (re)created Thunderbird address book, picking the most
  *  authoritative source available:
  *
- *    1. The folder's `targetName` — preserved across disable/enable and
+ *    1. The folder's `targetName` - preserved across disable/enable and
  *       carried over from legacy by the host's migration.
- *    2. The folder's `displayName` — set when the folder row was first
+ *    2. The folder's `displayName` - set when the folder row was first
  *       pushed by the provider.
  *    3. A computed fallback combining the account name + authenticated
  *       email, so users with multiple Google accounts under the same

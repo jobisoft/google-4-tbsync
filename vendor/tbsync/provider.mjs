@@ -1,7 +1,7 @@
 /**
  * Base class for TbSync provider add-ons. Owns the handshake, port
  * lifecycle, RPC dispatch, and setup/config popup windowing. Subclasses
- * override `on*` virtual hooks — one per HOST_CMD. Required overrides
+ * override `on*` virtual hooks - one per HOST_CMD. Required overrides
  * throw `E:UNKNOWN_COMMAND`; safe-no-op hooks return `null`.
  *
  * Startup: `new MyProvider(options); provider.init();`.
@@ -28,7 +28,7 @@ const DEFAULT_SETUP_HEIGHT = 640;
 const DEFAULT_CONFIG_WIDTH = 520;
 const DEFAULT_CONFIG_HEIGHT = 580;
 
-// Host-availability retry schedule — first announce 250 ms after host flips
+// Host-availability retry schedule - first announce 250 ms after host flips
 // to enabled (it's still initialising its onMessageExternal listener), then
 // every 500 ms up to 10 attempts.
 const ANNOUNCE_INITIAL_DELAY_MS = 250;
@@ -177,7 +177,7 @@ export class TbSyncProviderImplementation {
 
   /** Provider-scoped upgrade lock. While `locked: true`, the host
    *  refuses every user-initiated RPC against any account belonging to
-   *  this provider and skips autosync ticks — the manager surfaces the
+   *  this provider and skips autosync ticks - the manager surfaces the
    *  state as "Provider is performing one-time upgrade work…". The
    *  upgrade itself is exempt: provider→host commands like
    *  `updateAccount` / `changelogMarkServerWrite` continue to flow.
@@ -203,7 +203,7 @@ export class TbSyncProviderImplementation {
   reportStatus(payload)       { this.#notify(PROVIDER_NOTIFY.REPORT_STATUS, payload); }
   requestOpenManager(payload) { this.#notify(PROVIDER_NOTIFY.REQUEST_OPEN_MANAGER, payload); }
 
-  // ── Virtual hooks — subclass overrides ──────────────────────────────────
+  // ── Virtual hooks - subclass overrides ──────────────────────────────────
 
   /** Sync a whole account. Host calls this before walking selected folders. */
   async onSyncAccount(_args)           { throw this.#notImplemented("onSyncAccount"); }
@@ -228,7 +228,7 @@ export class TbSyncProviderImplementation {
 
   /** Called each time the host opens a port to us (initial boot + every
    *  reconnect after a host restart). Safe place for startup work that
-   *  needs to read host state — listAccounts, getAccount, etc. — since the
+   *  needs to read host state - listAccounts, getAccount, etc. - since the
    *  port is live from this point. Must be idempotent. */
   async onConnectedToHost()            { return null; }
 
@@ -269,7 +269,7 @@ export class TbSyncProviderImplementation {
         this.#pendingSetups.set(setupToken, { resolve, reject, windowId: win.id });
       });
 
-    // `custom` — if present — seeds the new account's opaque provider blob
+    // `custom` - if present - seeds the new account's opaque provider blob
     // atomically with the host row creation. See protocol.mjs PROVIDER_CMD.
     const { accountId } = await this.registerAccount({
       setupToken,
@@ -345,7 +345,7 @@ export class TbSyncProviderImplementation {
    *  consent window (e.g. EAS's nativeclient flow) register the windowId
    *  in `registerReauthWindow` while the popup is open; this method then
    *  brings it to the front. Subclasses that delegate reauth to
-   *  `browser.identity.launchWebAuthFlow` (e.g. Google) never register —
+   *  `browser.identity.launchWebAuthFlow` (e.g. Google) never register -
    *  the call is a deliberate no-op for them. */
   async onFocusReauthPopup(args) {
     const windowId = this.#pendingReauths.get(args.accountId);
@@ -356,7 +356,7 @@ export class TbSyncProviderImplementation {
     return null;
   }
 
-  /** Subclass hook — track a reauth popup window for the duration of a
+  /** Subclass hook - track a reauth popup window for the duration of a
    *  custom OAuth flow so `onFocusReauthPopup` can raise it. Always pair
    *  with `unregisterReauthWindow` in a finally block. */
   registerReauthWindow(accountId, windowId) {
@@ -622,7 +622,7 @@ export class TbSyncProviderImplementation {
       // Abort if the host flipped back off while we were waiting.
       const rv = await browser.storage.session.get({ [HOST_AVAILABLE_KEY]: false });
       if (!rv[HOST_AVAILABLE_KEY]) {
-        console.log(`${this.#logPrefix} host went away during retry — stopping`);
+        console.log(`${this.#logPrefix} host went away during retry - stopping`);
         return;
       }
       console.log(`${this.#logPrefix} announcing (attempt ${attempt}/${ANNOUNCE_MAX_ATTEMPTS})`);

@@ -1,5 +1,5 @@
 /**
- * Config popup controller — account settings only.
+ * Config popup controller - account settings only.
  *
  * Reads `accountId` + `readOnly` from the URL, fetches the sanitized account
  * via `google.getAccount`, and renders an editable or read-only form.
@@ -11,21 +11,19 @@
  * disabled; the secret field is hidden entirely; Save is hidden; Cancel
  * becomes Close.
  *
- * The OAuth client type is always rendered as a locked dropdown — switching
+ * The OAuth client type is always rendered as a locked dropdown - switching
  * the type on an existing account would invalidate every cached token and
  * leave the account in an unrecoverable state. To change the type, remove
  * the account and add it again.
  *
  * Re-authentication is a separate flow driven by the manager's "Sign in again"
- * button — Google's consent runs directly without an intermediate provider UI.
+ * button - Google's consent runs directly without an intermediate provider UI.
  * This popup therefore has no Sign-in-again button by design.
  */
 
 import { localizeDocument } from "../../vendor/i18n/i18n.mjs";
 import { createDropdown } from "../shared/dropdown.mjs";
 import { stringifyError } from "../../modules/errors.mjs";
-
-let clientTypeDropdown;
 
 const i18n = (key, fallback, substitutions) =>
   browser.i18n.getMessage(key, substitutions) || fallback;
@@ -61,15 +59,15 @@ async function load() {
   const account = reply.result;
 
   $("account-name").value = account.accountName ?? "";
-  $("email").textContent = account.authenticatedUserEmail ?? "—";
+  $("email").textContent = account.authenticatedUserEmail ?? "-";
   $("client-id").value = account.clientID ?? "";
-  // Keep the secret field blank — the user takes an explicit action to
+  // Keep the secret field blank - the user takes an explicit action to
   // overwrite it. Empty on save means "leave the stored secret untouched".
   $("client-secret").value = "";
   $("read-only-mode").checked = !!account.readOnlyMode;
   $("include-system-groups").checked = !!account.includeSystemContactGroups;
 
-  clientTypeDropdown = createDropdown($("client-type"), {
+  createDropdown($("client-type"), {
     options: [
       {
         value: "web",
@@ -100,11 +98,11 @@ function applyReadOnly() {
   for (const id of ["account-name", "client-id", "client-secret", "read-only-mode", "include-system-groups"]) {
     $(id).disabled = readOnly;
   }
-  // Hide the secret field entirely while locked — it's blank by design,
+  // Hide the secret field entirely while locked - it's blank by design,
   // so showing a perpetually-empty disabled input is just visual noise.
   $("client-secret-field").hidden = readOnly;
   $("btn-save").hidden = readOnly;
-  // Cancel doubles as the only way out in read-only mode — label it "Close"
+  // Cancel doubles as the only way out in read-only mode - label it "Close"
   // there so it reads as the primary/only action instead of a dismissal.
   const cancelBtn = $("btn-cancel");
   cancelBtn.textContent = readOnly
@@ -133,7 +131,7 @@ async function onSave() {
     readOnlyMode: $("read-only-mode").checked,
     includeSystemContactGroups: $("include-system-groups").checked,
   };
-  // Empty secret means "leave the stored secret untouched" — same
+  // Empty secret means "leave the stored secret untouched" - same
   // convention as basic-auth password fields in the EAS config popup.
   const clientSecret = $("client-secret").value;
   if (clientSecret) patch.clientSecret = clientSecret;

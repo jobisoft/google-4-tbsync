@@ -2,7 +2,7 @@
  * Provider-local one-shot upgrades.
  *
  * Runs work that has to happen exactly once after the user updates the
- * provider across a "split version" — typically a one-time data-shape
+ * provider across a "split version" - typically a one-time data-shape
  * migration that the host's legacy migration deliberately couldn't do
  * because it's provider-specific.
  *
@@ -14,7 +14,7 @@
  * host-connect via the boot-time stale drain.
  *
  * While a drain is in flight, the host treats every account belonging
- * to this provider as "upgrading" — refuses every user-initiated RPC
+ * to this provider as "upgrading" - refuses every user-initiated RPC
  * and skips autosync ticks. The lock is acquired before the first
  * upgrade body runs and released in a `finally` so a crashing upgrade
  * still releases it.
@@ -26,6 +26,7 @@ import { stringifyError } from "./errors.mjs";
 import * as oauth from "./google/oauth.mjs";
 
 const UPGRADE_QUEUE_KEY = "google.upgradeQueue";
+const STATUS_MODIFIED_BY_SERVER = "modified_by_server";
 
 /** Ordered list of split versions. An upgrade is *applicable* to an
  *  `(previousVersion, currentVersion)` pair iff
@@ -61,7 +62,7 @@ export function compareVersions(a, b) {
 let inFlight = null;
 
 /** Drain `google.upgradeQueue` against the UPGRADES table. Idempotent
- *  (each upgrade body is itself idempotent) and self-coalescing — a
+ *  (each upgrade body is itself idempotent) and self-coalescing - a
  *  second caller while the first is mid-flight just awaits the same
  *  Promise.
  *
@@ -85,13 +86,13 @@ export function runUpgrades(provider) {
       lockAcquired = true;
       provider.reportEventLog({
         level: "debug",
-        message: `[upgrade] entering upgrade mode — sync and account/resource modifications are paused (${queue.length} upgrade(s) pending)`,
+        message: `[upgrade] entering upgrade mode - sync and account/resource modifications are paused (${queue.length} upgrade(s) pending)`,
       });
 
       const remaining = [];
       for (const id of queue) {
         const upgrade = UPGRADES.find(u => u.id === id);
-        if (!upgrade) continue;  // unknown id — silently drop
+        if (!upgrade) continue;  // unknown id - silently drop
         try {
           provider.reportEventLog({ level: "debug", message: `[upgrade] ${id} starting` });
           await upgrade.run(provider);
@@ -113,7 +114,7 @@ export function runUpgrades(provider) {
         );
         provider.reportEventLog({
           level: "debug",
-          message: `[upgrade] exiting upgrade mode — sync and account/resource modifications re-enabled`,
+          message: `[upgrade] exiting upgrade mode - sync and account/resource modifications re-enabled`,
         });
       }
       inFlight = null;
@@ -146,7 +147,7 @@ export async function enqueueUpgradesForUpdate(previousVersion, currentVersion) 
  *  cards already showing the right identity in their vCard). Each
  *  update is pre-tagged with `markServerWrite("modified_by_server")` so
  *  the host's changelog watcher classifies the upcoming AB onModified
- *  event as self-inflicted and drops it — no `_by_user` entry, no
+ *  event as self-inflicted and drops it - no `_by_user` entry, no
  *  spurious "needs sync" state. */
 async function liftLegacyStamps(provider) {
   const accounts = await provider.listAccounts();
@@ -178,7 +179,7 @@ async function liftLegacyStamps(provider) {
           folderId: folder.folderId,
           parentId: folder.targetID,
           itemId: contactId,
-          status: "modified_by_server",
+          status: STATUS_MODIFIED_BY_SERVER,
         });
         const stampedVCard = mapper.stampIdentity(card.vCard, { resourceName, etag });
         await addressBook.updateContact(contactId, stampedVCard);
@@ -201,7 +202,7 @@ async function liftLegacyStamps(provider) {
  *  mailing-list cards. Without this lift, the first sync after a
  *  migration creates a fresh duplicate of every group.
  *
- *  `groupType` is intentionally left undefined on lifted entries —
+ *  `groupType` is intentionally left undefined on lifted entries -
  *  the next pull pass overlays the correct value from the server. */
 async function liftLegacyGroupStamps(provider) {
   const accounts = await provider.listAccounts();
@@ -210,7 +211,7 @@ async function liftLegacyGroupStamps(provider) {
     const folders = rv?.folders ?? [];
     for (const folder of folders) {
       if (!folder.targetID) continue;
-      const incoming = Array.isArray(folder.custom?.changelog) ? folder.custom.changelog : [];
+      const incoming = Array.isArray(folder.custom.changelog) ? folder.custom.changelog : [];
 
       // Legacy stored mailing-list X-GOOGLE-* via TbSync's wrapper,
       // which routes mailing-list setProperty calls into TbSync's own
@@ -244,7 +245,7 @@ async function liftLegacyGroupStamps(provider) {
       }
       if (!byParent.size) continue;
 
-      const existing = folder.custom?.groupMap ?? {};
+      const existing = folder.custom.groupMap ?? {};
       const groupMap = { ...existing };
       let lifted = 0;
       for (const [parentId, { resourceName, etag }] of byParent) {
@@ -257,7 +258,7 @@ async function liftLegacyGroupStamps(provider) {
       }
 
       // Strip the consumed legacy entries from the changelog regardless
-      // of whether each pair produced a groupMap entry — they're never
+      // of whether each pair produced a groupMap entry - they're never
       // useful to the new sync code.
       const cleaned = incoming.filter((_, i) => !consumedIdx.has(i));
 
@@ -284,14 +285,14 @@ async function liftLegacyGroupStamps(provider) {
  *  whenever the user toggles the checkbox in the config popup
  *  (`saveAccountFromConfig`). Migrated accounts arrive carrying
  *  `readOnlyMode` in `account.custom` but with folder-level `readOnly`
- *  set only from the legacy per-folder `downloadonly` field — so the
+ *  set only from the legacy per-folder `downloadonly` field - so the
  *  manager's resource list shows pencils when it should show locks.
  *  Idempotent: only writes when the folder's value differs from the
  *  desired one. */
 async function mirrorReadOnlyModeToFolders(provider) {
   const accounts = await provider.listAccounts();
   for (const acc of accounts) {
-    const desired = !!acc.custom?.readOnlyMode;
+    const desired = !!acc.custom.readOnlyMode;
     const rv = await provider.getAccount(acc.accountId);
     const folders = rv?.folders ?? [];
     for (const folder of folders) {
@@ -307,13 +308,13 @@ async function mirrorReadOnlyModeToFolders(provider) {
 
 /** Backfill `account.custom.authenticatedUserEmail` for every account
  *  that has working OAuth credentials but no email on file (legacy
- *  never persisted it). Idempotent — early-returns on each account
+ *  never persisted it). Idempotent - early-returns on each account
  *  that already has the field set. */
 async function backfillAuthenticatedUserEmail(provider) {
   const accounts = await provider.listAccounts();
   for (const acc of accounts) {
-    if (acc.custom?.authenticatedUserEmail) continue;
-    if (!acc.custom?.clientID || !acc.custom?.clientSecret || !acc.custom?.refreshToken) continue;
+    if (acc.custom.authenticatedUserEmail) continue;
+    if (!acc.custom.clientID || !acc.custom.clientSecret || !acc.custom.refreshToken) continue;
     oauth.primeAuth(acc.accountId, {
       clientID: acc.custom.clientID,
       clientSecret: acc.custom.clientSecret,

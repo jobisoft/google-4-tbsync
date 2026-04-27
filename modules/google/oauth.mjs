@@ -1,7 +1,7 @@
 /**
  * Google OAuth 2.0. Two client-type flows:
  *
- *   "desktop" — Google "Desktop App" client. `redirect_uri` is the
+ *   "desktop" - Google "Desktop App" client. `redirect_uri` is the
  *               legacy out-of-band sentinel `urn:ietf:wg:oauth:2.0:oob`.
  *               Driven by a popup window we open ourselves; on success
  *               Google sets the page title to `Success code=…` (and
@@ -10,13 +10,13 @@
  *               exchange it at the token endpoint. No redirect-URI setup
  *               required in the GCP console.
  *
- *   "web"     — Google "Web Application" client. Uses
+ *   "web"     - Google "Web Application" client. Uses
  *               `browser.identity.launchWebAuthFlow` with the loopback
  *               redirect (`http://127.0.0.1/mozoauth2/<subdomain>`).
  *               The user must add that exact URL to the OAuth client's
  *               Authorized redirect URIs in the GCP console.
  *
- * Default is "desktop" — matches the legacy add-on's flow and works
+ * Default is "desktop" - matches the legacy add-on's flow and works
  * without any redirect-URI configuration.
  *
  * Access tokens are cached in-memory per accountId, never persisted.
@@ -38,7 +38,7 @@ const SCOPES = [
   "https://www.googleapis.com/auth/userinfo.email",
 ];
 
-/** Out-of-band redirect — the desktop-client sentinel. Google's consent
+/** Out-of-band redirect - the desktop-client sentinel. Google's consent
  *  page renders the auth code into the page title rather than redirecting
  *  to a real URL. */
 const OOB_REDIRECT_URI = "urn:ietf:wg:oauth:2.0:oob";
@@ -60,8 +60,13 @@ export function primeAuth(accountId, { clientID, clientSecret, refreshToken }) {
   authCache.set(accountId, { clientID, clientSecret, refreshToken });
 }
 
+/** Clear every in-memory token state for the account - both the
+ *  cached access token and the primed clientID/secret/refreshToken
+ *  triple. Callers that disable, delete, or re-credential an account
+ *  call this to drop all OAuth state in one step. */
 export function forgetAuth(accountId) {
   authCache.delete(accountId);
+  accessTokenCache.delete(accountId);
 }
 
 /**
@@ -80,12 +85,12 @@ export function getRedirectURL() {
  * Open the Google consent screen, exchange the code for tokens, and fetch
  * the authenticated user's email.
  *
- * `clientType` defaults to "desktop" — matches the legacy flow and works
+ * `clientType` defaults to "desktop" - matches the legacy flow and works
  * without redirect-URI configuration in the GCP console. "web" uses the
  * `launchWebAuthFlow` loopback path.
  *
  * `loginHint` pre-selects a Google account on the consent screen. Google
- * treats it as a hint, not a lock — the caller must still verify the
+ * treats it as a hint, not a lock - the caller must still verify the
  * returned email matches.
  */
 export async function startAuth({ clientID, clientSecret, loginHint, clientType }) {
@@ -257,7 +262,7 @@ export async function refreshAccessToken({ clientID, clientSecret, refreshToken 
 
 /** Returns a valid access token for the given provider account, refreshing
  *  transparently when needed. Requires `primeAuth(accountId,
- *  {clientID, clientSecret, refreshToken})` to have been called first —
+ *  {clientID, clientSecret, refreshToken})` to have been called first -
  *  callers (provider on* hooks, sync flow) seed that at the top of any
  *  work that hits the People API. */
 export async function getAccessToken(accountId) {
@@ -267,7 +272,7 @@ export async function getAccessToken(accountId) {
   }
   const auth = authCache.get(accountId);
   if (!auth?.clientID || !auth?.clientSecret || !auth?.refreshToken) {
-    throw withCode(new Error("OAuth auth not primed — call primeAuth first"), ERR.AUTH);
+    throw withCode(new Error("OAuth auth not primed - call primeAuth first"), ERR.AUTH);
   }
   const fresh = await refreshAccessToken({
     clientID: auth.clientID,

@@ -14,7 +14,7 @@ var LegacyAbProperties = class extends ExtensionCommon.ExtensionAPI {
          *  X-GOOGLE-RESOURCENAME property in its MAB property bag. The
          *  WebExtension `messenger.contacts.list` API surfaces the card
          *  as a vCard, but legacy google-4-tbsync wrote the stamp via
-         *  the older `card.setProperty(name, value)` interface — those
+         *  the older `card.setProperty(name, value)` interface - those
          *  custom properties are not serialised back to vCard. */
         readGoogleStamps: async (bookId) => {
           const dir = MailServices.ab.getDirectoryFromUID(bookId);

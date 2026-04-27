@@ -1,12 +1,12 @@
 /**
- * Reusable rich dropdown widget — used by setup.html and config.html.
+ * Reusable rich dropdown widget - used by setup.html and config.html.
  *
  * Each option is a {value, label, hint} triple. The trigger shows the
  * currently-selected option's label + hint; clicking opens a panel
  * with the same row format. Keyboard support: ArrowDown/Up navigates,
  * Enter/Space selects, Escape closes. Click-outside closes.
  *
- * Locked mode renders the trigger as `disabled` and never opens — used
+ * Locked mode renders the trigger as `disabled` and never opens - used
  * by the config popup to surface the account type read-only.
  */
 
