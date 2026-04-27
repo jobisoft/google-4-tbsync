@@ -459,7 +459,11 @@ async function runGroupPullPass(ctx, byResourceName, memberMap) {
 
     if (!existing) {
       // Wildcard because mailing lists are not created with a UID.
-      await ctx.markServer(targetID, null, STATUS.ADDED_BY_SERVER, "list");
+      // Pre-tag with the list's name as itemId. mailingLists.create takes
+      // no UID, so we don't know the TB-assigned id yet; the watcher
+      // matches by name on the next onCreated and rewrites the row to a
+      // normal `kind: "list"` entry with the real id.
+      await ctx.markServer(targetID, group.name, STATUS.ADDED_BY_SERVER, "list-by-name");
       const listId = await addressBook.createMailingList(targetID, { name: group.name });
       gMap.set(resourceName, {
         mailingListId: listId, etag: group.etag, groupType: group.groupType,
