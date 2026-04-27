@@ -115,7 +115,7 @@ export async function startAuth({ clientID, clientSecret, loginHint, clientType 
       ERR.AUTH
     );
   }
-  const email = await fetchUserEmail(tokens.access_token).catch(() => null);
+  const email = await fetchUserEmail(tokens.access_token);
 
   return {
     refreshToken: tokens.refresh_token,
@@ -294,13 +294,25 @@ export function primeAccessToken(accountId, token, expiresIn) {
 }
 
 /** Hit /userinfo with the given access token and return the email
- *  address. Used at sign-in and to backfill `authenticatedUserEmail`
- *  for accounts where it isn't on file yet. */
+ *  address. Throws ERR.NETWORK on HTTP failure or if the response has
+ *  no email field — callers rely on the returned value being a string. */
 export async function fetchUserEmail(accessToken) {
   const resp = await fetch(USERINFO_ENDPOINT, {
     headers: { Authorization: `Bearer ${accessToken}` },
   });
-  if (!resp.ok) return null;
+  if (!resp.ok) {
+    const body = await resp.text().catch(() => "");
+    throw withCode(
+      new Error(`userinfo ${resp.status}: ${body.slice(0, 200)}`),
+      ERR.NETWORK
+    );
+  }
   const data = await resp.json();
-  return data.email ?? null;
+  if (!data.email) {
+    throw withCode(
+      new Error("userinfo response missing email field"),
+      ERR.NETWORK
+    );
+  }
+  return data.email;
 }

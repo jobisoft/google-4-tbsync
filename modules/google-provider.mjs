@@ -30,7 +30,7 @@ export class GoogleProvider extends TbSyncProviderImplementation {
       shortName: "google",
       setupPath: "dialogs/setup/setup.html",
       setupWidth: 520,
-      setupHeight: 640,
+      setupHeight: 690,
       configPath: "dialogs/config/config.html",
       configWidth: 520,
       configHeight: 630,
@@ -68,6 +68,10 @@ export class GoogleProvider extends TbSyncProviderImplementation {
     // Prime OAuth auth so the people-api layer can refresh access tokens
     // without re-reading host state mid-sync.
     this.#primeAuth(ctx);
+    // Resource naming requires the authenticated user's email. Fetch and
+    // persist it now; if userinfo can't be reached, abort the sync with an
+    // account-level error rather than producing degraded names downstream.
+    await this.#ensureUserEmail(ctx);
     // Google surfaces a single contacts container - no server-side folder
     // discovery. The host's sync-coordinator proceeds to call onSyncFolder
     // for each selected folder. Dwell 250 ms so the manager can render
@@ -120,15 +124,18 @@ export class GoogleProvider extends TbSyncProviderImplementation {
     // Prime OAuth for this account in case `primeStartupState` hasn't
     // had a chance to (e.g. the account was just created post-setup).
     this.#primeAuth(ctx);
+    // Catch legacy/migrated accounts that arrived without the email on
+    // file. Throws if userinfo can't be reached; the host surfaces that
+    // as an account-level error.
+    await this.#ensureUserEmail(ctx);
     // Re-enable after disable: push a fresh single-folder descriptor. The
     // book itself is created lazily (onFolderEnabled / onSyncFolder) since
-    // the user may enable but not immediately sync. displayName mirrors
-    // the first-setup convention (authenticatedUserEmail if available).
+    // the user may enable but not immediately sync.
     if (ctx.folders.length > 0) return null;
     const folder = {
       folderId: `f-${crypto.randomUUID()}`,
       targetType: "contacts",
-      displayName: ctx.authenticatedUserEmail?.trim() || ctx.account.accountName,
+      displayName: ctx.authenticatedUserEmail.trim(),
       // Mirror the account-level toggle so the ACL icon is correct from
       // the moment the folder is discovered, before the user enables it.
       readOnly: !!ctx.account.custom.readOnlyMode,
@@ -279,7 +286,7 @@ export class GoogleProvider extends TbSyncProviderImplementation {
     const initialFolders = [{
       folderId: `f-${crypto.randomUUID()}`,
       targetType: "contacts",
-      displayName: authenticatedUserEmail?.trim() || trimmedLabel,
+      displayName: authenticatedUserEmail.trim(),
       // Mirrors `custom.readOnlyMode` default below so the ACL indicator
       // and push behavior agree from row zero.
       readOnly: true,
@@ -297,7 +304,7 @@ export class GoogleProvider extends TbSyncProviderImplementation {
         // `oauth.startAuth` treats anything other than "web" as desktop.
         clientType: clientType === "web" ? "web" : "desktop",
         refreshToken,
-        authenticatedUserEmail: authenticatedUserEmail ?? null,
+        authenticatedUserEmail,
         readOnlyMode: true,
         includeSystemContactGroups: false,
       },
@@ -434,6 +441,25 @@ export class GoogleProvider extends TbSyncProviderImplementation {
     oauth.primeAuth(ctx.account.accountId, { clientID, clientSecret, refreshToken });
   }
 
+  /** Guarantee `ctx.authenticatedUserEmail` is populated. If the field is
+   *  already on file, returns immediately. Otherwise hits Google's userinfo
+   *  endpoint, persists the result, and mutates `ctx` so the rest of the
+   *  hook sees it. Throws (ERR.NETWORK or ERR.AUTH) if the email cannot be
+   *  fetched - sync should abort with an account-level error rather than
+   *  produce resources named with a fallback. Caller must have run
+   *  `#primeAuth(ctx)` first. */
+  async #ensureUserEmail(ctx) {
+    if (ctx.authenticatedUserEmail) return;
+    const accountId = ctx.account.accountId;
+    const accessToken = await oauth.getAccessToken(accountId);
+    const email = await oauth.fetchUserEmail(accessToken);
+    await this.updateAccount({
+      accountId,
+      patch: { custom: { authenticatedUserEmail: email } },
+    });
+    ctx.authenticatedUserEmail = email;
+  }
+
   /** Load `{account, folders, authenticatedUserEmail}` for an on* hook.
    *  Returns null if the account doesn't exist or isn't owned by us. */
   async #loadContext(accountId) {
@@ -462,21 +488,15 @@ export class GoogleProvider extends TbSyncProviderImplementation {
 
 // ── Module-local helpers ─────────────────────────────────────────────────
 
-/** Book name for a (re)created Thunderbird address book, picking the most
- *  authoritative source available:
- *
- *    1. The folder's `targetName` - preserved across disable/enable and
- *       carried over from legacy by the host's migration.
- *    2. The folder's `displayName` - set when the folder row was first
- *       pushed by the provider.
- *    3. A computed fallback combining the account name + authenticated
- *       email, so users with multiple Google accounts under the same
- *       label can tell them apart in the Thunderbird sidebar. */
+/** Book name for a (re)created Thunderbird address book. Prefers the
+ *  stored `targetName` (carries across disable/enable and any user
+ *  rename mirrored from the TB UI). Otherwise builds the canonical
+ *  initial form `${accountName} (${email})`. The email is guaranteed
+ *  present by `#ensureUserEmail` running at the top of every sync. */
 function bookNameForFolder(folder, ctx) {
-  const stored = folder?.targetName?.trim?.() || folder?.displayName?.trim?.();
+  const stored = folder?.targetName?.trim?.();
   if (stored) return stored;
-  const email = ctx.authenticatedUserEmail?.trim?.() || null;
-  return email ? `${ctx.account.accountName} (${email})` : ctx.account.accountName;
+  return `${ctx.account.accountName} (${ctx.authenticatedUserEmail})`;
 }
 
 /** `addressBook.deleteBook` with a warn-and-continue catch. */
