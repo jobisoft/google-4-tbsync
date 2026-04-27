@@ -180,6 +180,7 @@ async function liftLegacyStamps(provider) {
           parentId: folder.targetID,
           itemId: contactId,
           status: STATUS_MODIFIED_BY_SERVER,
+          kind: "contact",
         });
         const stampedVCard = mapper.stampIdentity(card.vCard, { resourceName, etag });
         await addressBook.updateContact(contactId, stampedVCard);

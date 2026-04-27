@@ -64,8 +64,8 @@ export async function syncFolderContacts({ accountId, folderId, folder, account,
     accountId, folderId, targetID,
     notify, readOnly, includeSystemGroups,
     gMap, cMap, changelog,
-    markServer: (parentId, itemId, status) =>
-      notify.changelogMarkServerWrite({ accountId, folderId, parentId, itemId, status }),
+    markServer: (parentId, itemId, status, kind) =>
+      notify.changelogMarkServerWrite({ accountId, folderId, parentId, itemId, status, kind }),
     removeEntry: (parentId, itemId) =>
       notify.changelogRemove({ accountId, folderId, parentId, itemId }),
   };
@@ -262,7 +262,7 @@ async function pushModify(ctx, entry) {
     }
     if (err?.code === PUSH_ERR.NOT_FOUND) {
       logDebug(ctx, `push.modify ${identity.resourceName} - server contact gone, deleting local`);
-      await ctx.markServer(entry.parentId, entry.itemId, STATUS.DELETED_BY_SERVER);
+      await ctx.markServer(entry.parentId, entry.itemId, STATUS.DELETED_BY_SERVER, "contact");
       await addressBook.deleteContact(entry.itemId);
       cMap.remove(entry.itemId);
       await ctx.removeEntry(entry.parentId, entry.itemId);
@@ -280,7 +280,7 @@ async function stampLocalCard(ctx, contactId, originalVCard, serverPerson) {
     resourceName: serverPerson.resourceName,
     etag: serverPerson.etag,
   });
-  await ctx.markServer(ctx.targetID, contactId, STATUS.MODIFIED_BY_SERVER);
+  await ctx.markServer(ctx.targetID, contactId, STATUS.MODIFIED_BY_SERVER, "contact");
   await addressBook.updateContact(contactId, stamped);
 }
 
@@ -331,7 +331,7 @@ async function runPullPass(ctx) {
       // UID so the changelog pre-tag can use a concrete itemId.
       const newId = crypto.randomUUID();
       const vCard = mapper.personToVCard(person, newId);
-      await ctx.markServer(targetID, newId, STATUS.ADDED_BY_SERVER);
+      await ctx.markServer(targetID, newId, STATUS.ADDED_BY_SERVER, "contact");
       const createdId = await addressBook.createContact(targetID, vCard);
       if (createdId !== newId) {
         throw new Error(`createContact id mismatch: expected ${newId}, got ${createdId}`);
@@ -342,7 +342,7 @@ async function runPullPass(ctx) {
     } else if (existing.etag !== person.etag) {
       // Pull-update: server's version is newer.
       const vCard = mapper.personToVCard(person);
-      await ctx.markServer(targetID, existing.id, STATUS.MODIFIED_BY_SERVER);
+      await ctx.markServer(targetID, existing.id, STATUS.MODIFIED_BY_SERVER, "contact");
       await addressBook.updateContact(existing.id, vCard);
       updated++;
     } else {
@@ -356,7 +356,7 @@ async function runPullPass(ctx) {
   // Pull-delete: server dropped contacts we still have - mirror locally.
   for (const [resourceName, entry] of byResourceName) {
     if (serverResourceNames.has(resourceName)) continue;
-    await ctx.markServer(targetID, entry.id, STATUS.DELETED_BY_SERVER);
+    await ctx.markServer(targetID, entry.id, STATUS.DELETED_BY_SERVER, "contact");
     await addressBook.deleteContact(entry.id);
     cMap.remove(entry.id);
     byResourceName.delete(resourceName);
@@ -459,7 +459,7 @@ async function runGroupPullPass(ctx, byResourceName, memberMap) {
 
     if (!existing) {
       // Wildcard because mailing lists are not created with a UID.
-      await ctx.markServer(targetID, null, STATUS.ADDED_BY_SERVER);
+      await ctx.markServer(targetID, null, STATUS.ADDED_BY_SERVER, "list");
       const listId = await addressBook.createMailingList(targetID, { name: group.name });
       gMap.set(resourceName, {
         mailingListId: listId, etag: group.etag, groupType: group.groupType,
@@ -468,7 +468,7 @@ async function runGroupPullPass(ctx, byResourceName, memberMap) {
       added++;
     } else if (mapping.etag !== group.etag || existing.name !== group.name) {
       if (existing.name !== group.name) {
-        await ctx.markServer(targetID, existing.id, STATUS.MODIFIED_BY_SERVER);
+        await ctx.markServer(targetID, existing.id, STATUS.MODIFIED_BY_SERVER, "list");
         await addressBook.updateMailingList(existing.id, { name: group.name });
         existing.name = group.name;
       }
@@ -483,7 +483,7 @@ async function runGroupPullPass(ctx, byResourceName, memberMap) {
     if (seen.has(rn)) continue;
     const list = localByListId.get(listId);
     if (list) {
-      await ctx.markServer(targetID, listId, STATUS.DELETED_BY_SERVER);
+      await ctx.markServer(targetID, listId, STATUS.DELETED_BY_SERVER, "list");
       await addressBook.deleteMailingList(listId);
     }
     gMap.remove(rn);

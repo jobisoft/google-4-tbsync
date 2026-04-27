@@ -163,10 +163,16 @@ export class TbSyncProviderImplementation {
   getAccount(accountId)          { return this.#sendCmd(PROVIDER_CMD.GET_ACCOUNT, { accountId }); }
   /** Stamp a `*_by_server` pre-tag on `folder.changelog` so the host's
    *  observer drops the next Thunderbird event for this item as
-   *  self-inflicted (1500 ms freeze). Pass `itemId: null` for creates
-   *  where the TB-assigned id isn't known pre-call. Must be awaited
-   *  BEFORE the actual `messenger.contacts.*` / `messenger.mailingLists.*`
-   *  call so the tag is durable before the event fires. */
+   *  self-inflicted (1500 ms freeze). Args:
+   *    { accountId, folderId, parentId, itemId, status, kind }
+   *  `kind` is `"contact"` | `"list"` and MUST match the kind of the
+   *  event being suppressed (`"contact"` for `messenger.contacts.*`
+   *  calls, `"list"` for `messenger.mailingLists.*`). The watcher uses
+   *  it to filter wildcard matches so a list pre-tag can't be consumed
+   *  by a contact event in the same book (and vice versa). Pass
+   *  `itemId: null` for creates where the TB-assigned id isn't known
+   *  pre-call. Must be awaited BEFORE the actual TB API call so the
+   *  tag is durable before the event fires. */
   changelogMarkServerWrite(args) { return this.#sendCmd(PROVIDER_CMD.CHANGELOG_MARK_SERVER_WRITE, args); }
   /** Remove the changelog entry for `(parentId, itemId)` regardless of
    *  status. Called after successfully pushing a `*_by_user` entry. */
