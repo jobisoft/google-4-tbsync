@@ -163,3 +163,21 @@ document.body.addEventListener("click", e => {
   e.preventDefault();
   messenger.windows.openDefaultBrowser(a.getAttribute("href"));
 });
+
+// ESC closes the dialog; Enter while focused in a text input fires the
+// primary action (when enabled and visible). `defaultPrevented` lets the
+// dropdown's own Escape handler swallow the key when its panel is open.
+document.addEventListener("keydown", e => {
+  if (e.defaultPrevented) return;
+  if (e.key === "Escape") {
+    window.close();
+    return;
+  }
+  if (e.key === "Enter" && e.target?.tagName === "INPUT") {
+    const btn = document.querySelector("button.primary:not([hidden])");
+    if (btn && !btn.disabled) {
+      e.preventDefault();
+      btn.click();
+    }
+  }
+});
