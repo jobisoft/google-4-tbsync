@@ -7,7 +7,7 @@
  *               Google sets the page title to `Success code=…` (and
  *               `Error …` / `Denied …` on failure). We watch
  *               `tabs.onUpdated` for that title, parse the code, and
- *               exchange it at the token endpoint. No redirect-URI setup
+ *               exchange it at the token endpoint. No redirect-URL setup
  *               required in the GCP console.
  *
  *   "web"     - Google "Web Application" client. Uses

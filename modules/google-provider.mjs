@@ -174,23 +174,10 @@ export class GoogleProvider extends TbSyncProviderImplementation {
     return null;
   }
 
-  async onFolderEnabled({ accountId, folderId }) {
-    const ctx = await this.#loadContext(accountId);
-    if (!ctx) throw withCode(new Error("unknown account"), ERR.UNKNOWN_ACCOUNT);
-    const folder = ctx.folders.find(f => f.folderId === folderId);
-    if (!folder) throw withCode(new Error("unknown folder"), ERR.UNKNOWN_FOLDER);
-    // Idempotent: if the book is already present, nothing to do - the
-    // host's watcher is already registered for this targetID via the
-    // folder-row registry.
-    if (folder.targetID && await addressBook.bookExists(folder.targetID)) {
-      return null;
-    }
-    const bookName = bookNameForFolder(folder, ctx);
-    const targetID = await addressBook.createBook(bookName);
-    await this.updateFolder({
-      accountId, folderId,
-      patch: { targetID, targetName: bookName },
-    });
+  async onFolderEnabled() {
+    // No-op: the host flips `selected` on its folder row. The address
+    // book is created lazily by `onSyncFolder` on the next sync, so the
+    // resource list reflects "enabled but not yet synced" until then.
     return null;
   }
 
@@ -211,11 +198,17 @@ export class GoogleProvider extends TbSyncProviderImplementation {
     }
     // Dropping the book invalidates every pending changelog entry and
     // both provider-maintained maps - the TB ids they hold reference
-    // the book we just deleted. Clear in one patch so re-enable starts
-    // fresh.
+    // the book we just deleted. Wipe the sync status fields too so the
+    // resource list doesn't show stale lastSyncTime/error/warning after
+    // re-enable.
     await this.updateFolder({
       accountId, folderId,
-      patch: { custom: { groupMap: {}, contactMap: {}, changelog: [] } },
+      patch: {
+        lastSyncTime: 0,
+        error: null,
+        warning: null,
+        custom: { groupMap: {}, contactMap: {}, changelog: [] },
+      },
     });
     return null;
   }
@@ -357,7 +350,7 @@ export class GoogleProvider extends TbSyncProviderImplementation {
         clientID,
         clientSecret,
         // Persist the chosen flow so re-auth and the config popup know
-        // which redirect-URI / popup-vs-launchWebAuthFlow path to use.
+        // which redirect-URL / popup-vs-launchWebAuthFlow path to use.
         // `oauth.startAuth` treats anything other than "web" as desktop.
         clientType: clientType === "web" ? "web" : "desktop",
         refreshToken,
