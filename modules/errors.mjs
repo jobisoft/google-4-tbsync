@@ -15,6 +15,6 @@ export function stringifyError(err) {
  *  client to signal etag conflict / 404, and by the address-book
  *  wrapper to signal "the underlying TB record is gone". */
 export const PUSH_ERR = {
-  CONFLICT:  "E:CONFLICT",
+  CONFLICT: "E:CONFLICT",
   NOT_FOUND: "E:NOT_FOUND",
 };

@@ -53,7 +53,8 @@ export function compareVersions(a, b) {
   const pa = String(a).split(".").map(Number);
   const pb = String(b).split(".").map(Number);
   for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
-    const x = pa[i] ?? 0, y = pb[i] ?? 0;
+    const x = pa[i] ?? 0,
+      y = pb[i] ?? 0;
     if (x !== y) return x - y;
   }
   return 0;
@@ -91,12 +92,18 @@ export function runUpgrades(provider) {
 
       const remaining = [];
       for (const id of queue) {
-        const upgrade = UPGRADES.find(u => u.id === id);
-        if (!upgrade) continue;  // unknown id - silently drop
+        const upgrade = UPGRADES.find((u) => u.id === id);
+        if (!upgrade) continue; // unknown id - silently drop
         try {
-          provider.reportEventLog({ level: "debug", message: `[upgrade] ${id} starting` });
+          provider.reportEventLog({
+            level: "debug",
+            message: `[upgrade] ${id} starting`,
+          });
           await upgrade.run(provider);
-          provider.reportEventLog({ level: "debug", message: `[upgrade] ${id} done` });
+          provider.reportEventLog({
+            level: "debug",
+            message: `[upgrade] ${id} done`,
+          });
         } catch (err) {
           provider.reportEventLog({
             level: "error",
@@ -109,9 +116,14 @@ export function runUpgrades(provider) {
       await browser.storage.local.set({ [UPGRADE_QUEUE_KEY]: remaining });
     } finally {
       if (lockAcquired) {
-        await provider.setProviderUpgradeLock(false).catch(err =>
-          console.warn("[google-4-tbsync] failed to release upgrade lock:", stringifyError(err))
-        );
+        await provider
+          .setProviderUpgradeLock(false)
+          .catch((err) =>
+            console.warn(
+              "[google-4-tbsync] failed to release upgrade lock:",
+              stringifyError(err),
+            ),
+          );
         provider.reportEventLog({
           level: "debug",
           message: `[upgrade] exiting upgrade mode - sync and account/resource modifications re-enabled`,
@@ -126,13 +138,15 @@ export function runUpgrades(provider) {
 /** Compute the set of upgrades triggered by an update transition and
  *  merge their IDs into the persistent queue. No-op when nothing
  *  applies. Returns the new queue length. */
-export async function enqueueUpgradesForUpdate(previousVersion, currentVersion) {
-  const triggered = UPGRADES
-    .filter(u =>
-      compareVersions(previousVersion, u.splitVersion) < 0
-      && compareVersions(u.splitVersion, currentVersion) <= 0
-    )
-    .map(u => u.id);
+export async function enqueueUpgradesForUpdate(
+  previousVersion,
+  currentVersion,
+) {
+  const triggered = UPGRADES.filter(
+    (u) =>
+      compareVersions(previousVersion, u.splitVersion) < 0 &&
+      compareVersions(u.splitVersion, currentVersion) <= 0,
+  ).map((u) => u.id);
   if (!triggered.length) return 0;
   const rv = await browser.storage.local.get({ [UPGRADE_QUEUE_KEY]: [] });
   const next = Array.from(new Set([...rv[UPGRADE_QUEUE_KEY], ...triggered]));
@@ -158,11 +172,14 @@ async function liftLegacyStamps(provider) {
       if (!folder.targetID) continue;
       let stamps;
       try {
-        stamps = await browser.LegacyAbProperties.readGoogleStamps(folder.targetID);
+        stamps = await browser.LegacyAbProperties.readGoogleStamps(
+          folder.targetID,
+        );
       } catch (err) {
         provider.reportEventLog({
           level: "warning",
-          accountId: acc.accountId, folderId: folder.folderId,
+          accountId: acc.accountId,
+          folderId: folder.folderId,
           message: `[upgrade] readGoogleStamps failed: ${stringifyError(err)}`,
         });
         continue;
@@ -173,7 +190,8 @@ async function liftLegacyStamps(provider) {
       for (const { contactId, resourceName, etag } of stamps) {
         const card = await addressBook.getContact(contactId);
         if (!card?.vCard) continue;
-        if (mapper.readIdentity(card.vCard)?.resourceName === resourceName) continue;
+        if (mapper.readIdentity(card.vCard)?.resourceName === resourceName)
+          continue;
         await provider.changelogMarkServerWrite({
           accountId: acc.accountId,
           folderId: folder.folderId,
@@ -182,13 +200,17 @@ async function liftLegacyStamps(provider) {
           status: STATUS_MODIFIED_BY_SERVER,
           kind: "contact",
         });
-        const stampedVCard = mapper.stampIdentity(card.vCard, { resourceName, etag });
+        const stampedVCard = mapper.stampIdentity(card.vCard, {
+          resourceName,
+          etag,
+        });
         await addressBook.updateContact(contactId, stampedVCard);
         lifted++;
       }
       provider.reportEventLog({
         level: "debug",
-        accountId: acc.accountId, folderId: folder.folderId,
+        accountId: acc.accountId,
+        folderId: folder.folderId,
         message: `[upgrade] lifted ${lifted}/${stamps.length} legacy X-GOOGLE-RESOURCENAME stamp(s) onto vCards`,
       });
     }
@@ -229,11 +251,15 @@ async function liftLegacyGroupStamps(provider) {
       const consumed = [];
       for (const e of incoming) {
         if (e?.itemId !== RESOURCENAME && e?.itemId !== ETAG) continue;
-        if (typeof e.parentId !== "string" || !e.parentId.includes("#")) continue;
+        if (typeof e.parentId !== "string" || !e.parentId.includes("#"))
+          continue;
         let bag = byParent.get(e.parentId);
-        if (!bag) { bag = {}; byParent.set(e.parentId, bag); }
+        if (!bag) {
+          bag = {};
+          byParent.set(e.parentId, bag);
+        }
         if (e.itemId === RESOURCENAME) bag.resourceName = e.status;
-        else                            bag.etag         = e.status;
+        else bag.etag = e.status;
         consumed.push({ parentId: e.parentId, itemId: e.itemId });
       }
       if (!byParent.size) continue;
@@ -272,7 +298,8 @@ async function liftLegacyGroupStamps(provider) {
 
       provider.reportEventLog({
         level: "debug",
-        accountId: acc.accountId, folderId: folder.folderId,
+        accountId: acc.accountId,
+        folderId: folder.folderId,
         message: `[upgrade] lifted ${lifted}/${byParent.size} legacy mailing-list stamp(s) into folder.custom.groupMap (${consumed.length} legacy entries removed from folder.changelog)`,
       });
     }
@@ -314,7 +341,12 @@ async function backfillAuthenticatedUserEmail(provider) {
   const accounts = await provider.listAccounts();
   for (const acc of accounts) {
     if (acc.custom.authenticatedUserEmail) continue;
-    if (!acc.custom.clientID || !acc.custom.clientSecret || !acc.custom.refreshToken) continue;
+    if (
+      !acc.custom.clientID ||
+      !acc.custom.clientSecret ||
+      !acc.custom.refreshToken
+    )
+      continue;
     oauth.primeAuth(acc.accountId, {
       clientID: acc.custom.clientID,
       clientSecret: acc.custom.clientSecret,

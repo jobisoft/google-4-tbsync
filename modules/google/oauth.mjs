@@ -88,7 +88,12 @@ export function getRedirectURL() {
  * treats it as a hint, not a lock - the caller must still verify the
  * returned email matches.
  */
-export async function startAuth({ clientID, clientSecret, loginHint, clientType }) {
+export async function startAuth({
+  clientID,
+  clientSecret,
+  loginHint,
+  clientType,
+}) {
   if (!clientID || !clientSecret) {
     throw withCode(new Error("Missing client ID or client secret"), ERR.AUTH);
   }
@@ -108,11 +113,18 @@ export async function startAuth({ clientID, clientSecret, loginHint, clientType 
     ? await consentViaWebAuthFlow(authUrl.toString())
     : await consentViaPopup(authUrl.toString());
 
-  const tokens = await exchangeCode({ clientID, clientSecret, code, redirectUri });
+  const tokens = await exchangeCode({
+    clientID,
+    clientSecret,
+    code,
+    redirectUri,
+  });
   if (!tokens.refresh_token) {
     throw withCode(
-      new Error("Google did not return a refresh_token. Revoke access at https://myaccount.google.com/permissions and try again."),
-      ERR.AUTH
+      new Error(
+        "Google did not return a refresh_token. Revoke access at https://myaccount.google.com/permissions and try again.",
+      ),
+      ERR.AUTH,
     );
   }
   const email = await fetchUserEmail(tokens.access_token);
@@ -145,7 +157,8 @@ async function consentViaWebAuthFlow(authUrl) {
   const code = parsed.searchParams.get("code");
   const error = parsed.searchParams.get("error");
   if (error) throw withCode(new Error(`Google returned: ${error}`), ERR.AUTH);
-  if (!code) throw withCode(new Error("No authorization code in response"), ERR.AUTH);
+  if (!code)
+    throw withCode(new Error("No authorization code in response"), ERR.AUTH);
   return code;
 }
 
@@ -173,7 +186,11 @@ async function consentViaPopup(authUrl) {
       if (done) return;
       done = true;
       cleanup();
-      try { browser.windows.remove(popup.id); } catch { /* already gone */ }
+      try {
+        browser.windows.remove(popup.id);
+      } catch {
+        /* already gone */
+      }
       fn(value);
     };
 
@@ -188,7 +205,10 @@ async function consentViaPopup(authUrl) {
         const m = /\bcode=([^&\s]+)/.exec(title);
         if (m) finish(resolve, decodeURIComponent(m[1]));
       } else if (/^(Error|Denied)\b/.test(title)) {
-        finish(reject, withCode(new Error(`Google returned: ${title}`), ERR.AUTH));
+        finish(
+          reject,
+          withCode(new Error(`Google returned: ${title}`), ERR.AUTH),
+        );
       }
     };
 
@@ -217,7 +237,10 @@ async function exchangeCode({ clientID, clientSecret, code, redirectUri }) {
   });
   const text = await resp.text().catch(() => "");
   if (!resp.ok) {
-    throw withCode(new Error(`Token exchange failed (${resp.status}): ${text}`), ERR.AUTH);
+    throw withCode(
+      new Error(`Token exchange failed (${resp.status}): ${text}`),
+      ERR.AUTH,
+    );
   }
   try {
     return JSON.parse(text);
@@ -228,7 +251,11 @@ async function exchangeCode({ clientID, clientSecret, code, redirectUri }) {
 
 /** Exchange a refresh_token for a fresh access_token. Throws ERR.AUTH when
  *  Google returns invalid_grant (revoked / expired refresh token). */
-export async function refreshAccessToken({ clientID, clientSecret, refreshToken }) {
+export async function refreshAccessToken({
+  clientID,
+  clientSecret,
+  refreshToken,
+}) {
   const body = new URLSearchParams({
     client_id: clientID,
     client_secret: clientSecret,
@@ -245,7 +272,7 @@ export async function refreshAccessToken({ clientID, clientSecret, refreshToken 
     const isInvalidGrant = resp.status === 400 && /invalid_grant/.test(text);
     throw withCode(
       new Error(`Token refresh failed (${resp.status}): ${text}`),
-      isInvalidGrant ? ERR.AUTH : ERR.NETWORK
+      isInvalidGrant ? ERR.AUTH : ERR.NETWORK,
     );
   }
   try {
@@ -267,7 +294,10 @@ export async function getAccessToken(accountId) {
   }
   const auth = authCache.get(accountId);
   if (!auth?.clientID || !auth?.clientSecret || !auth?.refreshToken) {
-    throw withCode(new Error("OAuth auth not primed - call primeAuth first"), ERR.AUTH);
+    throw withCode(
+      new Error("OAuth auth not primed - call primeAuth first"),
+      ERR.AUTH,
+    );
   }
   const fresh = await refreshAccessToken({
     clientID: auth.clientID,
@@ -295,7 +325,7 @@ export function primeAccessToken(accountId, token, expiresIn) {
 
 /** Hit /userinfo with the given access token and return the email
  *  address. Throws ERR.NETWORK on HTTP failure or if the response has
- *  no email field — callers rely on the returned value being a string. */
+ *  no email field - callers rely on the returned value being a string. */
 export async function fetchUserEmail(accessToken) {
   const resp = await fetch(USERINFO_ENDPOINT, {
     headers: { Authorization: `Bearer ${accessToken}` },
@@ -304,14 +334,14 @@ export async function fetchUserEmail(accessToken) {
     const body = await resp.text().catch(() => "");
     throw withCode(
       new Error(`userinfo ${resp.status}: ${body.slice(0, 200)}`),
-      ERR.NETWORK
+      ERR.NETWORK,
     );
   }
   const data = await resp.json();
   if (!data.email) {
     throw withCode(
       new Error("userinfo response missing email field"),
-      ERR.NETWORK
+      ERR.NETWORK,
     );
   }
   return data.email;

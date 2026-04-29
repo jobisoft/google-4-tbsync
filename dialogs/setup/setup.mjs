@@ -22,7 +22,7 @@ const params = new URLSearchParams(location.search);
 const setupToken = params.get("setupToken");
 
 const TYPE_DESKTOP = "desktop";
-const TYPE_WEB     = "web";
+const TYPE_WEB = "web";
 
 let clientTypeDropdown;
 
@@ -44,15 +44,19 @@ function clearError() {
 
 async function loadLastCredentials() {
   try {
-    const reply = await browser.runtime.sendMessage({ type: "google.getLastCredentials" });
+    const reply = await browser.runtime.sendMessage({
+      type: "google.getLastCredentials",
+    });
     const creds = reply?.ok ? reply.result : null;
     if (creds && typeof creds === "object") {
       lastCredentials = {
         desktop: creds.desktop ?? null,
-        web:     creds.web     ?? null,
+        web: creds.web ?? null,
       };
     }
-  } catch { /* ignore - fields stay blank */ }
+  } catch {
+    /* ignore - fields stay blank */
+  }
   applyCredentialsForType(clientTypeDropdown.getValue());
 }
 
@@ -60,21 +64,28 @@ async function loadLastCredentials() {
  *  given client type, or blank them out when there are none on file. */
 function applyCredentialsForType(type) {
   const creds = lastCredentials[type];
-  document.getElementById("client-id").value     = creds?.clientID     ?? "";
+  document.getElementById("client-id").value = creds?.clientID ?? "";
   document.getElementById("client-secret").value = creds?.clientSecret ?? "";
 }
 
 async function onCopyRedirectURL() {
   const btn = document.getElementById("btn-copy");
   try {
-    const reply = await browser.runtime.sendMessage({ type: "google.getRedirectURL" });
+    const reply = await browser.runtime.sendMessage({
+      type: "google.getRedirectURL",
+    });
     if (!reply?.ok) {
-      throw new Error(reply?.error ?? i18n("setup.error.copyFailed", "Copy failed", "unknown error"));
+      throw new Error(
+        reply?.error ??
+          i18n("setup.error.copyFailed", "Copy failed", "unknown error"),
+      );
     }
     await navigator.clipboard.writeText(reply.result.redirectURL);
     const prior = btn.textContent;
     btn.textContent = i18n("setup.copied", "Copied");
-    setTimeout(() => { btn.textContent = prior; }, 1200);
+    setTimeout(() => {
+      btn.textContent = prior;
+    }, 1200);
   } catch (err) {
     const detail = stringifyError(err);
     showError(i18n("setup.error.copyFailed", `Copy failed: ${detail}`, detail));
@@ -88,16 +99,28 @@ async function onSignIn() {
   const clientSecret = document.getElementById("client-secret").value.trim();
   const clientType = clientTypeDropdown.getValue();
   if (!label) {
-    showError(i18n("setup.error.accountNameRequired", "Please enter an account name."));
+    showError(
+      i18n("setup.error.accountNameRequired", "Please enter an account name."),
+    );
     document.getElementById("account-name").focus();
     return;
   }
   if (!clientID || !clientSecret) {
-    showError(i18n("setup.error.credentialsRequired", "Please enter both the Client ID and the Client secret."));
+    showError(
+      i18n(
+        "setup.error.credentialsRequired",
+        "Please enter both the Client ID and the Client secret.",
+      ),
+    );
     return;
   }
   if (!setupToken) {
-    showError(i18n("setup.error.missingToken", "Missing setup token. Open this window through TbSync."));
+    showError(
+      i18n(
+        "setup.error.missingToken",
+        "Missing setup token. Open this window through TbSync.",
+      ),
+    );
     return;
   }
 
@@ -106,11 +129,19 @@ async function onSignIn() {
   try {
     const reply = await browser.runtime.sendMessage({
       type: "google.authenticate",
-      label, clientID, clientSecret, clientType,
+      label,
+      clientID,
+      clientSecret,
+      clientType,
     });
     if (!reply?.ok) {
-      if (reply?.code === ERR.CANCELLED) { btn.disabled = false; return; }
-      throw new Error(reply?.error ?? i18n("setup.error.signInFailed", "Sign-in failed"));
+      if (reply?.code === ERR.CANCELLED) {
+        btn.disabled = false;
+        return;
+      }
+      throw new Error(
+        reply?.error ?? i18n("setup.error.signInFailed", "Sign-in failed"),
+      );
     }
 
     await browser.runtime.sendMessage({
@@ -139,12 +170,12 @@ clientTypeDropdown = createDropdown(document.getElementById("client-type"), {
     {
       value: TYPE_WEB,
       label: i18n("setup.clientType.web", "Web OAuth Client"),
-      hint:  i18n("setup.clientType.web.hint", ""),
+      hint: i18n("setup.clientType.web.hint", ""),
     },
     {
       value: TYPE_DESKTOP,
       label: i18n("setup.clientType.desktop", "Desktop OAuth Client"),
-      hint:  i18n("setup.clientType.desktop.hint", ""),
+      hint: i18n("setup.clientType.desktop.hint", ""),
     },
   ],
   value: TYPE_WEB,
@@ -153,11 +184,15 @@ clientTypeDropdown = createDropdown(document.getElementById("client-type"), {
 applyClientType(clientTypeDropdown.getValue());
 
 loadLastCredentials();
-document.getElementById("btn-copy").addEventListener("click", onCopyRedirectURL);
-document.getElementById("btn-cancel").addEventListener("click", () => window.close());
+document
+  .getElementById("btn-copy")
+  .addEventListener("click", onCopyRedirectURL);
+document
+  .getElementById("btn-cancel")
+  .addEventListener("click", () => window.close());
 document.getElementById("btn-sign-in").addEventListener("click", onSignIn);
 
-document.body.addEventListener("click", e => {
+document.body.addEventListener("click", (e) => {
   const a = e.target.closest("a[data-link-target='browser']");
   if (!a) return;
   e.preventDefault();
@@ -167,7 +202,7 @@ document.body.addEventListener("click", e => {
 // ESC closes the dialog; Enter while focused in a text input fires the
 // primary action (when enabled and visible). `defaultPrevented` lets the
 // dropdown's own Escape handler swallow the key when its panel is open.
-document.addEventListener("keydown", e => {
+document.addEventListener("keydown", (e) => {
   if (e.defaultPrevented) return;
   if (e.key === "Escape") {
     window.close();

@@ -32,7 +32,9 @@ const params = new URLSearchParams(location.search);
 const accountId = params.get("accountId");
 const readOnly = params.get("readOnly") === "1";
 
-function $(id) { return document.getElementById(id); }
+function $(id) {
+  return document.getElementById(id);
+}
 
 function showError(message) {
   const el = $("error");
@@ -48,12 +50,20 @@ function clearBanners() {
 
 async function load() {
   if (!accountId) {
-    showError(i18n("config.error.missingAccountId", "Missing account identifier."));
+    showError(
+      i18n("config.error.missingAccountId", "Missing account identifier."),
+    );
     return;
   }
-  const reply = await browser.runtime.sendMessage({ type: "google.getAccount", accountId });
+  const reply = await browser.runtime.sendMessage({
+    type: "google.getAccount",
+    accountId,
+  });
   if (!reply?.ok) {
-    showError(reply?.error ?? i18n("config.error.loadFailed", "Failed to load account."));
+    showError(
+      reply?.error ??
+        i18n("config.error.loadFailed", "Failed to load account."),
+    );
     return;
   }
   const account = reply.result;
@@ -72,12 +82,12 @@ async function load() {
       {
         value: "web",
         label: i18n("setup.clientType.web", "Web OAuth Client"),
-        hint:  i18n("setup.clientType.web.hint", ""),
+        hint: i18n("setup.clientType.web.hint", ""),
       },
       {
         value: "desktop",
         label: i18n("setup.clientType.desktop", "Desktop OAuth Client"),
-        hint:  i18n("setup.clientType.desktop.hint", ""),
+        hint: i18n("setup.clientType.desktop.hint", ""),
       },
     ],
     value: account.clientType === "web" ? "web" : "desktop",
@@ -90,12 +100,21 @@ async function load() {
 function applyReadOnly() {
   const banner = $("readonly-banner");
   if (readOnly) {
-    banner.textContent = i18n("config.readOnlyBanner", "To prevent synchronization errors, settings cannot be edited while the account is enabled.");
+    banner.textContent = i18n(
+      "config.readOnlyBanner",
+      "To prevent synchronization errors, settings cannot be edited while the account is enabled.",
+    );
     banner.classList.add("visible");
   } else {
     banner.classList.remove("visible");
   }
-  for (const id of ["account-name", "client-id", "client-secret", "read-only-mode", "include-system-groups"]) {
+  for (const id of [
+    "account-name",
+    "client-id",
+    "client-secret",
+    "read-only-mode",
+    "include-system-groups",
+  ]) {
     $(id).disabled = readOnly;
   }
   // Hide the secret field entirely while locked - it's blank by design,
@@ -116,7 +135,9 @@ async function onSave() {
 
   const accountName = $("account-name").value.trim();
   if (!accountName) {
-    showError(i18n("config.error.accountNameRequired", "Account name is required."));
+    showError(
+      i18n("config.error.accountNameRequired", "Account name is required."),
+    );
     return;
   }
   const clientID = $("client-id").value.trim();
@@ -138,9 +159,15 @@ async function onSave() {
 
   $("btn-save").disabled = true;
   try {
-    const reply = await browser.runtime.sendMessage({ type: "google.saveAccount", accountId, patch });
+    const reply = await browser.runtime.sendMessage({
+      type: "google.saveAccount",
+      accountId,
+      patch,
+    });
     if (!reply?.ok) {
-      throw new Error(reply?.error ?? i18n("config.error.saveFailed", "Save failed"));
+      throw new Error(
+        reply?.error ?? i18n("config.error.saveFailed", "Save failed"),
+      );
     }
     window.close();
   } catch (err) {
@@ -157,7 +184,7 @@ $("btn-save").addEventListener("click", onSave);
 // ESC closes the dialog; Enter while focused in a text input fires the
 // primary action (when enabled and visible). `defaultPrevented` lets the
 // dropdown's own Escape handler swallow the key when its panel is open.
-document.addEventListener("keydown", e => {
+document.addEventListener("keydown", (e) => {
   if (e.defaultPrevented) return;
   if (e.key === "Escape") {
     window.close();

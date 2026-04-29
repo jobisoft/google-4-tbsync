@@ -3,7 +3,7 @@
 "use strict";
 
 var { MailServices } = ChromeUtils.importESModule(
-  "resource:///modules/MailServices.sys.mjs"
+  "resource:///modules/MailServices.sys.mjs",
 );
 
 var LegacyAbProperties = class extends ExtensionCommon.ExtensionAPI {
@@ -35,7 +35,6 @@ var LegacyAbProperties = class extends ExtensionCommon.ExtensionAPI {
           }
           return out;
         },
-
       },
     };
   }

@@ -14,7 +14,10 @@
  */
 
 import {
-  ERR, withCode, error, ok,
+  ERR,
+  withCode,
+  error,
+  ok,
   TbSyncProviderImplementation,
 } from "../vendor/tbsync/provider.mjs";
 import * as oauth from "./google/oauth.mjs";
@@ -51,7 +54,9 @@ export class GoogleProvider extends TbSyncProviderImplementation {
 
   /** Nothing to persist locally after registration - the host's accountId
    *  is the only identity we need and is looked up via getAccount(). */
-  async onRegisterSuccessful() { return null; }
+  async onRegisterSuccessful() {
+    return null;
+  }
 
   /** Fired by the base class the first time the host opens the port (and on
    *  every subsequent reconnect). Safe to call more than once - priming is
@@ -77,15 +82,16 @@ export class GoogleProvider extends TbSyncProviderImplementation {
     // for each selected folder. Dwell 250 ms so the manager can render
     // the "Preparing…" transition.
     this.reportSyncState({ accountId, syncState: "prepare" });
-    await new Promise(r => setTimeout(r, DEBUG_STATUS_DELAY_MS));
+    await new Promise((r) => setTimeout(r, DEBUG_STATUS_DELAY_MS));
     return ok();
   }
 
   async onSyncFolder({ accountId, folderId }) {
     const ctx = await this.#loadContext(accountId);
     if (!ctx) throw withCode(new Error("unknown account"), ERR.UNKNOWN_ACCOUNT);
-    const folder = ctx.folders.find(f => f.folderId === folderId);
-    if (!folder) throw withCode(new Error("unknown folder"), ERR.UNKNOWN_FOLDER);
+    const folder = ctx.folders.find((f) => f.folderId === folderId);
+    if (!folder)
+      throw withCode(new Error("unknown folder"), ERR.UNKNOWN_FOLDER);
 
     this.#primeAuth(ctx);
 
@@ -97,7 +103,8 @@ export class GoogleProvider extends TbSyncProviderImplementation {
       const bookName = bookNameForFolder(folder, ctx);
       targetID = await addressBook.createBook(bookName);
       await this.updateFolder({
-        accountId, folderId,
+        accountId,
+        folderId,
         patch: { targetID, targetName: bookName },
       });
     }
@@ -114,7 +121,9 @@ export class GoogleProvider extends TbSyncProviderImplementation {
     });
   }
 
-  async onCancelSync(_args) { return null; }
+  async onCancelSync(_args) {
+    return null;
+  }
 
   // ── Account / folder lifecycle ─────────────────────────────────────────
 
@@ -180,14 +189,16 @@ export class GoogleProvider extends TbSyncProviderImplementation {
   async onFolderDisabled({ accountId, folderId }) {
     const ctx = await this.#loadContext(accountId);
     if (!ctx) throw withCode(new Error("unknown account"), ERR.UNKNOWN_ACCOUNT);
-    const folder = ctx.folders.find(f => f.folderId === folderId);
-    if (!folder) throw withCode(new Error("unknown folder"), ERR.UNKNOWN_FOLDER);
+    const folder = ctx.folders.find((f) => f.folderId === folderId);
+    if (!folder)
+      throw withCode(new Error("unknown folder"), ERR.UNKNOWN_FOLDER);
     if (folder.targetID) {
       // Drop the targetID first so the host's watcher stops listening
       // before we delete the book (otherwise each cascading onDeleted
       // event from the book teardown would be logged as a user delete).
       await this.updateFolder({
-        accountId, folderId,
+        accountId,
+        folderId,
         patch: { targetID: null, targetName: null },
       });
       await safeDeleteBook(folder.targetID);
@@ -196,7 +207,8 @@ export class GoogleProvider extends TbSyncProviderImplementation {
     // book we just deleted. The host wipes the changelog and the
     // universal sync-status fields itself in `setFolderSelected`.
     await this.updateFolder({
-      accountId, folderId,
+      accountId,
+      folderId,
       patch: { custom: { groupMap: {}, contactMap: {} } },
     });
     return null;
@@ -211,7 +223,7 @@ export class GoogleProvider extends TbSyncProviderImplementation {
     return ctx.folders
       .slice()
       .sort((a, b) => (a.orderIndex ?? 0) - (b.orderIndex ?? 0))
-      .map(f => ({
+      .map((f) => ({
         folderId: f.folderId,
         targetType: f.targetType ?? "contacts",
         displayName: f.displayName,
@@ -242,23 +254,35 @@ export class GoogleProvider extends TbSyncProviderImplementation {
           clientType,
           loginHint: ctx.authenticatedUserEmail,
         });
-      if (ctx.authenticatedUserEmail && authenticatedUserEmail &&
-          ctx.authenticatedUserEmail !== authenticatedUserEmail) {
+      if (
+        ctx.authenticatedUserEmail &&
+        authenticatedUserEmail &&
+        ctx.authenticatedUserEmail !== authenticatedUserEmail
+      ) {
         return error(
           `Signed-in user (${authenticatedUserEmail}) does not match the account's Google address (${ctx.authenticatedUserEmail}).`,
-          ERR.AUTH
+          ERR.AUTH,
         );
       }
-      const nextEmail = authenticatedUserEmail ?? ctx.authenticatedUserEmail ?? null;
+      const nextEmail =
+        authenticatedUserEmail ?? ctx.authenticatedUserEmail ?? null;
       await this.updateAccount({
         accountId,
         patch: { custom: { refreshToken, authenticatedUserEmail: nextEmail } },
       });
-      oauth.primeAuth(ctx.account.accountId, { clientID, clientSecret, refreshToken });
-      if (accessToken) oauth.primeAccessToken(ctx.account.accountId, accessToken, expiresIn);
+      oauth.primeAuth(ctx.account.accountId, {
+        clientID,
+        clientSecret,
+        refreshToken,
+      });
+      if (accessToken)
+        oauth.primeAccessToken(ctx.account.accountId, accessToken, expiresIn);
       return ok();
     } catch (err) {
-      return error(err.message ?? "Re-authentication failed", err.code ?? ERR.AUTH);
+      return error(
+        err.message ?? "Re-authentication failed",
+        err.code ?? ERR.AUTH,
+      );
     }
   }
 
@@ -274,24 +298,37 @@ export class GoogleProvider extends TbSyncProviderImplementation {
    *  the page posts `tbsync-setup-completed`. The OAuth cache is primed
    *  by `primeStartupState` on the next port-open, keyed by the host's
    *  fresh accountId. */
-  async authenticateAndCreateAccount({ label, clientID, clientSecret, clientType }) {
-    const { refreshToken, authenticatedUserEmail } =
-      await oauth.startAuth({ clientID, clientSecret, clientType });
+  async authenticateAndCreateAccount({
+    label,
+    clientID,
+    clientSecret,
+    clientType,
+  }) {
+    const { refreshToken, authenticatedUserEmail } = await oauth.startAuth({
+      clientID,
+      clientSecret,
+      clientType,
+    });
 
     const trimmedLabel = (label ?? "").trim();
     if (!trimmedLabel) {
-      throw withCode(new Error("Account name is required"), ERR.UNKNOWN_ACCOUNT);
+      throw withCode(
+        new Error("Account name is required"),
+        ERR.UNKNOWN_ACCOUNT,
+      );
     }
 
-    const initialFolders = [{
-      folderId: `f-${crypto.randomUUID()}`,
-      targetType: "contacts",
-      displayName: authenticatedUserEmail.trim(),
-      // Mirrors `custom.readOnlyMode` default below so the ACL indicator
-      // and push behavior agree from row zero.
-      readOnly: true,
-      selected: false,
-    }];
+    const initialFolders = [
+      {
+        folderId: `f-${crypto.randomUUID()}`,
+        targetType: "contacts",
+        displayName: authenticatedUserEmail.trim(),
+        // Mirrors `custom.readOnlyMode` default below so the ACL indicator
+        // and push behavior agree from row zero.
+        readOnly: true,
+        selected: false,
+      },
+    ];
 
     return {
       accountName: trimmedLabel,
@@ -318,13 +355,16 @@ export class GoogleProvider extends TbSyncProviderImplementation {
   async getLastCredentials() {
     const list = await this.listAccounts();
     const sorted = list
-      .filter(a => a.custom.clientID && a.custom.clientSecret)
+      .filter((a) => a.custom.clientID && a.custom.clientSecret)
       .sort((a, b) => (b.lastSyncTime ?? 0) - (a.lastSyncTime ?? 0));
     const out = { desktop: null, web: null };
     for (const acc of sorted) {
       const type = acc.custom.clientType === "web" ? "web" : "desktop";
       if (out[type]) continue;
-      out[type] = { clientID: acc.custom.clientID, clientSecret: acc.custom.clientSecret };
+      out[type] = {
+        clientID: acc.custom.clientID,
+        clientSecret: acc.custom.clientSecret,
+      };
       if (out.desktop && out.web) break;
     }
     return out;
@@ -343,7 +383,8 @@ export class GoogleProvider extends TbSyncProviderImplementation {
       // from the legacy era, which only supported "desktop".
       clientType: ctx.account.custom.clientType === "web" ? "web" : "desktop",
       readOnlyMode: !!ctx.account.custom.readOnlyMode,
-      includeSystemContactGroups: !!ctx.account.custom.includeSystemContactGroups,
+      includeSystemContactGroups:
+        !!ctx.account.custom.includeSystemContactGroups,
     };
   }
 
@@ -367,12 +408,17 @@ export class GoogleProvider extends TbSyncProviderImplementation {
     const customPatch = {};
     if ("accountName" in patch) {
       const trimmed = String(patch.accountName ?? "").trim();
-      if (!trimmed) throw withCode(new Error("Account name is required"), ERR.UNKNOWN_ACCOUNT);
+      if (!trimmed)
+        throw withCode(
+          new Error("Account name is required"),
+          ERR.UNKNOWN_ACCOUNT,
+        );
       topLevelPatch.accountName = trimmed;
     }
     if ("clientID" in patch) {
       const trimmed = String(patch.clientID ?? "").trim();
-      if (!trimmed) throw withCode(new Error("Client ID is required"), ERR.AUTH);
+      if (!trimmed)
+        throw withCode(new Error("Client ID is required"), ERR.AUTH);
       customPatch.clientID = trimmed;
     }
     if ("clientSecret" in patch) {
@@ -388,8 +434,10 @@ export class GoogleProvider extends TbSyncProviderImplementation {
     // what's on disk. Invalidate refresh token + cached email so the
     // user re-authenticates.
     const credsChanged =
-      ("clientID"     in customPatch && customPatch.clientID     !== ctx.account.custom.clientID) ||
-      ("clientSecret" in customPatch && customPatch.clientSecret !== ctx.account.custom.clientSecret);
+      ("clientID" in customPatch &&
+        customPatch.clientID !== ctx.account.custom.clientID) ||
+      ("clientSecret" in customPatch &&
+        customPatch.clientSecret !== ctx.account.custom.clientSecret);
     if (credsChanged) {
       customPatch.refreshToken = null;
       customPatch.authenticatedUserEmail = null;
@@ -405,9 +453,15 @@ export class GoogleProvider extends TbSyncProviderImplementation {
     // Mirror onto each folder so the ACL column is updated.
     if ("readOnlyMode" in patch) {
       const readOnly = !!patch.readOnlyMode;
-      await Promise.all(ctx.folders.map(f =>
-        this.updateFolder({ accountId, folderId: f.folderId, patch: { readOnly } })
-      ));
+      await Promise.all(
+        ctx.folders.map((f) =>
+          this.updateFolder({
+            accountId,
+            folderId: f.folderId,
+            patch: { readOnly },
+          }),
+        ),
+      );
     }
     return null;
   }
@@ -438,7 +492,11 @@ export class GoogleProvider extends TbSyncProviderImplementation {
   #primeAuth(ctx) {
     const { clientID, clientSecret, refreshToken } = ctx.account.custom ?? {};
     if (!clientID || !clientSecret || !refreshToken) return;
-    oauth.primeAuth(ctx.account.accountId, { clientID, clientSecret, refreshToken });
+    oauth.primeAuth(ctx.account.accountId, {
+      clientID,
+      clientSecret,
+      refreshToken,
+    });
   }
 
   /** Guarantee `ctx.authenticatedUserEmail` is populated. If the field is
@@ -506,7 +564,7 @@ async function safeDeleteBook(targetID) {
   } catch (err) {
     console.warn(
       `[google-4-tbsync] could not delete address book ${targetID}:`,
-      stringifyError(err)
+      stringifyError(err),
     );
   }
 }

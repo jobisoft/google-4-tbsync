@@ -23,12 +23,12 @@ import { DEBUG_STATUS_DELAY_MS } from "../debug.mjs";
 import { stringifyError, PUSH_ERR } from "../errors.mjs";
 
 const STATUS = {
-  ADDED_BY_USER:      "added_by_user",
-  MODIFIED_BY_USER:   "modified_by_user",
-  DELETED_BY_USER:    "deleted_by_user",
-  ADDED_BY_SERVER:    "added_by_server",
+  ADDED_BY_USER: "added_by_user",
+  MODIFIED_BY_USER: "modified_by_user",
+  DELETED_BY_USER: "deleted_by_user",
+  ADDED_BY_SERVER: "added_by_server",
   MODIFIED_BY_SERVER: "modified_by_server",
-  DELETED_BY_SERVER:  "deleted_by_server",
+  DELETED_BY_SERVER: "deleted_by_server",
 };
 const SYSTEM_GROUP = "SYSTEM_CONTACT_GROUP";
 
@@ -47,7 +47,13 @@ function logDebug(ctx, message, details) {
   });
 }
 
-export async function syncFolderContacts({ accountId, folderId, folder, account, notify }) {
+export async function syncFolderContacts({
+  accountId,
+  folderId,
+  folder,
+  account,
+  notify,
+}) {
   const targetID = folder?.targetID;
   const readOnly = !!account?.custom.readOnlyMode;
   const includeSystemGroups = !!account?.custom.includeSystemContactGroups;
@@ -61,11 +67,24 @@ export async function syncFolderContacts({ accountId, folderId, folder, account,
   // call we make must be preceded by a *_by_server entry so the host
   // observer drops the resulting TB event as self-inflicted.
   const ctx = {
-    accountId, folderId, targetID,
-    notify, readOnly, includeSystemGroups,
-    gMap, cMap, changelog,
+    accountId,
+    folderId,
+    targetID,
+    notify,
+    readOnly,
+    includeSystemGroups,
+    gMap,
+    cMap,
+    changelog,
     markServer: (parentId, itemId, status, kind) =>
-      notify.changelogMarkServerWrite({ accountId, folderId, parentId, itemId, status, kind }),
+      notify.changelogMarkServerWrite({
+        accountId,
+        folderId,
+        parentId,
+        itemId,
+        status,
+        kind,
+      }),
     removeEntry: (parentId, itemId) =>
       notify.changelogRemove({ accountId, folderId, parentId, itemId }),
   };
@@ -79,9 +98,14 @@ export async function syncFolderContacts({ accountId, folderId, folder, account,
     // pick up where we left off. Log on failure so a broken flush doesn't
     // silently accumulate drift. The host writes folder.error / account.error
     // from the thrown code; we only need to rethrow.
-    await flushMaps(notify, accountId, folderId, gMap, cMap).catch(flushErr => {
-      console.warn("[google-4-tbsync] flushMaps during error handling failed:", stringifyError(flushErr));
-    });
+    await flushMaps(notify, accountId, folderId, gMap, cMap).catch(
+      (flushErr) => {
+        console.warn(
+          "[google-4-tbsync] flushMaps during error handling failed:",
+          stringifyError(flushErr),
+        );
+      },
+    );
     throw err;
   }
 }
@@ -91,7 +115,11 @@ async function flushMaps(notify, accountId, folderId, gMap, cMap) {
   if (gMap.dirty) customPatch.groupMap = gMap.toJSON();
   if (cMap.dirty) customPatch.contactMap = cMap.toJSON();
   if (!Object.keys(customPatch).length) return;
-  await notify.updateFolder({ accountId, folderId, patch: { custom: customPatch } });
+  await notify.updateFolder({
+    accountId,
+    folderId,
+    patch: { custom: customPatch },
+  });
   gMap.dirty = false;
   cMap.dirty = false;
 }
@@ -101,10 +129,11 @@ async function flushMaps(notify, accountId, folderId, gMap, cMap) {
 async function runFolderSync(ctx) {
   const { notify, accountId, folderId, readOnly, changelog } = ctx;
 
-  const userEntries = changelog.filter(e =>
-    e.status === STATUS.ADDED_BY_USER ||
-    e.status === STATUS.MODIFIED_BY_USER ||
-    e.status === STATUS.DELETED_BY_USER
+  const userEntries = changelog.filter(
+    (e) =>
+      e.status === STATUS.ADDED_BY_USER ||
+      e.status === STATUS.MODIFIED_BY_USER ||
+      e.status === STATUS.DELETED_BY_USER,
   );
   logDebug(ctx, `changelog: ${userEntries.length} pending user entries`);
 
@@ -112,7 +141,9 @@ async function runFolderSync(ctx) {
   let pushCounts = { added: 0, updated: 0, deleted: 0, conflicts: 0 };
   if (readOnly) {
     notify.reportEventLog({
-      accountId, folderId, level: "warning",
+      accountId,
+      folderId,
+      level: "warning",
       message: "Push skipped (read-only mode)",
     });
   } else {
@@ -125,7 +156,11 @@ async function runFolderSync(ctx) {
   // 3. Push-delete reconciliation - user-deleted cards whose resourceName
   //    is still on the server.
   if (!readOnly) {
-    const deleteStats = await runPushDeletePass(ctx, userEntries, pull.serverResourceNames);
+    const deleteStats = await runPushDeletePass(
+      ctx,
+      userEntries,
+      pull.serverResourceNames,
+    );
     pushCounts.deleted = deleteStats.deleted;
   }
 
@@ -138,8 +173,12 @@ async function runFolderSync(ctx) {
   if (!ctx.readOnly) {
     groupPushAddMod = await runGroupPushAddModifyPass(ctx, userEntries);
   }
-  const groupCounts = await runGroupPullPass(ctx, pull.byResourceName, pull.memberMap);
-  groupCounts.added   += groupPushAddMod.added;
+  const groupCounts = await runGroupPullPass(
+    ctx,
+    pull.byResourceName,
+    pull.memberMap,
+  );
+  groupCounts.added += groupPushAddMod.added;
   groupCounts.updated += groupPushAddMod.updated;
   if (!ctx.readOnly) {
     const groupDelCounts = await runGroupPushDeletePass(ctx, userEntries);
@@ -147,7 +186,7 @@ async function runFolderSync(ctx) {
   }
 
   notify.reportSyncState({ accountId, folderId, syncState: "sync" });
-  await new Promise(r => setTimeout(r, DEBUG_STATUS_DELAY_MS));
+  await new Promise((r) => setTimeout(r, DEBUG_STATUS_DELAY_MS));
 
   const pushSummary = readOnly
     ? "push skipped (read-only)"
@@ -156,7 +195,12 @@ async function runFolderSync(ctx) {
   const groupSummary = `groups: ${groupCounts.added}+${groupCounts.updated} ↓, ${groupCounts.deleted} delete; members: ${groupCounts.membersAdded}+${groupCounts.membersRemoved}`;
   const summary = `${pushSummary}; ${pullSummary}; ${groupSummary}`;
 
-  if (pull.itemsTotal === 0 && pull.localCount > 0 && pull.added === 0 && pull.updated === 0) {
+  if (
+    pull.itemsTotal === 0 &&
+    pull.localCount > 0 &&
+    pull.added === 0 &&
+    pull.updated === 0
+  ) {
     return warning("Server returned 0 contacts", summary);
   }
   return ok(summary);
@@ -167,29 +211,38 @@ async function runFolderSync(ctx) {
 async function runPushAddModifyPass(ctx, userEntries) {
   const { notify, accountId, folderId } = ctx;
   notify.reportSyncState({ accountId, folderId, syncState: "sync" });
-  await new Promise(r => setTimeout(r, DEBUG_STATUS_DELAY_MS));
+  await new Promise((r) => setTimeout(r, DEBUG_STATUS_DELAY_MS));
 
   // Contact entries only; groups handled in the groups pass.
-  const entries = userEntries.filter(e => isContactEntry(e));
-  const actionable = entries.filter(e =>
-    e.status === STATUS.ADDED_BY_USER || e.status === STATUS.MODIFIED_BY_USER
+  const entries = userEntries.filter((e) => isContactEntry(e));
+  const actionable = entries.filter(
+    (e) =>
+      e.status === STATUS.ADDED_BY_USER || e.status === STATUS.MODIFIED_BY_USER,
   );
 
-  let added = 0, updated = 0, conflicts = 0;
+  let added = 0,
+    updated = 0,
+    conflicts = 0;
   const total = actionable.length;
   if (total > 0) {
-    notify.reportProgress({ accountId, folderId, itemsDone: 0, itemsTotal: total });
-    await new Promise(r => setTimeout(r, DEBUG_STATUS_DELAY_MS));
+    notify.reportProgress({
+      accountId,
+      folderId,
+      itemsDone: 0,
+      itemsTotal: total,
+    });
+    await new Promise((r) => setTimeout(r, DEBUG_STATUS_DELAY_MS));
   }
   let done = 0;
 
   for (const entry of actionable) {
     try {
-      const outcome = entry.status === STATUS.ADDED_BY_USER
-        ? await pushAdd(ctx, entry)
-        : await pushModify(ctx, entry);
-      if (outcome === "added")    added++;
-      if (outcome === "updated")  updated++;
+      const outcome =
+        entry.status === STATUS.ADDED_BY_USER
+          ? await pushAdd(ctx, entry)
+          : await pushModify(ctx, entry);
+      if (outcome === "added") added++;
+      if (outcome === "updated") updated++;
       if (outcome === "conflict") conflicts++;
     } catch (err) {
       // Leave entry in the changelog - next sync retries.
@@ -201,8 +254,13 @@ async function runPushAddModifyPass(ctx, userEntries) {
       });
     }
     done++;
-    notify.reportProgress({ accountId, folderId, itemsDone: done, itemsTotal: total });
-    await new Promise(r => setTimeout(r, DEBUG_STATUS_DELAY_MS));
+    notify.reportProgress({
+      accountId,
+      folderId,
+      itemsDone: done,
+      itemsTotal: total,
+    });
+    await new Promise((r) => setTimeout(r, DEBUG_STATUS_DELAY_MS));
   }
   return { added, updated, deleted: 0, conflicts };
 }
@@ -219,7 +277,10 @@ async function pushAdd(ctx, entry) {
   const person = mapper.vCardToPerson(local.vCard);
   logDebug(ctx, `push.add ${entry.itemId} - creating on Google`);
   const serverPerson = await peopleApi.createContact(accountId, person);
-  logDebug(ctx, `push.add ${entry.itemId} - server resourceName=${serverPerson.resourceName}`);
+  logDebug(
+    ctx,
+    `push.add ${entry.itemId} - server resourceName=${serverPerson.resourceName}`,
+  );
   await stampLocalCard(ctx, entry.itemId, local.vCard, serverPerson);
   cMap.set(entry.itemId, serverPerson.resourceName);
   await ctx.removeEntry(entry.parentId, entry.itemId);
@@ -237,7 +298,10 @@ async function pushModify(ctx, entry) {
   if (!identity?.resourceName) {
     // No server identity yet - treat as a late add.
     const person = mapper.vCardToPerson(local.vCard);
-    logDebug(ctx, `push.modify ${entry.itemId} - no server identity, creating instead`);
+    logDebug(
+      ctx,
+      `push.modify ${entry.itemId} - no server identity, creating instead`,
+    );
     const serverPerson = await peopleApi.createContact(accountId, person);
     await stampLocalCard(ctx, entry.itemId, local.vCard, serverPerson);
     cMap.set(entry.itemId, serverPerson.resourceName);
@@ -248,7 +312,10 @@ async function pushModify(ctx, entry) {
   logDebug(ctx, `push.modify ${identity.resourceName}`);
   try {
     const serverPerson = await peopleApi.updateContact(
-      accountId, identity.resourceName, person, identity.etag
+      accountId,
+      identity.resourceName,
+      person,
+      identity.etag,
     );
     await stampLocalCard(ctx, entry.itemId, local.vCard, serverPerson);
     cMap.set(entry.itemId, serverPerson.resourceName);
@@ -256,13 +323,24 @@ async function pushModify(ctx, entry) {
     return "updated";
   } catch (err) {
     if (err?.code === PUSH_ERR.CONFLICT) {
-      logDebug(ctx, `push.modify ${identity.resourceName} - CONFLICT, dropping (pull will reconcile)`);
+      logDebug(
+        ctx,
+        `push.modify ${identity.resourceName} - CONFLICT, dropping (pull will reconcile)`,
+      );
       await ctx.removeEntry(entry.parentId, entry.itemId);
       return "conflict";
     }
     if (err?.code === PUSH_ERR.NOT_FOUND) {
-      logDebug(ctx, `push.modify ${identity.resourceName} - server contact gone, deleting local`);
-      await ctx.markServer(entry.parentId, entry.itemId, STATUS.DELETED_BY_SERVER, "contact");
+      logDebug(
+        ctx,
+        `push.modify ${identity.resourceName} - server contact gone, deleting local`,
+      );
+      await ctx.markServer(
+        entry.parentId,
+        entry.itemId,
+        STATUS.DELETED_BY_SERVER,
+        "contact",
+      );
       await addressBook.deleteContact(entry.itemId);
       cMap.remove(entry.itemId);
       await ctx.removeEntry(entry.parentId, entry.itemId);
@@ -280,7 +358,12 @@ async function stampLocalCard(ctx, contactId, originalVCard, serverPerson) {
     resourceName: serverPerson.resourceName,
     etag: serverPerson.etag,
   });
-  await ctx.markServer(ctx.targetID, contactId, STATUS.MODIFIED_BY_SERVER, "contact");
+  await ctx.markServer(
+    ctx.targetID,
+    contactId,
+    STATUS.MODIFIED_BY_SERVER,
+    "contact",
+  );
   await addressBook.updateContact(contactId, stamped);
 }
 
@@ -290,12 +373,12 @@ async function runPullPass(ctx) {
   const { notify, accountId, folderId, targetID, cMap } = ctx;
 
   notify.reportSyncState({ accountId, folderId, syncState: "sync" });
-  await new Promise(r => setTimeout(r, DEBUG_STATUS_DELAY_MS));
+  await new Promise((r) => setTimeout(r, DEBUG_STATUS_DELAY_MS));
   const people = await peopleApi.listAllConnections(accountId);
   logDebug(ctx, `pull: server returned ${people.length} contact(s)`);
 
   notify.reportSyncState({ accountId, folderId, syncState: "sync" });
-  await new Promise(r => setTimeout(r, DEBUG_STATUS_DELAY_MS));
+  await new Promise((r) => setTimeout(r, DEBUG_STATUS_DELAY_MS));
   const local = await addressBook.listContacts(targetID);
   logDebug(ctx, `pull: local book has ${local.length} card(s)`);
 
@@ -306,22 +389,31 @@ async function runPullPass(ctx) {
   for (const card of local) {
     const identity = mapper.readIdentity(card.vCard);
     if (!identity?.resourceName) continue;
-    byResourceName.set(identity.resourceName, { id: card.id, etag: identity.etag });
+    byResourceName.set(identity.resourceName, {
+      id: card.id,
+      etag: identity.etag,
+    });
     cMap.set(card.id, identity.resourceName);
   }
 
-  const memberMap = new Map();   // groupRn → Set<contactRn>
+  const memberMap = new Map(); // groupRn → Set<contactRn>
   const itemsTotal = people.length;
   let itemsDone = 0;
-  let added = 0, updated = 0, skipped = 0, deleted = 0;
+  let added = 0,
+    updated = 0,
+    skipped = 0,
+    deleted = 0;
 
   notify.reportProgress({ accountId, folderId, itemsDone, itemsTotal });
-  await new Promise(r => setTimeout(r, DEBUG_STATUS_DELAY_MS));
+  await new Promise((r) => setTimeout(r, DEBUG_STATUS_DELAY_MS));
 
   const serverResourceNames = new Set();
   for (const person of people) {
     const resourceName = person.resourceName;
-    if (!resourceName) { itemsDone++; continue; }
+    if (!resourceName) {
+      itemsDone++;
+      continue;
+    }
     serverResourceNames.add(resourceName);
     indexMemberships(memberMap, resourceName, person.memberships);
 
@@ -334,7 +426,9 @@ async function runPullPass(ctx) {
       await ctx.markServer(targetID, newId, STATUS.ADDED_BY_SERVER, "contact");
       const createdId = await addressBook.createContact(targetID, vCard);
       if (createdId !== newId) {
-        throw new Error(`createContact id mismatch: expected ${newId}, got ${createdId}`);
+        throw new Error(
+          `createContact id mismatch: expected ${newId}, got ${createdId}`,
+        );
       }
       byResourceName.set(resourceName, { id: newId, etag: person.etag });
       cMap.set(newId, resourceName);
@@ -342,7 +436,12 @@ async function runPullPass(ctx) {
     } else if (existing.etag !== person.etag) {
       // Pull-update: server's version is newer.
       const vCard = mapper.personToVCard(person);
-      await ctx.markServer(targetID, existing.id, STATUS.MODIFIED_BY_SERVER, "contact");
+      await ctx.markServer(
+        targetID,
+        existing.id,
+        STATUS.MODIFIED_BY_SERVER,
+        "contact",
+      );
       await addressBook.updateContact(existing.id, vCard);
       updated++;
     } else {
@@ -350,20 +449,35 @@ async function runPullPass(ctx) {
     }
     itemsDone++;
     notify.reportProgress({ accountId, folderId, itemsDone, itemsTotal });
-    await new Promise(r => setTimeout(r, DEBUG_STATUS_DELAY_MS));
+    await new Promise((r) => setTimeout(r, DEBUG_STATUS_DELAY_MS));
   }
 
   // Pull-delete: server dropped contacts we still have - mirror locally.
   for (const [resourceName, entry] of byResourceName) {
     if (serverResourceNames.has(resourceName)) continue;
-    await ctx.markServer(targetID, entry.id, STATUS.DELETED_BY_SERVER, "contact");
+    await ctx.markServer(
+      targetID,
+      entry.id,
+      STATUS.DELETED_BY_SERVER,
+      "contact",
+    );
     await addressBook.deleteContact(entry.id);
     cMap.remove(entry.id);
     byResourceName.delete(resourceName);
     deleted++;
   }
 
-  return { byResourceName, memberMap, itemsTotal, localCount: local.length, added, updated, skipped, deleted, serverResourceNames };
+  return {
+    byResourceName,
+    memberMap,
+    itemsTotal,
+    localCount: local.length,
+    added,
+    updated,
+    skipped,
+    deleted,
+    serverResourceNames,
+  };
 }
 
 function indexMemberships(memberMap, contactResourceName, memberships) {
@@ -372,7 +486,10 @@ function indexMemberships(memberMap, contactResourceName, memberships) {
     const groupRn = m?.contactGroupMembership?.contactGroupResourceName;
     if (!groupRn) continue;
     let set = memberMap.get(groupRn);
-    if (!set) { set = new Set(); memberMap.set(groupRn, set); }
+    if (!set) {
+      set = new Set();
+      memberMap.set(groupRn, set);
+    }
     set.add(contactResourceName);
   }
 }
@@ -382,7 +499,7 @@ function indexMemberships(memberMap, contactResourceName, memberships) {
 async function runPushDeletePass(ctx, userEntries, serverResourceNames) {
   const { accountId, cMap } = ctx;
   const deletions = userEntries.filter(
-    e => isContactEntry(e) && e.status === STATUS.DELETED_BY_USER
+    (e) => isContactEntry(e) && e.status === STATUS.DELETED_BY_USER,
   );
   if (!deletions.length) return { deleted: 0 };
 
@@ -391,7 +508,10 @@ async function runPushDeletePass(ctx, userEntries, serverResourceNames) {
     const resourceName = cMap.get(entry.itemId);
     if (!resourceName) {
       // Never-synced-or-already-gone → just drop the entry.
-      logDebug(ctx, `push.delete ${entry.itemId} - no resourceName on file, dropping`);
+      logDebug(
+        ctx,
+        `push.delete ${entry.itemId} - no resourceName on file, dropping`,
+      );
       await ctx.removeEntry(entry.parentId, entry.itemId);
       continue;
     }
@@ -430,32 +550,40 @@ async function runPushDeletePass(ctx, userEntries, serverResourceNames) {
 // ── Groups: pull + apply memberships ─────────────────────────────────────
 
 async function runGroupPullPass(ctx, byResourceName, memberMap) {
-  const { notify, accountId, folderId, targetID, gMap, includeSystemGroups } = ctx;
+  const { notify, accountId, folderId, targetID, gMap, includeSystemGroups } =
+    ctx;
   notify.reportSyncState({ accountId, folderId, syncState: "sync" });
-  await new Promise(r => setTimeout(r, DEBUG_STATUS_DELAY_MS));
+  await new Promise((r) => setTimeout(r, DEBUG_STATUS_DELAY_MS));
 
   const serverGroups = await peopleApi.listAllContactGroups(accountId);
-  const eligible = serverGroups.filter(g =>
-    includeSystemGroups || g.groupType !== SYSTEM_GROUP
+  const eligible = serverGroups.filter(
+    (g) => includeSystemGroups || g.groupType !== SYSTEM_GROUP,
   );
-  logDebug(ctx, `groups: server returned ${serverGroups.length} (${eligible.length} after system-group filter)`);
+  logDebug(
+    ctx,
+    `groups: server returned ${serverGroups.length} (${eligible.length} after system-group filter)`,
+  );
 
   const localLists = await addressBook.listMailingLists(targetID);
-  const localByListId = new Map(localLists.map(l => [l.id, l]));
+  const localByListId = new Map(localLists.map((l) => [l.id, l]));
 
   const listIdToResourceName = new Map();
   for (const [rn, entry] of gMap.listAll()) {
     if (entry.mailingListId) listIdToResourceName.set(entry.mailingListId, rn);
   }
 
-  let added = 0, updated = 0, deleted = 0;
+  let added = 0,
+    updated = 0,
+    deleted = 0;
   const seen = new Set();
 
   for (const group of eligible) {
     const resourceName = group.resourceName;
     seen.add(resourceName);
     const mapping = gMap.get(resourceName);
-    const existing = mapping?.mailingListId ? localByListId.get(mapping.mailingListId) : null;
+    const existing = mapping?.mailingListId
+      ? localByListId.get(mapping.mailingListId)
+      : null;
 
     if (!existing) {
       // Wildcard because mailing lists are not created with a UID.
@@ -463,21 +591,41 @@ async function runGroupPullPass(ctx, byResourceName, memberMap) {
       // no UID, so we don't know the TB-assigned id yet; the watcher
       // matches by name on the next onCreated and rewrites the row to a
       // normal `kind: "list"` entry with the real id.
-      await ctx.markServer(targetID, group.name, STATUS.ADDED_BY_SERVER, "list-by-name");
-      const listId = await addressBook.createMailingList(targetID, { name: group.name });
-      gMap.set(resourceName, {
-        mailingListId: listId, etag: group.etag, groupType: group.groupType,
+      await ctx.markServer(
+        targetID,
+        group.name,
+        STATUS.ADDED_BY_SERVER,
+        "list-by-name",
+      );
+      const listId = await addressBook.createMailingList(targetID, {
+        name: group.name,
       });
-      localByListId.set(listId, { id: listId, name: group.name, parentId: targetID });
+      gMap.set(resourceName, {
+        mailingListId: listId,
+        etag: group.etag,
+        groupType: group.groupType,
+      });
+      localByListId.set(listId, {
+        id: listId,
+        name: group.name,
+        parentId: targetID,
+      });
       added++;
     } else if (mapping.etag !== group.etag || existing.name !== group.name) {
       if (existing.name !== group.name) {
-        await ctx.markServer(targetID, existing.id, STATUS.MODIFIED_BY_SERVER, "list");
+        await ctx.markServer(
+          targetID,
+          existing.id,
+          STATUS.MODIFIED_BY_SERVER,
+          "list",
+        );
         await addressBook.updateMailingList(existing.id, { name: group.name });
         existing.name = group.name;
       }
       gMap.set(resourceName, {
-        mailingListId: existing.id, etag: group.etag, groupType: group.groupType,
+        mailingListId: existing.id,
+        etag: group.etag,
+        groupType: group.groupType,
       });
       updated++;
     }
@@ -500,7 +648,8 @@ async function runGroupPullPass(ctx, byResourceName, memberMap) {
 
 async function applyMemberships(ctx, byResourceName, memberMap) {
   const { gMap } = ctx;
-  let membersAdded = 0, membersRemoved = 0;
+  let membersAdded = 0,
+    membersRemoved = 0;
   const mappings = gMap.listAll();
 
   for (const [resourceName, entry] of mappings) {
@@ -508,13 +657,13 @@ async function applyMemberships(ctx, byResourceName, memberMap) {
     if (!listId) continue;
 
     const expectedIds = new Set();
-    for (const contactRn of (memberMap.get(resourceName) ?? new Set())) {
+    for (const contactRn of memberMap.get(resourceName) ?? new Set()) {
       const contactEntry = byResourceName.get(contactRn);
       if (contactEntry) expectedIds.add(contactEntry.id);
     }
 
     const current = await addressBook.listMailingListMembers(listId);
-    const currentIds = new Set(current.map(c => c.id));
+    const currentIds = new Set(current.map((c) => c.id));
 
     // Membership changes are not tracked in the changelog: the host
     // watcher subscribes to mailingLists.onCreated/onUpdated/onDeleted
@@ -568,21 +717,23 @@ async function applyMemberships(ctx, byResourceName, memberMap) {
 // Google.
 
 async function runGroupPushAddModifyPass(ctx, userEntries) {
-  const groupEntries = userEntries.filter(e =>
-    !isContactEntry(e) && (
-      e.status === STATUS.ADDED_BY_USER ||
-      e.status === STATUS.MODIFIED_BY_USER
-    )
+  const groupEntries = userEntries.filter(
+    (e) =>
+      !isContactEntry(e) &&
+      (e.status === STATUS.ADDED_BY_USER ||
+        e.status === STATUS.MODIFIED_BY_USER),
   );
   if (!groupEntries.length) return { added: 0, updated: 0 };
 
-  let added = 0, updated = 0;
+  let added = 0,
+    updated = 0;
   for (const entry of groupEntries) {
     try {
-      const outcome = entry.status === STATUS.ADDED_BY_USER
-        ? await pushGroupAdd(ctx, entry)
-        : await pushGroupModify(ctx, entry);
-      if (outcome === "added")   added++;
+      const outcome =
+        entry.status === STATUS.ADDED_BY_USER
+          ? await pushGroupAdd(ctx, entry)
+          : await pushGroupModify(ctx, entry);
+      if (outcome === "added") added++;
       if (outcome === "updated") updated++;
     } catch (err) {
       ctx.notify.reportEventLog({
@@ -605,7 +756,9 @@ async function pushGroupAdd(ctx, entry) {
     return "dropped";
   }
   logDebug(ctx, `push.group.add ${list.name}`);
-  const created = await peopleApi.createContactGroup(accountId, { name: list.name });
+  const created = await peopleApi.createContactGroup(accountId, {
+    name: list.name,
+  });
   gMap.set(created.resourceName, {
     mailingListId: list.id,
     etag: created.etag,
@@ -623,7 +776,10 @@ async function pushGroupModify(ctx, entry) {
   let mapping;
   let resourceName;
   let listId;
-  if (typeof entry.itemId === "string" && entry.itemId.startsWith("contactGroups/")) {
+  if (
+    typeof entry.itemId === "string" &&
+    entry.itemId.startsWith("contactGroups/")
+  ) {
     resourceName = entry.itemId;
     mapping = gMap.get(resourceName);
     if (!mapping) {
@@ -652,10 +808,14 @@ async function pushGroupModify(ctx, entry) {
     return "dropped";
   }
   logDebug(ctx, `push.group.modify ${resourceName}`);
-  const updatedGroup = await peopleApi.updateContactGroup(accountId, resourceName, {
-    name: list.name,
-    etag: mapping.etag,
-  });
+  const updatedGroup = await peopleApi.updateContactGroup(
+    accountId,
+    resourceName,
+    {
+      name: list.name,
+      etag: mapping.etag,
+    },
+  );
   gMap.set(updatedGroup.resourceName, {
     mailingListId: listId,
     etag: updatedGroup.etag,
@@ -670,7 +830,7 @@ async function pushGroupModify(ctx, entry) {
 async function runGroupPushDeletePass(ctx, userEntries) {
   const { accountId, gMap } = ctx;
   const deletions = userEntries.filter(
-    e => !isContactEntry(e) && e.status === STATUS.DELETED_BY_USER
+    (e) => !isContactEntry(e) && e.status === STATUS.DELETED_BY_USER,
   );
   if (!deletions.length) return { deleted: 0 };
 
@@ -718,9 +878,12 @@ async function runGroupPushDeletePass(ctx, userEntries) {
  *  `contactGroups/…` resource-name shape for entries from migrated
  *  profiles that lack `kind`. */
 function isContactEntry(entry) {
-  if (entry.kind === "list")    return false;
+  if (entry.kind === "list") return false;
   if (entry.kind === "contact") return true;
-  if (typeof entry.itemId === "string" && entry.itemId.startsWith("contactGroups/")) {
+  if (
+    typeof entry.itemId === "string" &&
+    entry.itemId.startsWith("contactGroups/")
+  ) {
     return false;
   }
   return true;

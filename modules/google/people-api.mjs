@@ -67,7 +67,10 @@ export async function listAllConnections(accountId) {
     });
     if (pageToken) params.set("pageToken", pageToken);
 
-    const data = await fetchWithAuthRetry(accountId, `${CONNECTIONS_ENDPOINT}?${params}`);
+    const data = await fetchWithAuthRetry(
+      accountId,
+      `${CONNECTIONS_ENDPOINT}?${params}`,
+    );
 
     if (Array.isArray(data.connections)) {
       all.push(...data.connections);
@@ -122,7 +125,10 @@ export async function listAllContactGroups(accountId) {
       pageSize: String(PAGE_SIZE),
     });
     if (pageToken) params.set("pageToken", pageToken);
-    const data = await fetchWithAuthRetry(accountId, `${BASE}/contactGroups?${params}`);
+    const data = await fetchWithAuthRetry(
+      accountId,
+      `${BASE}/contactGroups?${params}`,
+    );
     if (Array.isArray(data.contactGroups)) all.push(...data.contactGroups);
     if (!data.nextPageToken) break;
     pageToken = data.nextPageToken;
@@ -141,7 +147,11 @@ export async function createContactGroup(accountId, { name }) {
 }
 
 /** Rename a user contact group. Etag required for optimistic locking. */
-export async function updateContactGroup(accountId, resourceName, { name, etag }) {
+export async function updateContactGroup(
+  accountId,
+  resourceName,
+  { name, etag },
+) {
   const url = `${BASE}/${resourceName}`;
   return await fetchWithAuthRetry(accountId, url, {
     method: "PUT",
@@ -176,7 +186,10 @@ async function fetchWithAuthRetry(accountId, url, opts = {}) {
       try {
         return JSON.parse(text);
       } catch (err) {
-        throw withCode(new Error(`Invalid People API response: ${err.message}`), ERR.NETWORK);
+        throw withCode(
+          new Error(`Invalid People API response: ${err.message}`),
+          ERR.NETWORK,
+        );
       }
     }
 
@@ -189,24 +202,26 @@ async function fetchWithAuthRetry(accountId, url, opts = {}) {
     // People API reports etag mismatches as 400 FAILED_PRECONDITION or
     // 409/412.
     if (
-      (resp.status === 409 || resp.status === 412) ||
+      resp.status === 409 ||
+      resp.status === 412 ||
       (resp.status === 400 && /FAILED_PRECONDITION/.test(body))
     ) {
       throw withCode(
         new Error(`People API ${resp.status}: etag conflict`),
-        PUSH_ERR.CONFLICT
+        PUSH_ERR.CONFLICT,
       );
     }
     if (resp.status === 404) {
       throw withCode(
         new Error(`People API ${resp.status}: not found`),
-        PUSH_ERR.NOT_FOUND
+        PUSH_ERR.NOT_FOUND,
       );
     }
-    const code = resp.status === 401 || resp.status === 403 ? ERR.AUTH : ERR.NETWORK;
+    const code =
+      resp.status === 401 || resp.status === 403 ? ERR.AUTH : ERR.NETWORK;
     throw withCode(
       new Error(`People API ${resp.status}: ${body.slice(0, 200)}`),
-      code
+      code,
     );
   }
 }

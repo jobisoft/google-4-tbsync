@@ -26,7 +26,7 @@ export const providerReady = (async () => {
   // The actual readiness signal we care about is the first port-open;
   // `provider.init()` itself runs below as a side-effect and resolves
   // independently. We listen for the port via the base-class one-shot.
-  await new Promise(resolve => provider.onceConnectedToHost(resolve));
+  await new Promise((resolve) => provider.onceConnectedToHost(resolve));
 })();
 
 // Internal messages from our own UI pages (setup.html, config.html).
@@ -34,7 +34,7 @@ export const providerReady = (async () => {
 // thrown, because runtime.sendMessage serialisation drops Error.code and
 // the setup/config pages need the code to distinguish E:CANCELLED from
 // real failures.
-browser.runtime.onMessage.addListener(async msg => {
+browser.runtime.onMessage.addListener(async (msg) => {
   if (msg?.type === "google.authenticate") {
     try {
       const result = await provider.authenticateAndCreateAccount({

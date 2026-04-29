@@ -34,10 +34,13 @@ export function personToVCard(person, uid) {
   writeIms(comp, person);
   writeOrganization(comp, person);
   writeDate(comp, "bday", person.birthdays?.[0]?.date);
-  const anniv = (person.events ?? []).find(e => /anniversary/i.test(e.type ?? ""));
+  const anniv = (person.events ?? []).find((e) =>
+    /anniversary/i.test(e.type ?? ""),
+  );
   writeDate(comp, "anniversary", anniv?.date);
   writeNote(comp, person);
-  if (person.resourceName) comp.addPropertyWithValue(X_RESOURCENAME, person.resourceName);
+  if (person.resourceName)
+    comp.addPropertyWithValue(X_RESOURCENAME, person.resourceName);
   if (person.etag) comp.addPropertyWithValue(X_ETAG, person.etag);
   return comp.toString();
 }
@@ -212,7 +215,7 @@ function readEmails(comp) {
       type: denormalizeEmailType(paramValue(p, "type")),
     });
   }
-  return out.filter(e => e.value);
+  return out.filter((e) => e.value);
 }
 
 // ── Phones ───────────────────────────────────────────────────────────────
@@ -247,7 +250,7 @@ function writeAddresses(comp, person) {
   for (const addr of person.addresses ?? []) {
     if (!addr) continue;
     const parts = [
-      "",                              // PO box (unused)
+      "", // PO box (unused)
       addr.extendedAddress ?? "",
       addr.streetAddress ?? "",
       addr.city ?? "",
@@ -255,7 +258,7 @@ function writeAddresses(comp, person) {
       addr.postalCode ?? "",
       addr.country ?? "",
     ];
-    if (parts.every(s => !s)) continue;
+    if (parts.every((s) => !s)) continue;
     const p = new ICAL.Property("adr", comp);
     p.setValue(parts);
     const type = normalizeAddressType(addr.type);
@@ -270,7 +273,8 @@ function readAddresses(comp) {
     const parts = p.getFirstValue();
     if (!Array.isArray(parts)) continue;
     const [, extended, street, city, region, postalCode, country] = parts;
-    if (![extended, street, city, region, postalCode, country].some(Boolean)) continue;
+    if (![extended, street, city, region, postalCode, country].some(Boolean))
+      continue;
     out.push({
       extendedAddress: extended || undefined,
       streetAddress: street || undefined,
@@ -329,7 +333,10 @@ function readIms(comp) {
     const str = stringOf(value);
     const colon = str.indexOf(":");
     if (colon > 0) {
-      out.push({ protocol: str.slice(0, colon), username: str.slice(colon + 1) });
+      out.push({
+        protocol: str.slice(0, colon),
+        username: str.slice(colon + 1),
+      });
     } else {
       out.push({ username: str });
     }
@@ -353,7 +360,9 @@ function readOrganization(comp) {
   const out = {};
   if (orgValue) {
     // vCard ORG is a semicolon-separated unit list; Google wants a single string.
-    out.name = Array.isArray(orgValue) ? orgValue.filter(Boolean).join(" ") : stringOf(orgValue);
+    out.name = Array.isArray(orgValue)
+      ? orgValue.filter(Boolean).join(" ")
+      : stringOf(orgValue);
   }
   if (title) out.title = stringOf(title);
   return out;
@@ -402,7 +411,11 @@ function parsePartialDate(s) {
   }
   const compact = s.match(/^(\d{4})(\d{2})(\d{2})$/);
   if (compact) {
-    return { year: Number(compact[1]), month: Number(compact[2]), day: Number(compact[3]) };
+    return {
+      year: Number(compact[1]),
+      month: Number(compact[2]),
+      day: Number(compact[3]),
+    };
   }
   return null;
 }
@@ -423,21 +436,28 @@ function paramValue(prop, name) {
 // branching code path - adding a new field family means adding a table,
 // not new helper functions.
 
-const EMAIL_NORMALIZE   = { home: "home", work: "work" };
+const EMAIL_NORMALIZE = { home: "home", work: "work" };
 const EMAIL_DENORMALIZE = { home: "home", work: "work" };
 
 const PHONE_NORMALIZE = {
-  home: "home", work: "work",
-  mobile: "cell", cell: "cell",
-  fax: "fax", workfax: "fax", homefax: "fax",
+  home: "home",
+  work: "work",
+  mobile: "cell",
+  cell: "cell",
+  fax: "fax",
+  workfax: "fax",
+  homefax: "fax",
   pager: "pager",
 };
 const PHONE_DENORMALIZE = {
-  home: "home", work: "work",
-  cell: "mobile", fax: "workFax", pager: "pager",
+  home: "home",
+  work: "work",
+  cell: "mobile",
+  fax: "workFax",
+  pager: "pager",
 };
 
-const ADDRESS_NORMALIZE   = { home: "home", work: "work" };
+const ADDRESS_NORMALIZE = { home: "home", work: "work" };
 const ADDRESS_DENORMALIZE = { home: "home", work: "work" };
 
 function lookupType(table, type, fallback) {
@@ -445,9 +465,21 @@ function lookupType(table, type, fallback) {
   return table[type.toLowerCase()] ?? fallback;
 }
 
-function normalizeEmailType(type)     { return lookupType(EMAIL_NORMALIZE,     type, type ? "other" : null); }
-function denormalizeEmailType(type)   { return lookupType(EMAIL_DENORMALIZE,   type, type ? "other" : undefined); }
-function normalizePhoneType(type)     { return lookupType(PHONE_NORMALIZE,     type, null); }
-function denormalizePhoneType(type)   { return lookupType(PHONE_DENORMALIZE,   type, undefined); }
-function normalizeAddressType(type)   { return lookupType(ADDRESS_NORMALIZE,   type, null); }
-function denormalizeAddressType(type) { return lookupType(ADDRESS_DENORMALIZE, type, undefined); }
+function normalizeEmailType(type) {
+  return lookupType(EMAIL_NORMALIZE, type, type ? "other" : null);
+}
+function denormalizeEmailType(type) {
+  return lookupType(EMAIL_DENORMALIZE, type, type ? "other" : undefined);
+}
+function normalizePhoneType(type) {
+  return lookupType(PHONE_NORMALIZE, type, null);
+}
+function denormalizePhoneType(type) {
+  return lookupType(PHONE_DENORMALIZE, type, undefined);
+}
+function normalizeAddressType(type) {
+  return lookupType(ADDRESS_NORMALIZE, type, null);
+}
+function denormalizeAddressType(type) {
+  return lookupType(ADDRESS_DENORMALIZE, type, undefined);
+}

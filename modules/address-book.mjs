@@ -111,7 +111,9 @@ export async function listMailingLists(bookId) {
     return await messenger.mailingLists.list(bookId);
   } catch (err) {
     if (isNotFoundError(err)) {
-      console.debug(`[google-4-tbsync] listMailingLists: book ${bookId} not found`);
+      console.debug(
+        `[google-4-tbsync] listMailingLists: book ${bookId} not found`,
+      );
       return [];
     }
     throw err;
@@ -163,7 +165,9 @@ export async function listMailingListMembers(listId) {
     return await messenger.mailingLists.listMembers(listId);
   } catch (err) {
     if (isNotFoundError(err)) {
-      console.debug(`[google-4-tbsync] listMailingListMembers: list ${listId} not found`);
+      console.debug(
+        `[google-4-tbsync] listMailingListMembers: list ${listId} not found`,
+      );
       return [];
     }
     throw err;
@@ -180,7 +184,9 @@ export async function addMailingListMember(listId, contactId) {
     await messenger.mailingLists.addMember(listId, contactId);
   } catch (err) {
     if (isNotFoundError(err)) {
-      const wrapped = new Error(`addMailingListMember: list ${listId} or contact ${contactId} not found`);
+      const wrapped = new Error(
+        `addMailingListMember: list ${listId} or contact ${contactId} not found`,
+      );
       wrapped.code = PUSH_ERR.NOT_FOUND;
       throw wrapped;
     }
@@ -197,7 +203,9 @@ export async function removeMailingListMember(listId, contactId) {
     await messenger.mailingLists.removeMember(listId, contactId);
   } catch (err) {
     if (isNotFoundError(err)) {
-      const wrapped = new Error(`removeMailingListMember: list ${listId} or contact ${contactId} not found`);
+      const wrapped = new Error(
+        `removeMailingListMember: list ${listId} or contact ${contactId} not found`,
+      );
       wrapped.code = PUSH_ERR.NOT_FOUND;
       throw wrapped;
     }

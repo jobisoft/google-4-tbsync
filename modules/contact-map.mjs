@@ -14,7 +14,9 @@ export class ContactMap {
     this.dirty = false;
   }
 
-  get(itemId)   { return this.map.get(itemId) ?? null; }
+  get(itemId) {
+    return this.map.get(itemId) ?? null;
+  }
   set(itemId, resourceName) {
     if (!itemId || !resourceName) return;
     if (this.map.get(itemId) === resourceName) return;
@@ -24,5 +26,7 @@ export class ContactMap {
   remove(itemId) {
     if (this.map.delete(itemId)) this.dirty = true;
   }
-  toJSON() { return Object.fromEntries(this.map); }
+  toJSON() {
+    return Object.fromEntries(this.map);
+  }
 }
