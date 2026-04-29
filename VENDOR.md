@@ -16,12 +16,12 @@ This file lists files that were not created by this project and are maintained u
 ## i18n.mjs
 
 - **File** : `/vendor/i18n/i18n.mjs`
-- **Source** : https://github.com/thunderbird/webext-support/blob/6bbbf8ac2105d04c1b59083e8bd52e0046448ec7/modules/i18n/i18n.mjs
+- **Source** : https://raw.githubusercontent.com/thunderbird/webext-support/6bbbf8ac2105d04c1b59083e8bd52e0046448ec7/modules/i18n/i18n.mjs
 - **License** : MIT
 
 ---
 
-## tbsync
+## tbsync (still subject to review)
 
-- **Files** : `/vendor/tbsync/protocol.mjs`, `/vendor/tbsync/status.mjs`, `/vendor/tbsync/provider.mjs`
-- **Source** : `tbsync-new/tbsync/` in the TbSync host repo (canonical). Mirror byte-for-byte; do not edit in this provider.
+- **Files** : `/vendor/tbsync/*`
+- **Source** : https://download-directory.github.io/?url=https%3A%2F%2Fgithub.com%2Fjobisoft%2FTbSync%2Ftree%2Fdb16a2bf89960bd88f666e416973bdc1f0f79dbd%2Ftbsync
