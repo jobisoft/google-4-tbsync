@@ -3,11 +3,12 @@
   "browser_specific_settings": {
     "gecko": {
       "id": "google-4-tbsync@marcozanon.com",
-      "strict_min_version": "140.0"
+      "strict_min_version": "140.0",
+      "strict_max_version": "151.*"
     }
   },
   "name": "__MSG_extensionName__",
-  "version": "1.0",
+  "version": "1.0.2",
   "author": "Marco Zanon",
   "homepage_url": "https://github.com/jobisoft/google-4-tbsync",
   "default_locale": "en-US",
@@ -29,9 +30,7 @@
   ],
   "background": {
     "type": "module",
-    "scripts": [
-      "background.mjs"
-    ]
+    "scripts": ["background.mjs"]
   },
   "experiment_apis": {
     "LegacyAbProperties": {
