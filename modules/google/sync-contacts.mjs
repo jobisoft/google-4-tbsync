@@ -55,8 +55,15 @@ export async function syncFolderContacts({
   notify,
 }) {
   const targetID = folder?.targetID;
-  const readOnly = !!account?.custom.readOnlyMode;
-  const includeSystemGroups = !!account?.custom.includeSystemContactGroups;
+  // Effective read-only: account-level "Read-only mode" pref OR a per-folder
+  // server-imposed `readOnly` (rare for Google) OR the user's per-folder
+  // `downloadOnly` toggle from the manager UI's ACL icon. Any of the three
+  // skips push and reverts pending local edits.
+  const readOnly =
+    !!account?.custom?.readOnlyMode ||
+    !!folder?.readOnly ||
+    !!folder?.downloadOnly;
+  const includeSystemGroups = !!account?.custom?.includeSystemContactGroups;
 
   // Host-owned changelog and the in-memory provider maps (flushed at end).
   const changelog = Array.isArray(folder?.changelog) ? folder.changelog : [];
@@ -140,11 +147,23 @@ async function runFolderSync(ctx) {
   // 1. Push adds + modifies (deletes handled by reconciliation after pull).
   let pushCounts = { added: 0, updated: 0, deleted: 0, conflicts: 0 };
   if (readOnly) {
+    // Drop pending user edits so they don't accumulate forever. The pull
+    // pass below will resync server state for anything that was locally
+    // modified or deleted; locally-added cards that were never pushed
+    // will linger as unsynced local-only cards but won't keep retrying
+    // every sync. Mirrors the spirit of EAS-4-TbSync's
+    // `revertLocalChanges` pre-step on effective-RO folders.
+    for (const entry of userEntries) {
+      await ctx.removeEntry(entry.parentId, entry.itemId);
+    }
     notify.reportEventLog({
       accountId,
       folderId,
-      level: "warning",
-      message: "Push skipped (read-only mode)",
+      level: "info",
+      message:
+        userEntries.length > 0
+          ? `Push skipped (read-only); dropped ${userEntries.length} pending local edit${userEntries.length === 1 ? "" : "s"}.`
+          : "Push skipped (read-only).",
     });
   } else {
     pushCounts = await runPushAddModifyPass(ctx, userEntries);

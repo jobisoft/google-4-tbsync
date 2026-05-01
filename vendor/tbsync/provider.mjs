@@ -226,6 +226,13 @@ export class TbSyncProviderImplementation {
   changelogRemove(args) {
     return this.#sendCmd(PROVIDER_CMD.CHANGELOG_REMOVE, args);
   }
+  /** Move the supplied changelog entries to the tail of the queue
+   *  (preserving content + timestamps). Used after a partial-push
+   *  failure so the next sync attempts non-failing items first.
+   *  args: `{accountId, folderId, items: [{parentId, itemId}, …]}`. */
+  changelogMoveToTail(args) {
+    return this.#sendCmd(PROVIDER_CMD.CHANGELOG_MOVE_TO_TAIL, args);
+  }
 
   /** Provider-scoped upgrade lock. While `locked: true`, the host
    *  refuses every user-initiated RPC against any account belonging to
@@ -249,13 +256,19 @@ export class TbSyncProviderImplementation {
     this.#notify(PROVIDER_NOTIFY.REPORT_PROGRESS, payload);
   }
   /** Append a line to the host's event log. `payload.level` is REQUIRED and
-   *  MUST be one of "error" | "warning" | "debug"; a plain Error is thrown
-   *  at the call site if it's missing or bogus (fail-fast, not a wire error). */
+   *  MUST be one of "error" | "warning" | "info" | "debug"; a plain Error
+   *  is thrown at the call site if it's missing or bogus (fail-fast, not a
+   *  wire error). */
   reportEventLog(payload) {
     const level = payload?.level;
-    if (level !== "error" && level !== "warning" && level !== "debug") {
+    if (
+      level !== "error" &&
+      level !== "warning" &&
+      level !== "info" &&
+      level !== "debug"
+    ) {
       throw new Error(
-        `reportEventLog: level must be "error" | "warning" | "debug" (got ${JSON.stringify(level)})`,
+        `reportEventLog: level must be "error" | "warning" | "info" | "debug" (got ${JSON.stringify(level)})`,
       );
     }
     this.#notify(PROVIDER_NOTIFY.REPORT_EVENT_LOG, payload);
