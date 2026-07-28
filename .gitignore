@@ -1,0 +1,4 @@
+*.xpi
+dist
+dev
+node_modules

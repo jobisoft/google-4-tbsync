@@ -3,7 +3,6 @@
   "browser_specific_settings": {
     "gecko": {
       "id": "google-4-tbsync@marcozanon.com",
-      "update_url": "https://raw.githubusercontent.com/jobisoft/tbsync/refs/heads/Main/updates.json",
       "strict_min_version": "140.0",
       "strict_max_version": "151.*"
     }
@@ -31,22 +30,36 @@
   ],
   "background": {
     "type": "module",
-    "scripts": ["background.mjs"]
+    "scripts": [
+      "background.mjs"
+    ]
   },
   "experiment_apis": {
     "LegacyAbProperties": {
       "schema": "experiments/LegacyAbProperties/schema.json",
       "parent": {
-        "scopes": ["addon_parent"],
-        "paths": [["LegacyAbProperties"]],
+        "scopes": [
+          "addon_parent"
+        ],
+        "paths": [
+          [
+            "LegacyAbProperties"
+          ]
+        ],
         "script": "experiments/LegacyAbProperties/implementation.js"
       }
     },
     "LegacyPrefs": {
       "schema": "experiments/LegacyPrefs/schema.json",
       "parent": {
-        "scopes": ["addon_parent"],
-        "paths": [["LegacyPrefs"]],
+        "scopes": [
+          "addon_parent"
+        ],
+        "paths": [
+          [
+            "LegacyPrefs"
+          ]
+        ],
         "script": "experiments/LegacyPrefs/implementation.js"
       }
     }
