@@ -25,6 +25,7 @@ import * as addressBook from "./address-book.mjs";
 import { syncFolderContacts } from "./google/sync-contacts.mjs";
 import { DEBUG_STATUS_DELAY_MS } from "./debug.mjs";
 import { stringifyError } from "./errors.mjs";
+import { runStartupMigrations } from "./upgrades.mjs";
 
 export class GoogleProvider extends TbSyncProviderImplementation {
   constructor() {
@@ -62,6 +63,13 @@ export class GoogleProvider extends TbSyncProviderImplementation {
    *  every subsequent reconnect). Safe to call more than once - priming is
    *  idempotent. */
   async onConnectedToHost() {
+    // Bring storage and accounts up to date before priming reads account
+    // state - a legacy-imported account still holds it in the shape the
+    // legacy add-on wrote. Cheap when there is nothing to do, and it has to
+    // run on every port open rather than once per boot: the host re-imports
+    // whenever its own storage has been cleared, and that reaches this side
+    // as a reconnect and nothing else.
+    await runStartupMigrations(this);
     await this.primeStartupState();
   }
 

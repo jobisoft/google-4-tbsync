@@ -9,7 +9,7 @@
     }
   },
   "name": "__MSG_extensionName__",
-  "version": "1.0.5",
+  "version": "5.0.11",
   "author": "Marco Zanon",
   "homepage_url": "https://github.com/jobisoft/google-4-tbsync",
   "default_locale": "en-US",
@@ -40,6 +40,14 @@
         "scopes": ["addon_parent"],
         "paths": [["LegacyAbProperties"]],
         "script": "experiments/LegacyAbProperties/implementation.js"
+      }
+    },
+    "LegacyPrefs": {
+      "schema": "experiments/LegacyPrefs/schema.json",
+      "parent": {
+        "scopes": ["addon_parent"],
+        "paths": [["LegacyPrefs"]],
+        "script": "experiments/LegacyPrefs/implementation.js"
       }
     }
   },
