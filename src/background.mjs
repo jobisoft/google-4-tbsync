@@ -18,59 +18,58 @@ import { stringifyError } from "./modules/errors.mjs";
 const provider = new GoogleProvider();
 
 // Internal messages from our own UI pages (setup.html, config.html).
-// Errors are returned as structured { ok:false, error, code } rather than
-// thrown, because runtime.sendMessage serialisation drops Error.code and
-// the setup/config pages need the code to distinguish E:CANCELLED from
-// real failures.
-browser.runtime.onMessage.addListener(async (msg) => {
-  if (msg?.type === "google.authenticate") {
-    try {
-      const result = await provider.authenticateAndCreateAccount({
-        label: msg.label,
-        clientID: msg.clientID,
-        clientSecret: msg.clientSecret,
-        clientType: msg.clientType,
-      });
-      return { ok: true, result };
-    } catch (err) {
-      return { ok: false, error: stringifyError(err), code: err.code ?? null };
-    }
+//
+// The listener is deliberately NOT async. Returning a promise from an
+// onMessage listener claims the message and supplies its response, so an
+// async listener would answer every message in this add-on - including
+// `tbsync-setup-completed`, which belongs to the base class's own listener.
+// Returning nothing for anything not in this table leaves those alone.
+//
+// Errors come back as structured { ok:false, error, code } rather than
+// thrown, because runtime.sendMessage serialisation drops Error.code and the
+// setup/config pages need the code to distinguish E:CANCELLED from real
+// failures.
+const MESSAGE_HANDLERS = {
+  "google.authenticate": (msg) =>
+    provider.authenticateAndCreateAccount({
+      label: msg.label,
+      clientID: msg.clientID,
+      clientSecret: msg.clientSecret,
+      clientType: msg.clientType,
+    }),
+
+  "google.getRedirectURL": () => ({ redirectURL: getRedirectURL() }),
+
+  "google.getLastCredentials": () => provider.getLastCredentials(),
+
+  "google.getAccount": (msg) => provider.getAccountForConfig(msg.accountId),
+
+  "google.saveAccount": (msg) =>
+    provider.saveAccountFromConfig({
+      accountId: msg.accountId,
+      patch: msg.patch ?? {},
+    }),
+};
+
+/** Run a handler and shape the reply the dialogs expect. */
+async function replyEnvelope(handler, msg) {
+  try {
+    return { ok: true, result: await handler(msg) };
+  } catch (err) {
+    return {
+      ok: false,
+      error: stringifyError(err),
+      code: err?.code ?? null,
+      details: err?.details ?? null,
+    };
   }
-  if (msg?.type === "google.getRedirectURL") {
-    try {
-      return { ok: true, result: { redirectURL: getRedirectURL() } };
-    } catch (err) {
-      return { ok: false, error: stringifyError(err), code: err.code ?? null };
-    }
-  }
-  if (msg?.type === "google.getLastCredentials") {
-    try {
-      const result = await provider.getLastCredentials();
-      return { ok: true, result };
-    } catch (err) {
-      return { ok: false, error: stringifyError(err), code: err.code ?? null };
-    }
-  }
-  if (msg?.type === "google.getAccount") {
-    try {
-      const result = await provider.getAccountForConfig(msg.accountId);
-      return { ok: true, result };
-    } catch (err) {
-      return { ok: false, error: stringifyError(err), code: err.code ?? null };
-    }
-  }
-  if (msg?.type === "google.saveAccount") {
-    try {
-      const result = await provider.saveAccountFromConfig({
-        accountId: msg.accountId,
-        patch: msg.patch ?? {},
-      });
-      return { ok: true, result };
-    } catch (err) {
-      return { ok: false, error: stringifyError(err), code: err.code ?? null };
-    }
-  }
-  return undefined;
+}
+
+browser.runtime.onMessage.addListener((msg) => {
+  const handler = MESSAGE_HANDLERS[msg?.type];
+  // Not ours - stay out of the way so the listener it belongs to can answer.
+  if (!handler) return;
+  return replyEnvelope(handler, msg);
 });
 
 provider.init();
