@@ -19,7 +19,6 @@ import * as mapper from "./contact-mapper.mjs";
 import * as addressBook from "../address-book.mjs";
 import { GroupMap } from "../group-map.mjs";
 import { ContactMap } from "../contact-map.mjs";
-import { DEBUG_STATUS_DELAY_MS } from "../debug.mjs";
 import { stringifyError, PUSH_ERR } from "../errors.mjs";
 
 const STATUS = {
@@ -205,7 +204,6 @@ async function runFolderSync(ctx) {
   }
 
   notify.reportSyncState({ accountId, folderId, syncState: "sync" });
-  await new Promise((r) => setTimeout(r, DEBUG_STATUS_DELAY_MS));
 
   const pushSummary = readOnly
     ? "push skipped (read-only)"
@@ -230,7 +228,6 @@ async function runFolderSync(ctx) {
 async function runPushAddModifyPass(ctx, userEntries) {
   const { notify, accountId, folderId } = ctx;
   notify.reportSyncState({ accountId, folderId, syncState: "sync" });
-  await new Promise((r) => setTimeout(r, DEBUG_STATUS_DELAY_MS));
 
   // Contact entries only; groups handled in the groups pass.
   const entries = userEntries.filter((e) => isContactEntry(e));
@@ -250,7 +247,6 @@ async function runPushAddModifyPass(ctx, userEntries) {
       itemsDone: 0,
       itemsTotal: total,
     });
-    await new Promise((r) => setTimeout(r, DEBUG_STATUS_DELAY_MS));
   }
   let done = 0;
 
@@ -279,7 +275,6 @@ async function runPushAddModifyPass(ctx, userEntries) {
       itemsDone: done,
       itemsTotal: total,
     });
-    await new Promise((r) => setTimeout(r, DEBUG_STATUS_DELAY_MS));
   }
   return { added, updated, deleted: 0, conflicts };
 }
@@ -392,12 +387,10 @@ async function runPullPass(ctx) {
   const { notify, accountId, folderId, targetID, cMap } = ctx;
 
   notify.reportSyncState({ accountId, folderId, syncState: "sync" });
-  await new Promise((r) => setTimeout(r, DEBUG_STATUS_DELAY_MS));
   const people = await peopleApi.listAllConnections(accountId);
   logDebug(ctx, `pull: server returned ${people.length} contact(s)`);
 
   notify.reportSyncState({ accountId, folderId, syncState: "sync" });
-  await new Promise((r) => setTimeout(r, DEBUG_STATUS_DELAY_MS));
   const local = await addressBook.listContacts(targetID);
   logDebug(ctx, `pull: local book has ${local.length} card(s)`);
 
@@ -424,7 +417,6 @@ async function runPullPass(ctx) {
     deleted = 0;
 
   notify.reportProgress({ accountId, folderId, itemsDone, itemsTotal });
-  await new Promise((r) => setTimeout(r, DEBUG_STATUS_DELAY_MS));
 
   const serverResourceNames = new Set();
   for (const person of people) {
@@ -468,7 +460,6 @@ async function runPullPass(ctx) {
     }
     itemsDone++;
     notify.reportProgress({ accountId, folderId, itemsDone, itemsTotal });
-    await new Promise((r) => setTimeout(r, DEBUG_STATUS_DELAY_MS));
   }
 
   // Pull-delete: server dropped contacts we still have - mirror locally.
@@ -572,7 +563,6 @@ async function runGroupPullPass(ctx, byResourceName, memberMap) {
   const { notify, accountId, folderId, targetID, gMap, includeSystemGroups } =
     ctx;
   notify.reportSyncState({ accountId, folderId, syncState: "sync" });
-  await new Promise((r) => setTimeout(r, DEBUG_STATUS_DELAY_MS));
 
   const serverGroups = await peopleApi.listAllContactGroups(accountId);
   const eligible = serverGroups.filter(
