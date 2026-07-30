@@ -21,7 +21,6 @@
   "permissions": [
     "storage",
     "identity",
-    "management",
     "addressBooks",
     "notifications",
     "https://accounts.google.com/*",
