@@ -23,7 +23,6 @@ import {
 import * as oauth from "./google/oauth.mjs";
 import * as addressBook from "./address-book.mjs";
 import { syncFolderContacts } from "./google/sync-contacts.mjs";
-import { DEBUG_STATUS_DELAY_MS } from "./debug.mjs";
 import { stringifyError } from "./errors.mjs";
 import { runStartupMigrations } from "./upgrades.mjs";
 
@@ -90,7 +89,6 @@ export class GoogleProvider extends TbSyncProviderImplementation {
     // for each selected folder. Dwell 250 ms so the manager can render
     // the "Preparing…" transition.
     this.reportSyncState({ accountId, syncState: "prepare" });
-    await new Promise((r) => setTimeout(r, DEBUG_STATUS_DELAY_MS));
     return ok();
   }
 
