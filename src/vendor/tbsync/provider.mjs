@@ -23,6 +23,10 @@ import {
   withCode,
 } from "./protocol.mjs";
 
+/** Long enough for the reply to reach the host before the background page
+ *  goes away with it. Nothing observable happens in between. */
+const RELOAD_DELAY_MS = 250;
+
 // Subclass-facing surface. Subclass code imports only from this file;
 // protocol.mjs and status.mjs stay as mirror-synced contract files.
 export { ERR, withCode } from "./protocol.mjs";
@@ -205,21 +209,54 @@ export class TbSyncProviderImplementation {
    *                         name on the next `mailingLists.onCreated`
    *                         and upgrades it in place to
    *                         `kind: "list", itemId: <real id>`.
-   *    - `"event"`        : itemId = TB calendar item id; suppresses
-   *                         `messenger.calendar.items.*` events whose
-   *                         `item.type === "event"`.
-   *    - `"task"`         : itemId = TB calendar item id; suppresses
-   *                         `messenger.calendar.items.*` events whose
-   *                         `item.type === "task"`.
-   *    - `"calendar-item"`: itemId = TB calendar item id; reserved for
-   *                         the `onRemoved` path where the item type
-   *                         is no longer available. The watcher resolves
-   *                         this against any matching `(parentId, itemId)`
-   *                         row regardless of kind.
+   *    - `"event"` / `"task"` : accepted and ignored. A provider supplies
+   *                         its own calendars and reports edits to them
+   *                         itself, so the host does not observe those
+   *                         resources and has nothing to suppress.
    *  Must be awaited BEFORE the actual TB API call so the tag is
    *  durable before the event fires. */
   changelogMarkServerWrite(args) {
     return this.#sendCmd(PROVIDER_CMD.CHANGELOG_MARK_SERVER_WRITE, args);
+  }
+  /** Record a user edit for a resource this provider supplies itself, e.g.
+   *  a calendar of its own type whose edits arrive as provider hooks rather
+   *  than through the host's observer.
+   *
+   *  `parentId` is the resource (the calendar's id); the host resolves which
+   *  folder that is. `op` is "created" | "updated" | "deleted" and is folded
+   *  into whatever is already queued for the item. `detail` is stored
+   *  verbatim and handed back on the changelog entry - for calendars it
+   *  carries the item's previous version, the one thing that cannot be
+   *  re-derived once the edit has been written. */
+  changelogRecordUserEdit(args) {
+    return this.#sendCmd(PROVIDER_CMD.CHANGELOG_RECORD_USER_EDIT, args);
+  }
+  /** Ask the host to sync one of this provider's folders, identified by the
+   *  local resource it is bound to.
+   *
+   *  For when something outside the host's schedule asks for a sync - a user
+   *  pressing Reload on a calendar the provider supplies, say. The host still
+   *  decides: it runs its normal account prologue first, syncs only that
+   *  folder, and defers the request if the account is already syncing rather
+   *  than dropping it.
+   *
+   *  Resolves when the sync it asked for has finished, so a caller answering
+   *  a platform hook can report a real outcome. */
+  requestSync(args) {
+    return this.#sendCmd(PROVIDER_CMD.REQUEST_SYNC, args);
+  }
+  /** Report that the local resource behind one of this provider's folders is
+   *  gone - the user deleted the calendar or address book it was bound to.
+   *  The host clears the binding and deselects the folder, leaving the row so
+   *  it can be enabled again later.
+   *
+   *  Only for resources the provider supplies itself. A provider watching its
+   *  own targets must satisfy itself that the resource is really gone before
+   *  calling: the platform also announces a removal when a provider's own
+   *  extension is restarting, and reporting that would deselect the folder on
+   *  every update. */
+  folderTargetRemoved(args) {
+    return this.#sendCmd(PROVIDER_CMD.FOLDER_TARGET_REMOVED, args);
   }
   /** Remove the changelog entry for `(parentId, itemId)` regardless of
    *  status. Called after successfully pushing a `*_by_user` entry. */
@@ -654,12 +691,49 @@ export class TbSyncProviderImplementation {
         return this.onFolderDisabled(args);
       case HOST_CMD.GET_SORTED_FOLDERS:
         return this.onGetSortedFolders(args);
+      // Answered here rather than by a subclass hook: the work is identical
+      // for every provider and there is nothing one could usefully do
+      // differently.
+      case HOST_CMD.RELOAD:
+        return this.#reloadSelf();
       default:
         throw withCode(
           new Error(`Unknown command: ${cmd}`),
           ERR.UNKNOWN_COMMAND,
         );
     }
+  }
+
+  /** Reload this add-on, so a rebuilt `dev/` tree takes effect without a
+   *  reinstall.
+   *
+   *  Only meaningful for a temporarily installed add-on: `runtime.reload()`
+   *  re-installs one from its source bundle, but merely disables and
+   *  re-enables a permanently installed one, which restarts identical code.
+   *  Refusing is better than reporting success for a reload that changed
+   *  nothing - and worse, dropped the host's port on the way.
+   *
+   *  `management.getSelf()` needs no permission (the schema gates the
+   *  management API per function, and this one declares none), and
+   *  `installType` is "development" exactly when the add-on is temporarily
+   *  installed - the same flag reload() branches on.
+   *
+   *  Resolves *before* reloading. The caller's reply is posted after this
+   *  returns, and a background page that has already torn itself down cannot
+   *  post it: the host would see E:TIMEOUT for a reload that worked. */
+  async #reloadSelf() {
+    const { installType } = await browser.management.getSelf();
+    if (installType !== "development") {
+      throw withCode(
+        new Error(
+          `reload needs a temporarily installed add-on (this one is ` +
+            `"${installType}") - a reload would restart the same code`,
+        ),
+        ERR.NOT_TEMPORARY,
+      );
+    }
+    setTimeout(() => browser.runtime.reload(), RELOAD_DELAY_MS);
+    return { reloading: true, installType };
   }
 
   #sendCmd(cmd, args = {}) {
