@@ -2,10 +2,17 @@
  * Bidirectional sync between a Thunderbird address book and the
  * authenticated user's Google Contacts. Flow:
  *   1. Push adds + modifies from the host's changelog to Google.
- *   2. Pull all server contacts; reconcile local.
- *   3. Push-delete reconciliation: local cards that are gone but whose
- *      resourceName is still on the server → delete on the server.
+ *   2. Push deletes.
+ *   3. Pull all server contacts; reconcile local.
  *   4. Groups: mirror of the contact flow, via `groupMap`.
+ *
+ * Every push happens before the matching pull, and that ordering is load-
+ * bearing rather than tidy. Our own change is then already part of what the
+ * server reports, so anything the pull brings back is news; pull first and
+ * the echo of a local edit is indistinguishable from a genuine server-side
+ * one. Deletes suffer worst - a locally deleted item is simply absent, which
+ * reads exactly like an item the book has never seen, so a pull-first delete
+ * gets undone by the very pass that should have confirmed it.
  *
  * Contact groups sync bidirectionally; memberships are server→local only.
  * Every local write is preceded by `notify.changelogMarkServerWrite` so
@@ -143,7 +150,7 @@ async function runFolderSync(ctx) {
   );
   logDebug(ctx, `changelog: ${userEntries.length} pending user entries`);
 
-  // 1. Push adds + modifies (deletes handled by reconciliation after pull).
+  // 1. Push adds + modifies.
   let pushCounts = { added: 0, updated: 0, deleted: 0, conflicts: 0 };
   if (readOnly) {
     // Drop pending user edits so they don't accumulate forever. The pull
@@ -168,28 +175,36 @@ async function runFolderSync(ctx) {
     pushCounts = await runPushAddModifyPass(ctx, userEntries);
   }
 
-  // 2. Pull contacts - server → local reconciliation.
-  const pull = await runPullPass(ctx);
-
-  // 3. Push-delete reconciliation - user-deleted cards whose resourceName
-  //    is still on the server.
+  // 2. Push deletes - before the pull, like the adds and modifies above.
+  //    A delete pushed *after* the pull is a delete the pull has already
+  //    undone: the card is gone locally but still on the server, which is
+  //    indistinguishable from a contact the book has never seen, so the
+  //    pull re-creates the very card the user just deleted. Sending it
+  //    first means the pull reads a server that already agrees with us,
+  //    and the ambiguity never arises.
   if (!readOnly) {
-    const deleteStats = await runPushDeletePass(
-      ctx,
-      userEntries,
-      pull.serverResourceNames,
-    );
+    const deleteStats = await runPushDeletePass(ctx, userEntries);
     pushCounts.deleted = deleteStats.deleted;
   }
 
-  // 4. Groups - mirror contact flow. Push-add-modify before pull so any
-  //    new local group exists server-side (and is in gMap) before the
-  //    pull pass walks the server's group list - otherwise the pull
-  //    would see the just-pushed group as "new on server" and create a
-  //    duplicate local list.
+  // 3. Pull contacts - server → local reconciliation.
+  const pull = await runPullPass(ctx);
+
+  // 4. Groups - mirror of the contact flow, and now in the same order:
+  //    every push before the pull. Add-modify has always been first, so
+  //    that a just-pushed group is in gMap before the pull walks the
+  //    server's list and would otherwise create a duplicate local one.
+  //    Delete joins it for a sharper reason: gMap holds a single entry per
+  //    group, so a pull that re-creates a locally-deleted list overwrites
+  //    its `mailingListId` with a fresh local id, and the delete pass then
+  //    looks up the id the user actually deleted, finds nothing and drops
+  //    the entry. Ordered this way the mapping is still intact when the
+  //    delete is sent.
   let groupPushAddMod = { added: 0, updated: 0 };
+  let groupDeleted = 0;
   if (!ctx.readOnly) {
     groupPushAddMod = await runGroupPushAddModifyPass(ctx, userEntries);
+    groupDeleted = (await runGroupPushDeletePass(ctx, userEntries)).deleted;
   }
   const groupCounts = await runGroupPullPass(
     ctx,
@@ -198,10 +213,7 @@ async function runFolderSync(ctx) {
   );
   groupCounts.added += groupPushAddMod.added;
   groupCounts.updated += groupPushAddMod.updated;
-  if (!ctx.readOnly) {
-    const groupDelCounts = await runGroupPushDeletePass(ctx, userEntries);
-    groupCounts.deleted += groupDelCounts.deleted;
-  }
+  groupCounts.deleted += groupDeleted;
 
   notify.reportSyncState({ accountId, folderId, syncState: "sync" });
 
@@ -506,7 +518,7 @@ function indexMemberships(memberMap, contactResourceName, memberships) {
 
 // ── Push-delete reconciliation ───────────────────────────────────────────
 
-async function runPushDeletePass(ctx, userEntries, serverResourceNames) {
+async function runPushDeletePass(ctx, userEntries) {
   const { accountId, cMap } = ctx;
   const deletions = userEntries.filter(
     (e) => isContactEntry(e) && e.status === STATUS.DELETED_BY_USER,
@@ -525,13 +537,10 @@ async function runPushDeletePass(ctx, userEntries, serverResourceNames) {
       await ctx.removeEntry(entry.parentId, entry.itemId);
       continue;
     }
-    if (!serverResourceNames.has(resourceName)) {
-      // Server already dropped it; nothing to push.
-      logDebug(ctx, `push.delete ${resourceName} - already gone on server`);
-      cMap.remove(entry.itemId);
-      await ctx.removeEntry(entry.parentId, entry.itemId);
-      continue;
-    }
+    // No "is it still on the server?" pre-check: this pass now runs before
+    // the pull, so there is no server listing to consult. A contact deleted
+    // in the Google UI since our last sync answers with NOT_FOUND below,
+    // which is the same outcome one round trip later.
     try {
       logDebug(ctx, `push.delete ${resourceName}`);
       await peopleApi.deleteContact(accountId, resourceName);
@@ -847,6 +856,13 @@ async function runGroupPushDeletePass(ctx, userEntries) {
   for (const entry of deletions) {
     const mapping = gMap.getByListId(entry.itemId);
     if (!mapping) {
+      // Never reached the server, or the mapping was lost. Say so: dropping
+      // a delete in silence is how a list that keeps coming back looks like
+      // a clean sync.
+      logDebug(
+        ctx,
+        `push.group.delete ${entry.itemId} - no group mapping on file, dropping`,
+      );
       await ctx.removeEntry(entry.parentId, entry.itemId);
       continue;
     }
