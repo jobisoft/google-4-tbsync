@@ -14,7 +14,7 @@
  * reads exactly like an item the book has never seen, so a pull-first delete
  * gets undone by the very pass that should have confirmed it.
  *
- * Contact groups sync bidirectionally; memberships are server→local only.
+ * Contact groups and their memberships both sync bidirectionally.
  * Every local write is preceded by `notify.changelogMarkServerWrite` so
  * the host's observer suppresses the resulting TB event. Writes are serial
  * for monotonic progress.
@@ -202,9 +202,19 @@ async function runFolderSync(ctx) {
   //    delete is sent.
   let groupPushAddMod = { added: 0, updated: 0 };
   let groupDeleted = 0;
+  let memberPush = { added: 0, removed: 0 };
   if (!ctx.readOnly) {
     groupPushAddMod = await runGroupPushAddModifyPass(ctx, userEntries);
     groupDeleted = (await runGroupPushDeletePass(ctx, userEntries)).deleted;
+    // Last of the pushes: a membership needs both ends to exist on the
+    // server, so it has to follow the contact and group adds, and it is
+    // pointless for a group the delete pass just removed.
+    //
+    // `pull.memberMap` goes along to be kept honest. It was read during the
+    // contact pull one step above and so predates everything pushed here,
+    // and `applyMemberships` further down reconciles the book against it -
+    // faithfully undoing, in this same sync, every membership we just sent.
+    memberPush = await runMembershipPushPass(ctx, userEntries, pull.memberMap);
   }
   const groupCounts = await runGroupPullPass(
     ctx,
@@ -221,7 +231,7 @@ async function runFolderSync(ctx) {
     ? "push skipped (read-only)"
     : `push: ${pushCounts.added}+${pushCounts.updated} ↑, ${pushCounts.deleted} ↓${pushCounts.conflicts ? `, ${pushCounts.conflicts} conflicts` : ""}`;
   const pullSummary = `pull: ${pull.added}+${pull.updated} ↓, ${pull.deleted} delete${pull.skipped ? `, ${pull.skipped} unchanged` : ""}`;
-  const groupSummary = `groups: ${groupCounts.added}+${groupCounts.updated} ↓, ${groupCounts.deleted} delete; members: ${groupCounts.membersAdded}+${groupCounts.membersRemoved}`;
+  const groupSummary = `groups: ${groupCounts.added}+${groupCounts.updated} ↓, ${groupCounts.deleted} delete; members: ${groupCounts.membersAdded}+${groupCounts.membersRemoved} ↓, ${memberPush.added}+${memberPush.removed} ↑`;
   const summary = `${pushSummary}; ${pullSummary}; ${groupSummary}`;
 
   if (
@@ -683,12 +693,19 @@ async function applyMemberships(ctx, byResourceName, memberMap) {
     const current = await addressBook.listMailingListMembers(listId);
     const currentIds = new Set(current.map((c) => c.id));
 
-    // Membership changes are not tracked in the changelog: the host
-    // watcher subscribes to mailingLists.onCreated/onUpdated/onDeleted
-    // but not to onMemberAdded/onMemberRemoved.
+    // Each write is pre-tagged, like every other local write here: the host
+    // now watches onMemberAdded/onMemberRemoved, so an untagged write of the
+    // server's own state comes straight back as a pending user edit and gets
+    // pushed again on the next sync, forever.
     for (const id of expectedIds) {
       if (!currentIds.has(id)) {
         try {
+          await ctx.markServer(
+            listId,
+            id,
+            STATUS.ADDED_BY_SERVER,
+            "membership",
+          );
           await addressBook.addMailingListMember(listId, id);
           membersAdded++;
         } catch (err) {
@@ -708,6 +725,12 @@ async function applyMemberships(ctx, byResourceName, memberMap) {
     for (const id of currentIds) {
       if (!expectedIds.has(id)) {
         try {
+          await ctx.markServer(
+            listId,
+            id,
+            STATUS.DELETED_BY_SERVER,
+            "membership",
+          );
           await addressBook.removeMailingListMember(listId, id);
           membersRemoved++;
         } catch (err) {
@@ -738,6 +761,7 @@ async function runGroupPushAddModifyPass(ctx, userEntries) {
   const groupEntries = userEntries.filter(
     (e) =>
       !isContactEntry(e) &&
+      !isMembershipEntry(e) &&
       (e.status === STATUS.ADDED_BY_USER ||
         e.status === STATUS.MODIFIED_BY_USER),
   );
@@ -848,7 +872,10 @@ async function pushGroupModify(ctx, entry) {
 async function runGroupPushDeletePass(ctx, userEntries) {
   const { accountId, gMap } = ctx;
   const deletions = userEntries.filter(
-    (e) => !isContactEntry(e) && e.status === STATUS.DELETED_BY_USER,
+    (e) =>
+      !isContactEntry(e) &&
+      !isMembershipEntry(e) &&
+      e.status === STATUS.DELETED_BY_USER,
   );
   if (!deletions.length) return { deleted: 0 };
 
@@ -902,8 +929,101 @@ async function runGroupPushDeletePass(ctx, userEntries) {
  *  list (group). Prefers the watcher-supplied `kind`; falls back to the
  *  `contactGroups/…` resource-name shape for entries from migrated
  *  profiles that lack `kind`. */
+function isMembershipEntry(entry) {
+  return entry.kind === "membership";
+}
+
+// ── Membership push ──────────────────────────────────────────────────────
+//
+// A membership entry names the exact pair the user changed - `parentId` is
+// the mailing list, `itemId` the contact - so what goes to Google is that
+// one add or removal, not the group's whole membership re-asserted. That
+// matters for more than bandwidth: re-asserting would silently undo a member
+// added from another device between our syncs, whereas a delta touches only
+// what the user actually touched and leaves the rest to the pull.
+
+async function runMembershipPushPass(ctx, userEntries, memberMap) {
+  const { accountId, gMap, cMap } = ctx;
+  const entries = userEntries.filter(isMembershipEntry);
+  if (!entries.length) return { added: 0, removed: 0 };
+
+  // Group by list so one call carries every change to the same group.
+  const byGroup = new Map();
+  for (const entry of entries) {
+    const mapping = gMap.getByListId(entry.parentId);
+    const contactRn = cMap.get(entry.itemId);
+    if (!mapping || !contactRn) {
+      // The list or the contact never reached the server - it was deleted
+      // before this ran, or was never pushed. Either way the membership
+      // cannot be expressed; drop it rather than retry forever.
+      logDebug(
+        ctx,
+        `push.member ${entry.parentId}/${entry.itemId} - ` +
+          `${!mapping ? "list" : "contact"} not on the server, dropping`,
+      );
+      await ctx.removeEntry(entry.parentId, entry.itemId);
+      continue;
+    }
+    let bucket = byGroup.get(mapping.resourceName);
+    if (!bucket) {
+      bucket = { add: [], remove: [], entries: [] };
+      byGroup.set(mapping.resourceName, bucket);
+    }
+    if (entry.status === STATUS.DELETED_BY_USER) bucket.remove.push(contactRn);
+    else bucket.add.push(contactRn);
+    bucket.entries.push(entry);
+  }
+
+  let added = 0,
+    removed = 0;
+  for (const [groupRn, bucket] of byGroup) {
+    try {
+      logDebug(
+        ctx,
+        `push.member ${groupRn} +${bucket.add.length} -${bucket.remove.length}`,
+      );
+      await peopleApi.modifyContactGroupMembers(accountId, groupRn, {
+        add: bucket.add,
+        remove: bucket.remove,
+      });
+      added += bucket.add.length;
+      removed += bucket.remove.length;
+      // Fold the change into the pull's snapshot so the reconciliation
+      // below sees the server as it now is, not as it was a step ago.
+      if (memberMap) {
+        let set = memberMap.get(groupRn);
+        if (!set) {
+          set = new Set();
+          memberMap.set(groupRn, set);
+        }
+        for (const rn of bucket.add) set.add(rn);
+        for (const rn of bucket.remove) set.delete(rn);
+      }
+      for (const entry of bucket.entries) {
+        await ctx.removeEntry(entry.parentId, entry.itemId);
+      }
+    } catch (err) {
+      if (err?.code === PUSH_ERR.NOT_FOUND) {
+        for (const entry of bucket.entries) {
+          await ctx.removeEntry(entry.parentId, entry.itemId);
+        }
+        continue;
+      }
+      // Leave the entries; the next sync retries.
+      ctx.notify.reportEventLog({
+        level: "warning",
+        accountId: ctx.accountId,
+        folderId: ctx.folderId,
+        message: `Push membership ${groupRn} failed: ${stringifyError(err)}`,
+      });
+    }
+  }
+  return { added, removed };
+}
+
 function isContactEntry(entry) {
   if (entry.kind === "list") return false;
+  if (entry.kind === "membership") return false;
   if (entry.kind === "contact") return true;
   if (
     typeof entry.itemId === "string" &&

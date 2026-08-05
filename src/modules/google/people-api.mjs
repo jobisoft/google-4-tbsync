@@ -163,6 +163,38 @@ export async function updateContactGroup(
   });
 }
 
+/** Add and/or remove members of a user contact group, in one call.
+ *
+ *  `contactGroups.members.modify` rather than `memberships` on each person:
+ *  this is the shape Thunderbird's data model already has - a list and the
+ *  contacts in it - whereas `people.updateContact` replaces a contact's
+ *  *entire* membership set, so pushing one added member would first mean
+ *  reading back every other group that contact belongs to and resending them
+ *  all. (`memberships` is a legal `updatePersonFields` value; the reason to
+ *  prefer this endpoint is the shape, not permission.)
+ *
+ *  Google caps the two arrays at 1000 names combined. Callers here push one
+ *  user action at a time, so the cap is documentation rather than a limit we
+ *  come near.
+ *
+ *  Among system groups only `myContacts` and `starred` accept additions;
+ *  everything we push is a user group, where both directions are allowed. */
+export async function modifyContactGroupMembers(
+  accountId,
+  resourceName,
+  { add = [], remove = [] } = {},
+) {
+  if (!add.length && !remove.length) return null;
+  const url = `${BASE}/${resourceName}/members:modify`;
+  return await fetchWithAuthRetry(accountId, url, {
+    method: "POST",
+    body: JSON.stringify({
+      resourceNamesToAdd: add,
+      resourceNamesToRemove: remove,
+    }),
+  });
+}
+
 /** Delete a user contact group. 404 → PUSH_ERR.NOT_FOUND. */
 export async function deleteContactGroup(accountId, resourceName) {
   const url = `${BASE}/${resourceName}`;
