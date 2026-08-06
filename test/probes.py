@@ -25,6 +25,7 @@ def card(slug, extra=()):
         "VERSION:4.0",
         f"FN:{MARKER} {slug}",
         f"N:{slug};{MARKER};Q;Dr.;",
+        "NICKNAME:Probey",
         "ORG:Beispiel GmbH;Entwicklung",
         "TITLE:Protokolltester",
         f"EMAIL;TYPE=work:{slug}@probe.invalid",
@@ -33,6 +34,15 @@ def card(slug, extra=()):
         "TEL;TYPE=cell:+49 170 7654321",
         "ADR;TYPE=work:;;Musterweg 4;Bonn;NRW;53111;Deutschland",
         "BDAY:19800229",
+        "ANNIVERSARY:20100615",
+        "IMPP:xmpp:probe@jabber.invalid",
+        "URL:https://example.invalid/probe",
+        "X-CUSTOM1:Erste Notiz",
+        "X-CUSTOM2:Zweite Notiz",
+        "GENDER:F",
+        "ROLE:Testperson",
+        "RELATED;VALUE=TEXT;TYPE=spouse:Jane Probe",
+        "CALURI:https://example.invalid/probe.ics",
         "NOTE:Angelegt vom Test. Umlaute: aeoeue AEOEUE ss.",
     ]
     lines += list(extra) + ["END:VCARD", ""]

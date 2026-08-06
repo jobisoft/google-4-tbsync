@@ -34,6 +34,7 @@ MODULES = [
     "test_2_contacts",
     "test_3_lists",
     "test_4_membership",
+    "test_6_fields",
     "test_5_read_only",
 ]
 

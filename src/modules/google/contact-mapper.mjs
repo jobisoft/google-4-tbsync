@@ -39,6 +39,11 @@ export function personToVCard(person, uid) {
   );
   writeDate(comp, "anniversary", anniv?.date);
   writeNote(comp, person);
+  writeCustomFields(comp, person);
+  writeGender(comp, person);
+  writeRole(comp, person);
+  writeRelations(comp, person);
+  writeCalendarUrls(comp, person);
   if (person.resourceName)
     comp.addPropertyWithValue(X_RESOURCENAME, person.resourceName);
   if (person.etag) comp.addPropertyWithValue(X_ETAG, person.etag);
@@ -85,7 +90,127 @@ export function vCardToPerson(vCard) {
   const note = comp.getFirstPropertyValue("note");
   if (note) person.biographies = [{ value: stringOf(note) }];
 
+  const custom = readCustomFields(comp);
+  if (custom.length) person.userDefined = custom;
+
+  const gender = readGender(comp);
+  if (gender) person.genders = [gender];
+
+  const role = comp.getFirstPropertyValue("role");
+  if (role) person.occupations = [{ value: stringOf(role) }];
+
+  const relations = readRelations(comp);
+  if (relations.length) person.relations = relations;
+
+  const calUrls = readCalendarUrls(comp);
+  if (calUrls.length) person.calendarUrls = calUrls;
+
   return person;
+}
+
+// ── Custom fields ────────────────────────────────────────────────────────
+//
+// Thunderbird models exactly four free-text custom fields (X-CUSTOM1..4 in
+// its vCards); Google models an open list of key/value pairs. The mapping is
+// positional, like the original Google-4-TbSync's: the first four
+// `userDefined` entries land in the four slots, and the slots go back as
+// keys Custom1..Custom4. An entry's original key does not survive a local
+// edit - the cost of squeezing an open list into four fixed slots.
+
+const CUSTOM_SLOTS = ["x-custom1", "x-custom2", "x-custom3", "x-custom4"];
+
+function writeCustomFields(comp, person) {
+  const entries = (person.userDefined ?? []).filter((e) => e?.value);
+  entries.slice(0, CUSTOM_SLOTS.length).forEach((entry, i) => {
+    comp.addPropertyWithValue(CUSTOM_SLOTS[i], entry.value);
+  });
+}
+
+function readCustomFields(comp) {
+  const out = [];
+  CUSTOM_SLOTS.forEach((slot, i) => {
+    const v = comp.getFirstPropertyValue(slot);
+    if (v) out.push({ key: `Custom${i + 1}`, value: stringOf(v) });
+  });
+  return out;
+}
+
+// ── Gender ───────────────────────────────────────────────────────────────
+//
+// Single letter only. vCard 4 allows `sex;identity`, but Thunderbird
+// silently discards the ENTIRE card when a GENDER value contains the `;`
+// component - contacts.create returns an id and the card never exists
+// (measured against TB 153; single letters store fine). So Google's three
+// standard values map onto M/F/U, any custom value becomes a bare O, and
+// the custom text is the one thing this mapping knowingly loses.
+
+function writeGender(comp, person) {
+  const value = person.genders?.[0]?.value;
+  if (!value) return;
+  const letter =
+    { male: "M", female: "F", unspecified: "U" }[value.toLowerCase()] ?? "O";
+  comp.addPropertyWithValue("gender", letter);
+}
+
+function readGender(comp) {
+  const raw = comp.getFirstPropertyValue("gender");
+  if (!raw) return null;
+  const sex = stringOf(raw).split(";")[0];
+  const value = { M: "male", F: "female", U: "unspecified", O: "other" }[
+    sex?.toUpperCase()
+  ];
+  return value ? { value } : null;
+}
+
+// ── Occupation ───────────────────────────────────────────────────────────
+
+function writeRole(comp, person) {
+  const value = person.occupations?.[0]?.value;
+  if (value) comp.addPropertyWithValue("role", value);
+}
+
+// ── Relations ────────────────────────────────────────────────────────────
+//
+// Google: `{ person: "Jane", type: "spouse" }`. vCard 4 RELATED wants a URI
+// or VALUE=TEXT; the person is a display name, so TEXT it is.
+
+function writeRelations(comp, person) {
+  for (const rel of person.relations ?? []) {
+    if (!rel?.person) continue;
+    const p = new ICAL.Property("related", comp);
+    p.setParameter("value", "TEXT");
+    if (rel.type) p.setParameter("type", rel.type);
+    p.setValue(rel.person);
+    comp.addProperty(p);
+  }
+}
+
+function readRelations(comp) {
+  const out = [];
+  for (const p of comp.getAllProperties("related")) {
+    const value = p.getFirstValue();
+    if (!value) continue;
+    const type = paramValue(p, "type");
+    out.push({ person: stringOf(value), ...(type ? { type } : {}) });
+  }
+  return out;
+}
+
+// ── Calendar links ───────────────────────────────────────────────────────
+
+function writeCalendarUrls(comp, person) {
+  for (const cal of person.calendarUrls ?? []) {
+    if (cal?.url) comp.addPropertyWithValue("caluri", cal.url);
+  }
+}
+
+function readCalendarUrls(comp) {
+  const out = [];
+  for (const p of comp.getAllProperties("caluri")) {
+    const value = p.getFirstValue();
+    if (value) out.push({ url: stringOf(value) });
+  }
+  return out;
 }
 
 /** Extract the two X-GOOGLE-* identity properties from a vCard string.

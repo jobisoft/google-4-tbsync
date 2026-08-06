@@ -29,9 +29,17 @@ const PULL_FIELDS = [
   "imClients",
   "biographies",
   "memberships",
+  "userDefined",
+  "genders",
+  "occupations",
+  "relations",
+  "calendarUrls",
 ].join(",");
 
 // Push mask excludes `memberships` - memberships are server→local only.
+// Every other pulled field is pushed: a field in the pull mask but not the
+// update mask is silently reverted by the next updateContact, which reads
+// as "Google keeps undoing my edit".
 const PUSH_FIELDS = [
   "names",
   "nicknames",
@@ -44,6 +52,11 @@ const PUSH_FIELDS = [
   "events",
   "imClients",
   "biographies",
+  "userDefined",
+  "genders",
+  "occupations",
+  "relations",
+  "calendarUrls",
 ].join(",");
 
 // Group members are NOT derived from here - they come from each Person's
