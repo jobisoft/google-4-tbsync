@@ -25,6 +25,7 @@ import * as addressBook from "./address-book.mjs";
 import { syncFolderContacts } from "./google/sync-contacts.mjs";
 import { stringifyError } from "./errors.mjs";
 import { runStartupMigrations } from "./upgrades.mjs";
+import { setSyncSignalResolver } from "./google/people-api.mjs";
 
 export class GoogleProvider extends TbSyncProviderImplementation {
   constructor() {
@@ -48,6 +49,10 @@ export class GoogleProvider extends TbSyncProviderImplementation {
       contributorsUrl: "https://github.com/jobisoft/google-4-tbsync",
       logPrefix: "[google-4-tbsync]",
     });
+    // Let the People API layer see the running sync's AbortSignal, so a
+    // cancel drops the request in flight instead of waiting out a call that
+    // may never answer.
+    setSyncSignalResolver((accountId) => this.syncSignal(accountId));
   }
 
   // ── Base-class hook: post-register ─────────────────────────────────────
@@ -125,10 +130,6 @@ export class GoogleProvider extends TbSyncProviderImplementation {
       account: ctx.account,
       notify: this,
     });
-  }
-
-  async onCancelSync(_args) {
-    return null;
   }
 
   // ── Account / folder lifecycle ─────────────────────────────────────────

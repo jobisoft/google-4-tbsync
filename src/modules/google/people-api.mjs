@@ -201,15 +201,31 @@ export async function deleteContactGroup(accountId, resourceName) {
   await fetchWithAuthRetry(accountId, url, { method: "DELETE" });
 }
 
+/** How this module reaches the running sync's AbortSignal. Wired once by the
+ *  provider, so every People API call is cancellable without threading a
+ *  signal through each of them. */
+let syncSignalFor = () => null;
+export function setSyncSignalResolver(fn) {
+  syncSignalFor = typeof fn === "function" ? fn : () => null;
+}
+
 /** Authenticated People API fetch. Retries once on 401 with a fresh token.
  *  DELETE and empty bodies return null. */
 async function fetchWithAuthRetry(accountId, url, opts = {}) {
   const method = opts.method ?? "GET";
   for (let attempt = 1; attempt <= 2; attempt++) {
+    const signal = syncSignalFor(accountId);
     const token = await oauth.getAccessToken(accountId);
     const headers = { Authorization: `Bearer ${token}` };
     if (opts.body) headers["Content-Type"] = "application/json";
-    const resp = await fetch(url, { method, headers, body: opts.body });
+    // A cancel aborts the request in flight; the AbortError travels out
+    // untouched so the port reports E:CANCELLED rather than a fault.
+    const resp = await fetch(url, {
+      method,
+      headers,
+      body: opts.body,
+      ...(signal ? { signal } : {}),
+    });
 
     if (resp.ok) {
       if (resp.status === 204) return null;

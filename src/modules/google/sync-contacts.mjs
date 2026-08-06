@@ -53,6 +53,15 @@ function logDebug(ctx, message, details) {
   });
 }
 
+/** Stop if the host has cancelled this account's sync.
+ *
+ *  The abort signal already kills the People API call in flight; this covers
+ *  the gaps between items, where carrying on means work nobody is waiting
+ *  for any more. `ctx.notify` is the provider instance. */
+function throwIfCancelled(ctx) {
+  ctx.notify?.throwIfCancelled?.(ctx.accountId);
+}
+
 export async function syncFolderContacts({
   accountId,
   folderId,
@@ -273,6 +282,10 @@ async function runPushAddModifyPass(ctx, userEntries) {
   let done = 0;
 
   for (const entry of actionable) {
+    // Between items, never between a push and the changelog entry it
+    // settles: unwinding there would drop a user edit that Google already
+    // has. An entry left in the changelog is simply retried next sync.
+    throwIfCancelled(ctx);
     try {
       const outcome =
         entry.status === STATUS.ADDED_BY_USER
@@ -537,6 +550,11 @@ async function runPushDeletePass(ctx, userEntries) {
 
   let deleted = 0;
   for (const entry of deletions) {
+    // Every pass, not just the add/modify ones: once the signal is aborted
+    // each remaining request fails instantly and the per-item catch below
+    // turns that into one warning per item - a wall of noise for what was a
+    // button press.
+    throwIfCancelled(ctx);
     const resourceName = cMap.get(entry.itemId);
     if (!resourceName) {
       // Never-synced-or-already-gone → just drop the entry.
@@ -770,6 +788,7 @@ async function runGroupPushAddModifyPass(ctx, userEntries) {
   let added = 0,
     updated = 0;
   for (const entry of groupEntries) {
+    throwIfCancelled(ctx);
     try {
       const outcome =
         entry.status === STATUS.ADDED_BY_USER
@@ -881,6 +900,7 @@ async function runGroupPushDeletePass(ctx, userEntries) {
 
   let deleted = 0;
   for (const entry of deletions) {
+    throwIfCancelled(ctx);
     const mapping = gMap.getByListId(entry.itemId);
     if (!mapping) {
       // Never reached the server, or the mapping was lost. Say so: dropping
@@ -977,6 +997,7 @@ async function runMembershipPushPass(ctx, userEntries, memberMap) {
   let added = 0,
     removed = 0;
   for (const [groupRn, bucket] of byGroup) {
+    throwIfCancelled(ctx);
     try {
       logDebug(
         ctx,
