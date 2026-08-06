@@ -23,7 +23,6 @@ import {
 import * as oauth from "./google/oauth.mjs";
 import * as addressBook from "./address-book.mjs";
 import { syncFolderContacts } from "./google/sync-contacts.mjs";
-import { stringifyError } from "./errors.mjs";
 import { runStartupMigrations } from "./upgrades.mjs";
 import { setSyncSignalResolver } from "./google/people-api.mjs";
 
@@ -162,27 +161,20 @@ export class GoogleProvider extends TbSyncProviderImplementation {
   }
 
   async onAccountDisabled({ accountId }) {
-    const ctx = await this.#loadContext(accountId);
-    if (!ctx) return null;
-    // Release Thunderbird resources so re-enable starts from a clean
-    // slate. The host wipes its folder rows right after this returns,
-    // so per-folder custom.* doesn't need clearing here.
-    await this.#deleteAccountTargets(ctx.folders);
-    oauth.forgetAuth(ctx.account.accountId);
+    // Provider state only - the host owns target deletion in every flow
+    // and deletes the books right after this returns, whether or not this
+    // provider is around to hear about it. That division is what makes
+    // Disconnect a recovery path.
+    oauth.forgetAuth(accountId);
     return null;
   }
 
-  async onAccountDeleted({ accountId, purgeTargets }) {
-    const ctx = await this.#loadContext(accountId);
-    if (!ctx) return null;
-    // `purgeTargets` travels over the protocol from the host. Default to
-    // true: removing an account normally means the books go too. The host
+  async onAccountDeleted({ accountId }) {
+    // Same contract: stop, drop provider state, never touch resources.
+    // Keeping or purging the books is the host's decision now; the host
     // row (including custom.{groupMap,contactMap,changelog} and OAuth
-    // secrets) is wiped right after we return - no explicit patch needed.
-    if (purgeTargets !== false) {
-      await this.#deleteAccountTargets(ctx.folders);
-    }
-    oauth.forgetAuth(ctx.account.accountId);
+    // secrets) is wiped right after we return.
+    oauth.forgetAuth(accountId);
     return null;
   }
 
@@ -200,15 +192,15 @@ export class GoogleProvider extends TbSyncProviderImplementation {
     if (!folder)
       throw withCode(new Error("unknown folder"), ERR.UNKNOWN_FOLDER);
     if (folder.targetID) {
-      // Drop the targetID first so the host's watcher stops listening
-      // before we delete the book (otherwise each cascading onDeleted
-      // event from the book teardown would be logged as a user delete).
+      // Drop the targetID so the host's watcher stops listening before the
+      // book goes away (otherwise each cascading onDeleted event from the
+      // teardown would be logged as a user delete). The deletion itself is
+      // the host's, right after this returns.
       await this.updateFolder({
         accountId,
         folderId,
         patch: { targetID: null, targetName: null },
       });
-      await safeDeleteBook(folder.targetID);
     }
     // Clear the provider-owned maps: the TB ids they hold reference the
     // book we just deleted. The host wipes the changelog and the
@@ -537,18 +529,6 @@ export class GoogleProvider extends TbSyncProviderImplementation {
     };
   }
 
-  /** Delete every Thunderbird address book bound to these folder rows,
-   *  tolerating per-folder failures (log and continue). The host watcher
-   *  unregisters each book on the next folders-changed broadcast (when
-   *  targetID drops to null) - callers that care about avoiding orphan
-   *  delete entries should null targetID *before* calling this helper. */
-  async #deleteAccountTargets(folderList) {
-    for (const folder of folderList) {
-      if (folder.targetID) {
-        await safeDeleteBook(folder.targetID);
-      }
-    }
-  }
 }
 
 // ── Module-local helpers ─────────────────────────────────────────────────
@@ -564,14 +544,3 @@ function bookNameForFolder(folder, ctx) {
   return `${ctx.account.accountName} (${ctx.authenticatedUserEmail})`;
 }
 
-/** `addressBook.deleteBook` with a warn-and-continue catch. */
-async function safeDeleteBook(targetID) {
-  try {
-    await addressBook.deleteBook(targetID);
-  } catch (err) {
-    console.warn(
-      `[google-4-tbsync] could not delete address book ${targetID}:`,
-      stringifyError(err),
-    );
-  }
-}
