@@ -34,6 +34,7 @@ const PULL_FIELDS = [
   "occupations",
   "relations",
   "calendarUrls",
+  "photos",
 ].join(",");
 
 // Push mask excludes `memberships` - memberships are server→local only.
@@ -124,6 +125,51 @@ export async function updateContact(accountId, resourceName, person, etag) {
 export async function deleteContact(accountId, resourceName) {
   const url = `${BASE}/${resourceName}:deleteContact`;
   await fetchWithAuthRetry(accountId, url, { method: "DELETE" });
+}
+
+// ── Contact photos ────────────────────────────────────────────────────────
+//
+// Photos are not part of updateContact - listing them in updatePersonFields
+// is a 400 - they travel through their own endpoints, and downloads go
+// straight to the photo URL each person carries.
+
+/** Fetch a photo URL into a data URI, or null when it cannot be fetched.
+ *  No Authorization header: the URLs Google hands out are self-authorizing,
+ *  and a failure here must cost one photo, never the sync. */
+export async function fetchPhotoAsDataUri(url) {
+  try {
+    const resp = await fetch(url);
+    if (!resp.ok) return null;
+    const mime = resp.headers.get("content-type") ?? "image/jpeg";
+    const buf = new Uint8Array(await resp.arrayBuffer());
+    let bin = "";
+    const CHUNK = 0x8000;
+    for (let i = 0; i < buf.length; i += CHUNK) {
+      bin += String.fromCharCode(...buf.subarray(i, i + CHUNK));
+    }
+    return `data:${mime};base64,${btoa(bin)}`;
+  } catch {
+    return null;
+  }
+}
+
+/** Upload a contact photo. Returns the updated person (fresh etag and
+ *  photo URL), so the caller can restamp instead of refetching. */
+export async function updateContactPhoto(accountId, resourceName, base64) {
+  const url = `${BASE}/${resourceName}:updateContactPhoto`;
+  const data = await fetchWithAuthRetry(accountId, url, {
+    method: "PATCH",
+    body: JSON.stringify({ photoBytes: base64, personFields: PULL_FIELDS }),
+  });
+  return data?.person ?? null;
+}
+
+/** Remove a contact photo. Returns the updated person. */
+export async function deleteContactPhoto(accountId, resourceName) {
+  const params = new URLSearchParams({ personFields: PULL_FIELDS });
+  const url = `${BASE}/${resourceName}:deleteContactPhoto?${params}`;
+  const data = await fetchWithAuthRetry(accountId, url, { method: "DELETE" });
+  return data?.person ?? null;
 }
 
 // ── Contact groups ────────────────────────────────────────────────────────

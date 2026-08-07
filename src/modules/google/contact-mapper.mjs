@@ -14,6 +14,12 @@ import ICAL from "../../vendor/ical.min.js";
 
 const X_RESOURCENAME = "x-google-resourcename";
 const X_ETAG = "x-google-etag";
+// Photo bookkeeping. The URL is the server's current photo address (change
+// detection on pull: same URL, no refetch); the hash is sha-1 of the local
+// PHOTO's base64 payload as of the last server exchange (change detection on
+// push: different hash, upload).
+const X_PHOTO_URL = "x-google-photo-url";
+const X_PHOTO_HASH = "x-google-photo-hash";
 
 // ── Public API ───────────────────────────────────────────────────────────
 
@@ -22,7 +28,7 @@ const X_ETAG = "x-google-etag";
  *  `id` from that, so callers can pre-tag the changelog with a known
  *  itemId before calling `messenger.contacts.create`. Omit for paths
  *  that don't need to control the id. */
-export function personToVCard(person, uid) {
+export function personToVCard(person, uid, { photo } = {}) {
   const comp = newVCard();
   if (uid) comp.addPropertyWithValue("uid", uid);
   writeNames(comp, person);
@@ -44,6 +50,7 @@ export function personToVCard(person, uid) {
   writeRole(comp, person);
   writeRelations(comp, person);
   writeCalendarUrls(comp, person);
+  writePhoto(comp, photo);
   if (person.resourceName)
     comp.addPropertyWithValue(X_RESOURCENAME, person.resourceName);
   if (person.etag) comp.addPropertyWithValue(X_ETAG, person.etag);
@@ -211,6 +218,54 @@ function readCalendarUrls(comp) {
     if (value) out.push({ url: stringOf(value) });
   }
   return out;
+}
+
+// ── Photo ────────────────────────────────────────────────────────────────
+//
+// Same local shape the EAS provider uses: PHOTO;VALUE=URI with a data URI,
+// which Thunderbird stores and displays. The bytes never ride in the Person
+// object - Google serves them from a URL and takes them through the
+// updateContactPhoto endpoint - so the mapper only carries what the sync
+// hands it.
+
+function writePhoto(comp, photo) {
+  if (!photo?.dataUri) return;
+  const p = new ICAL.Property("photo", comp);
+  p.setParameter("value", "uri");
+  p.setValue(photo.dataUri);
+  comp.addProperty(p);
+  if (photo.url) comp.addPropertyWithValue(X_PHOTO_URL, photo.url);
+  if (photo.hash) comp.addPropertyWithValue(X_PHOTO_HASH, photo.hash);
+}
+
+/** The photo state a stored vCard carries: the local PHOTO data URI (null
+ *  when the card has none) and the two bookkeeping stamps. */
+export function readPhoto(vCard) {
+  const comp = parseVCard(vCard);
+  if (!comp) return { dataUri: null, url: null, hash: null, base64: null };
+  const raw = comp.getFirstPropertyValue("photo");
+  const dataUri = raw ? stringOf(raw) : null;
+  const m = dataUri ? /^data:[^;]+;base64,(.+)$/is.exec(dataUri) : null;
+  const urlProp = comp.getFirstPropertyValue(X_PHOTO_URL);
+  const hashProp = comp.getFirstPropertyValue(X_PHOTO_HASH);
+  return {
+    dataUri,
+    base64: m ? m[1].replace(/\s+/g, "") : null,
+    url: urlProp ? stringOf(urlProp) : null,
+    hash: hashProp ? stringOf(hashProp) : null,
+  };
+}
+
+/** Rewrite the photo bookkeeping stamps on a stored vCard (after an upload
+ *  or deletion), leaving everything else untouched. Pass nulls to clear. */
+export function stampPhotoState(vCard, { url, hash }) {
+  const comp = parseVCard(vCard);
+  if (!comp) return vCard;
+  comp.removeAllProperties(X_PHOTO_URL);
+  comp.removeAllProperties(X_PHOTO_HASH);
+  if (url) comp.addPropertyWithValue(X_PHOTO_URL, url);
+  if (hash) comp.addPropertyWithValue(X_PHOTO_HASH, hash);
+  return comp.toString();
 }
 
 /** Extract the two X-GOOGLE-* identity properties from a vCard string.

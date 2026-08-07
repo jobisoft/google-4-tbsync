@@ -399,14 +399,90 @@ async function pushModify(ctx, entry) {
   }
 }
 
+/** sha-1 of a base64 payload, hex - the photo change detector. */
+async function sha1hex(text) {
+  const buf = await crypto.subtle.digest(
+    "SHA-1",
+    new TextEncoder().encode(text),
+  );
+  return [...new Uint8Array(buf)]
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+/** The server-side photo worth syncing, or null. `default: true` marks the
+ *  generated monogram silhouette, which is not a photo anyone set. */
+function pickServerPhoto(person) {
+  return (person.photos ?? []).find((p) => p?.url && !p.default) ?? null;
+}
+
+/** Bring the server's photo in line with the local card, during the stamp
+ *  step of a push. Photos travel through their own endpoint - they are not
+ *  part of updateContact - and the endpoint answers with the updated
+ *  person, whose fresh etag must win the stamp or the next pull re-reads
+ *  the whole contact for nothing.
+ *
+ *  Returns `{ person, photoState }`: the person whose etag to stamp, and
+ *  the bookkeeping to write ({url, hash} or nulls). Failures cost the
+ *  photo, never the push - the entry has already been acknowledged.
+ */
+async function syncPhotoForPush(ctx, localVCard, serverPerson) {
+  const local = mapper.readPhoto(localVCard);
+  let person = serverPerson;
+  let photoState = { url: local.url, hash: local.hash };
+
+  try {
+    if (local.base64) {
+      const hash = await sha1hex(local.base64);
+      if (hash !== local.hash) {
+        logDebug(ctx, `push.photo ${serverPerson.resourceName} - uploading`);
+        const updated = await peopleApi.updateContactPhoto(
+          ctx.accountId,
+          serverPerson.resourceName,
+          local.base64,
+        );
+        if (updated) {
+          person = updated;
+          photoState = { url: pickServerPhoto(updated)?.url ?? null, hash };
+        }
+      }
+    } else if (local.url) {
+      // Had a synced photo, has none now - the user removed it.
+      logDebug(ctx, `push.photo ${serverPerson.resourceName} - deleting`);
+      const updated = await peopleApi.deleteContactPhoto(
+        ctx.accountId,
+        serverPerson.resourceName,
+      );
+      if (updated) person = updated;
+      photoState = { url: null, hash: null };
+    }
+  } catch (err) {
+    logDebug(
+      ctx,
+      `push.photo ${serverPerson.resourceName} failed: ${err?.message ?? err}`,
+    );
+  }
+  return { person, photoState };
+}
+
 /** Stamp the local card with `{resourceName, etag}` from the server.
  *  Writes via the host's observer-aware pre-tag so the stamp-update
- *  doesn't echo back as a user edit. */
+ *  doesn't echo back as a user edit. Also the moment the photo crosses:
+ *  the card is being rewritten anyway, so the photo bookkeeping rides
+ *  along in the same write. */
 async function stampLocalCard(ctx, contactId, originalVCard, serverPerson) {
-  const stamped = mapper.stampIdentity(originalVCard, {
-    resourceName: serverPerson.resourceName,
-    etag: serverPerson.etag,
-  });
+  const { person, photoState } = await syncPhotoForPush(
+    ctx,
+    originalVCard,
+    serverPerson,
+  );
+  const stamped = mapper.stampPhotoState(
+    mapper.stampIdentity(originalVCard, {
+      resourceName: person.resourceName ?? serverPerson.resourceName,
+      etag: person.etag,
+    }),
+    photoState,
+  );
   await ctx.markServer(
     ctx.targetID,
     contactId,
@@ -414,6 +490,24 @@ async function stampLocalCard(ctx, contactId, originalVCard, serverPerson) {
     "contact",
   );
   await addressBook.updateContact(contactId, stamped);
+}
+
+/** The photo argument for `personToVCard` on the pull side: reuse the
+ *  local bytes when the server URL is unchanged, fetch when it moved,
+ *  nothing when the server has none. */
+async function resolvePullPhoto(ctx, person, existingVCard) {
+  const serverPhoto = pickServerPhoto(person);
+  if (!serverPhoto) return null;
+  if (existingVCard) {
+    const old = mapper.readPhoto(existingVCard);
+    if (old.dataUri && old.url === serverPhoto.url) {
+      return { dataUri: old.dataUri, url: old.url, hash: old.hash };
+    }
+  }
+  const dataUri = await peopleApi.fetchPhotoAsDataUri(serverPhoto.url);
+  if (!dataUri) return null;
+  const base64 = dataUri.slice(dataUri.indexOf(",") + 1);
+  return { dataUri, url: serverPhoto.url, hash: await sha1hex(base64) };
 }
 
 // ── Pull pass ────────────────────────────────────────────────────────────
@@ -439,6 +533,7 @@ async function runPullPass(ctx) {
     byResourceName.set(identity.resourceName, {
       id: card.id,
       etag: identity.etag,
+      vCard: card.vCard,
     });
     cMap.set(card.id, identity.resourceName);
   }
@@ -468,7 +563,8 @@ async function runPullPass(ctx) {
       // Pull-create: book wasn't aware of this contact. Pre-generate the
       // UID so the changelog pre-tag can use a concrete itemId.
       const newId = crypto.randomUUID();
-      const vCard = mapper.personToVCard(person, newId);
+      const photo = await resolvePullPhoto(ctx, person, null);
+      const vCard = mapper.personToVCard(person, newId, { photo });
       await ctx.markServer(targetID, newId, STATUS.ADDED_BY_SERVER, "contact");
       const createdId = await addressBook.createContact(targetID, vCard);
       if (createdId !== newId) {
@@ -481,7 +577,8 @@ async function runPullPass(ctx) {
       added++;
     } else if (existing.etag !== person.etag) {
       // Pull-update: server's version is newer.
-      const vCard = mapper.personToVCard(person);
+      const photo = await resolvePullPhoto(ctx, person, existing.vCard);
+      const vCard = mapper.personToVCard(person, null, { photo });
       await ctx.markServer(
         targetID,
         existing.id,
