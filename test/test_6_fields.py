@@ -57,6 +57,8 @@ def _unfolded(s, card):
 @test("6.1", "create the rich card, sync - it reaches Google and is stamped")
 def t_6_1(s):
     _writable(s)
+    # The full-fat probe card: every mapped field family filled in. Create
+    # locally, sync so the push sends it.
     ok("contacts.create", vCard=probes.card(SLUG))
     s.sync()
     card = s.find_card(ANCHOR)
@@ -71,10 +73,13 @@ def t_6_1(s):
 @test("6.2", "clean re-pull - every mapped field comes back from Google")
 def t_6_2(s):
     _writable(s)
+    # Drop the book and re-pull: the card is now rebuilt purely from what
+    # Google stored, so a field missing here was lost in the round trip.
     s.rebind()
     card = s.find_card(ANCHOR)
     harness.true(card is not None, "the card did not survive a clean re-pull")
     body = _unfolded(s, card)
+    # Check every family in one pass and report all losses at once.
     missing = [
         label
         for label, pattern in ROUND_TRIP_FIELDS
@@ -92,6 +97,8 @@ def t_6_3(s):
     _writable(s)
     card = s.find_card(ANCHOR)
     harness.true(card is not None, "6.2 must have left the card in place")
+    # Edit X-CUSTOM1's value locally, push it, then re-pull from scratch:
+    # the new value must come back from Google.
     edited = s.vcard(card).replace("Erste Notiz", "Erste Notiz v2")
     harness.true("Erste Notiz v2" in edited, "the field to edit was present")
     ok("contacts.update", id=card["id"], vCard=edited)
@@ -114,6 +121,8 @@ def t_6_4(s):
     _writable(s)
     card = s.find_card(ANCHOR)
     harness.true(card is not None, "6.3 must have left the card in place")
+    # Rewrite the card WITHOUT these lines - the way a user removes fields.
+    # One representative per family type, plus BDAY for the date writers.
     cleared = ("NICKNAME", "X-CUSTOM2", "ROLE", "RELATED", "CALURI", "BDAY")
     kept = [
         line
@@ -121,6 +130,8 @@ def t_6_4(s):
         if not line.upper().startswith(cleared)
     ]
     ok("contacts.update", id=card["id"], vCard="\r\n".join(kept) + "\r\n")
+    # Push the removal, then re-pull from scratch: Google must report the
+    # fields as gone, not hand their old values back.
     s.sync()
     s.rebind()
     body = _unfolded(s, s.find_card(ANCHOR))
@@ -138,13 +149,15 @@ def t_6_4(s):
 
 
 @test("6.5", "delete the card, sync - gone and staying gone")
-def t_6_4(s):
+def t_6_5(s):
     _writable(s)
     card = s.find_card(ANCHOR)
     harness.true(card is not None, "6.3 must have left the card in place")
+    # Delete the rich card and push the delete.
     ok("contacts.remove", id=card["id"])
     s.sync()
     harness.true(s.find_card(ANCHOR) is None, "the card is gone locally")
+    # A second sync catches the delete echoing back from a pull.
     s.sync()
     harness.true(s.find_card(ANCHOR) is None, "the echo re-created the card")
     harness.eq(s.changelog(), [], "changelog drained")

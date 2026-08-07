@@ -19,6 +19,8 @@ ANCHOR = probes.email_of(SLUG)
 
 
 def _writable(s):
+    """Write tests skip (not fail) on a read-only account - that mode is a
+    legitimate configuration, and section 5 tests it explicitly."""
     if s.read_only:
         raise Skip("account is in read-only mode; turn it off to run write tests")
 
@@ -27,11 +29,15 @@ def _writable(s):
 def t_2_1(s):
     _writable(s)
     before = len(s.cards())
+    # Create the card in the local address book (as the user would), then
+    # sync: the push pass must send it to Google.
     ok("contacts.create", vCard=probes.card(SLUG))
     s.sync()
 
     card = s.find_card(ANCHOR)
     harness.true(card is not None, "the card vanished after the push")
+    # The push stamps Google's identity onto the stored card; its presence
+    # is the difference between "saved locally" and "reached the server".
     harness.true(
         s.resource_name(card) is not None,
         "no X-GOOGLE-RESOURCENAME - the card was saved locally but never "
@@ -47,8 +53,12 @@ def t_2_2(s):
     _writable(s)
     card = s.find_card(ANCHOR)
     harness.true(card is not None, "2.1 must have left a card to modify")
+    # Remember the server identity: an edit must update the same server
+    # record, not delete and re-create it.
     was = s.resource_name(card)
 
+    # Edit two fields the way a user would (change the stored vCard), then
+    # sync so the push sends the modification.
     body = s.vcard(card)
     body = body.replace("TITLE:Protokolltester", "TITLE:Protokolltester (geaendert)")
     body = body.replace("+49 228 1234567", "+49 228 7777777")
@@ -68,6 +78,9 @@ def t_2_2(s):
 @test("2.3", "clean re-pull - the card comes back from Google intact")
 def t_2_3(s):
     _writable(s)
+    # Tear the local book down and pull it fresh: from here on, everything
+    # asserted comes from what Google stored, not from local state that a
+    # failed push would have left looking healthy.
     s.rebind()
     card = s.find_card(ANCHOR)
     harness.true(card is not None, "the card did not survive a clean re-pull")
@@ -96,6 +109,8 @@ def t_2_4(s):
     card = s.find_card(ANCHOR)
     harness.true(card is not None, "2.3 must have left a card to delete")
     before = len(s.cards())
+    # Delete locally, then sync: the delete must be pushed BEFORE the pull
+    # runs, or the pull re-creates the card (the bug this section pins).
     ok("contacts.remove", id=card["id"])
     s.sync()
 
@@ -106,5 +121,7 @@ def t_2_4(s):
     )
     harness.eq(len(s.cards()), before - 1, "card count")
     harness.eq(s.changelog(), [], "changelog drained")
+    # A second sync catches the delayed variant of the same bug: a delete
+    # that only half-reached Google comes back on the next pull.
     s.sync()
     harness.true(s.find_card(ANCHOR) is None, "still gone after a settling sync")

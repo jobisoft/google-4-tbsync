@@ -26,8 +26,11 @@ def _read_only(s):
 @test("5.1", "a local edit is queued, then dropped by the sync")
 def t_5_1(s):
     _read_only(s)
+    # Create a card locally: the observer must still queue it (read-only is
+    # decided at sync time, not at edit time)...
     ok("contacts.create", vCard=probes.card(SLUG))
     harness.true(s.changelog(), "the edit was not queued at all")
+    # ...and the sync must then discard the entry rather than push it.
     s.sync()
     harness.eq(
         s.changelog(),
@@ -58,12 +61,17 @@ def t_5_3(s):
 @test("5.4", "the local card is not destroyed, and Google is untouched")
 def t_5_4(s):
     _read_only(s)
+    # Dropping the changelog entry must not delete the card itself - the
+    # user's local copy stays, it just never syncs.
     card = s.find_card(ANCHOR)
     harness.true(card is not None, "the locally-created card was deleted outright")
+    # No X-GOOGLE-RESOURCENAME on it = it was never pushed to Google.
     harness.true(
         s.resource_name(card) is None,
         "the card carries a Google identity, so it was pushed despite "
         "read-only mode",
     )
+    # Clean up: in read-only mode the remove also stays local, which is fine
+    # because the card never existed on Google.
     ok("contacts.remove", id=card["id"])
     s.sync()

@@ -48,6 +48,8 @@ def _photo_lines(s, card):
 @test("7.1", "create a card with a photo - the photo is uploaded and stamped")
 def t_7_1(s):
     _writable(s)
+    # Probe card plus a local PHOTO data URI, then sync: the push must
+    # create the contact AND upload the photo through updateContactPhoto.
     ok(
         "contacts.create",
         vCard=probes.card(SLUG, extra=(f"PHOTO;VALUE=URI:{DATA_URI}",)),
@@ -55,6 +57,8 @@ def t_7_1(s):
     s.sync()
     card = s.find_card(ANCHOR)
     harness.true(card is not None, "the card vanished after the push")
+    # The upload leaves both bookkeeping stamps on the stored card: the URL
+    # (pull change detection) and the hash (push change detection).
     lines = _photo_lines(s, card)
     harness.true(
         any(l.upper().startswith("X-GOOGLE-PHOTO-URL") for l in lines),
@@ -70,6 +74,8 @@ def t_7_1(s):
 @test("7.2", "clean re-pull - the photo comes back from Google")
 def t_7_2(s):
     _writable(s)
+    # Drop the book and re-pull: the photo must be fetched back from the
+    # URL Google serves, not remembered from local state.
     s.rebind()
     card = s.find_card(ANCHOR)
     harness.true(card is not None, "the card did not survive the re-pull")
@@ -88,6 +94,8 @@ def t_7_2(s):
 @test("7.3", "sync again with no edit - the photo is not re-fetched or re-sent")
 def t_7_3(s):
     _writable(s)
+    # Snapshot the photo lines, run a no-op sync, snapshot again: identical
+    # stamps prove the change detectors (URL on pull, hash on push) hold.
     card_before = s.find_card(ANCHOR)
     s.sync()
     card_after = s.find_card(ANCHOR)
@@ -108,6 +116,8 @@ def t_7_4(s):
     unfolded = s.unfold(s.vcard(card))
     kept = [l for l in unfolded if not l.upper().startswith("PHOTO")]
     ok("contacts.update", id=card["id"], vCard="\r\n".join(kept) + "\r\n")
+    # Push the removal (URL stamp present + no local PHOTO = delete), then
+    # re-pull from scratch: Google must no longer serve a user photo.
     s.sync()
     s.rebind()
     card2 = s.find_card(ANCHOR)
@@ -118,6 +128,7 @@ def t_7_4(s):
         f"the photo came back after removal - deleteContactPhoto never ran; "
         f"photo lines: {lines}",
     )
+    # This slug's last test: remove the card itself.
     ok("contacts.remove", id=card2["id"])
     s.sync()
 
@@ -146,6 +157,7 @@ def _png_data_uri(r, g, b):
 @test("7.5", "replace the photo - the new image is uploaded, not skipped")
 def t_7_5(s):
     _writable(s)
+    # Fresh card with a red 1x1 photo (own slug - 7.4 deleted the other).
     slug = "fotowechsel"
     ok(
         "contacts.create",
@@ -154,11 +166,14 @@ def t_7_5(s):
     s.sync()
     card = s.find_card(probes.email_of(slug))
     harness.true(card is not None, "setup card did not reach Google")
+    # Remember the hash stamp of the first upload...
     before = [
         l for l in s.unfold(s.vcard(card)) if l.upper().startswith("X-GOOGLE-PHOTO-HASH")
     ]
     harness.true(before, "no hash stamp after the first upload")
 
+    # ...swap the PHOTO line for a different image and push again. The hash
+    # comparison must see the difference and re-upload.
     unfolded = s.unfold(s.vcard(card))
     swapped = []
     for line in unfolded:
@@ -177,6 +192,7 @@ def t_7_5(s):
         "the hash stamp did not change - the replacement photo was never "
         "uploaded (the hash comparison thinks nothing changed)",
     )
+    # Clean up the replacement-test card.
     ok("contacts.remove", id=card2["id"])
     s.sync()
 

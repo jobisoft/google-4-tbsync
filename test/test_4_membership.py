@@ -39,8 +39,12 @@ def _setup(s):
 def t_4_1(s):
     _writable(s)
     lst, card = _setup(s)
+    # Add the card to the list locally and DON'T sync yet - this test is
+    # about what gets recorded, 4.2 is about what the sync does with it.
     ok("lists.addMember", id=lst["id"], contactId=card["id"])
 
+    # The changelog must now hold a membership entry; without one the next
+    # pull reconciles the book back to the server and the add vanishes.
     kinds = [e.get("kind") for e in s.changelog()]
     harness.contains(
         kinds,
@@ -54,6 +58,9 @@ def t_4_1(s):
 def t_4_2(s):
     _writable(s)
     lst = s.find_list(NAME)
+    # Sync the pending membership from 4.1: push sends it, then the pull of
+    # the SAME sync must not revert it (the original bug reconciled against
+    # a pre-push snapshot).
     s.sync()
     harness.eq(s.changelog(), [], "changelog drained")
     harness.eq(
@@ -67,6 +74,8 @@ def t_4_2(s):
 @test("4.3", "clean re-pull - the membership came from Google, not local state")
 def t_4_3(s):
     _writable(s)
+    # Drop the book, pull it fresh: the membership must be rebuilt from the
+    # server's group data, which proves the push actually landed.
     s.rebind()
     lst = s.find_list(NAME)
     harness.true(lst is not None, "the list did not survive the re-pull")
@@ -76,6 +85,9 @@ def t_4_3(s):
 @test("4.4", "a server-applied membership does not re-queue itself")
 def t_4_4(s):
     _writable(s)
+    # 4.3's rebind made the provider apply the server's membership locally.
+    # That write must be pre-tagged as the provider's own - otherwise it
+    # shows up here as a pending user edit and re-pushes forever.
     harness.eq(
         s.changelog(),
         [],
@@ -92,14 +104,18 @@ def t_4_5(s):
     lst = s.find_list(NAME)
     members = s.members(lst["id"])
     harness.true(members, "4.3 must have left a member to remove")
+    # Remove the member locally and push it.
     ok("lists.removeMember", id=lst["id"], contactId=members[0]["id"])
     s.sync()
     harness.eq(s.changelog(), [], "changelog drained")
     harness.eq(len(s.members(lst["id"])), 0, "the member is gone locally")
+    # The second sync's pull is where a removal that never reached Google
+    # would come back.
     s.sync()
     harness.eq(
         len(s.members(lst["id"])),
         0,
         "the member was restored by the pull - the removal never reached Google",
     )
+    # Last membership test: clear the probe list and card for section 6.
     probes.reset(s)

@@ -61,10 +61,13 @@ def _as_old_card(s, card, edits=(), extra=()):
 @test("8.1", "an old card's edit no longer clears the new families on Google")
 def t_8_1(s):
     _writable(s)
+    # Setup: push the rich probe card so Google holds values in every new
+    # family. This is the server-side data the guard must protect.
     ok("contacts.create", vCard=probes.card(SLUG))
     s.sync()
     card = s.find_card(ANCHOR)
     harness.true(card is not None, "the card vanished after the push")
+    # The push path must have stamped the card current (stampLocalCard).
     harness.eq(
         _sync_rev(s, card),
         "2",
@@ -80,6 +83,8 @@ def t_8_1(s):
             s, card, edits=[("TITLE:Protokolltester", "TITLE:Altkarten-Edit")]
         ),
     )
+    # This sync is the moment of truth: pushModify sees syncRev 1 < 2,
+    # clean-pulls the server person, merges, and pushes the upgraded card.
     s.sync()
 
     # The push must have upgraded the local card: families merged back in,
@@ -89,6 +94,7 @@ def t_8_1(s):
     harness.contains(body, "Erste Notiz", "the merge did not restore X-CUSTOM1")
     harness.eq(_sync_rev(s, local), "2", "the pushed old card was not restamped")
 
+    # Server truth: drop the book, re-pull, and check what Google kept.
     s.rebind()
     body = _unfolded(s, s.find_card(ANCHOR))
     harness.contains(body, "Altkarten-Edit", "the actual edit got lost")
@@ -125,6 +131,8 @@ def t_8_2(s):
         id=card["id"],
         vCard=_as_old_card(s, card, extra=["X-CUSTOM1:Lokal gewonnen"]),
     )
+    # Push (guard merges: local slot 1 wins, server fills the rest), then
+    # re-pull from scratch for the server's verdict.
     s.sync()
     s.rebind()
     body = _unfolded(s, s.find_card(ANCHOR))
@@ -144,12 +152,15 @@ def t_8_3(s):
     card = s.find_card(ANCHOR)
     harness.true(card is not None, "8.2 must have left the card in place")
     harness.eq(_sync_rev(s, card), "2", "the re-pulled card must be current")
+    # Remove one custom line from the stamped card - a deliberate removal,
+    # not an old card's ignorance.
     kept = [
         line
         for line in s.unfold(s.vcard(card))
         if "Lokal gewonnen" not in line
     ]
     ok("contacts.update", id=card["id"], vCard="\r\n".join(kept) + "\r\n")
+    # Push (no merge this time - the card is current), then re-pull.
     s.sync()
     s.rebind()
     body = _unfolded(s, s.find_card(ANCHOR))

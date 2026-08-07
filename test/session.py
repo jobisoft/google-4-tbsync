@@ -210,7 +210,20 @@ class Session:
         ]
 
 
-def preflight():
+def preflight(bind=True):
+    """Locate the granted Google account and return a ready Session.
+
+    NOT read-only by default: the final step (`_bind`) runs a FULL ACCOUNT
+    SYNC to prove the contacts resource actually binds to an address book.
+    Any pending changelog entry is pushed and the pull pass runs - state
+    staged for a later test is consumed here. This once silently destroyed
+    a prepared migration fixture that a script only meant to *look at*.
+
+    Pass `bind=False` for a genuinely read-only session: no folder
+    toggling, no sync - just locate the account and folder. The caller
+    then owns the guarantee that the folder is bound (verbs against an
+    unbound folder fail with the platform's "not bound" error).
+    """
     if not bridge.is_up():
         raise PreflightError(
             f"the bridge is not answering on 127.0.0.1:{bridge.PORT}.\n"
@@ -247,10 +260,11 @@ def preflight():
     session = Session(granted, folder_id, read_only)
     session.active = ("contacts",)
     session.mark()
-    try:
-        _bind(session)
-    except AssertionError as e:
-        raise PreflightError(f"the initial sync failed.\n  {e}") from None
+    if bind:
+        try:
+            _bind(session)
+        except AssertionError as e:
+            raise PreflightError(f"the initial sync failed.\n  {e}") from None
     return session
 
 
@@ -270,6 +284,10 @@ def _granted_account(accounts):
 
 
 def _granted_contacts_folder(account_id):
+    """Find the granted contacts folder by probing scope, like
+    `_granted_account`: re-submitting a folder's current `selected` value is
+    a no-op that only succeeds on the folder the grant covers. Nothing is
+    changed and nothing syncs - selection keeps the value it already has."""
     for row in ok("getFolders", accountId=account_id)["folders"]:
         if row.get("targetType") != "contacts":
             continue
@@ -285,6 +303,13 @@ def _granted_contacts_folder(account_id):
 
 
 def _bind(session):
+    """Select the contacts folder and RUN A FULL ACCOUNT SYNC, so every test
+    starts against a folder that is proven to be bound to an address book.
+
+    This is the sync `preflight()` warns about: it pushes whatever the
+    changelog holds and runs the pull pass. Scripts that must observe state
+    without changing it use `preflight(bind=False)` and skip this entirely.
+    """
     # `syncAccount` syncs everything selected, not just the folder a test is
     # looking at, so anything else still selected would be swept along and
     # its errors attributed here. Google offers one contacts folder today,
