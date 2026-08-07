@@ -396,7 +396,7 @@ async function liftLegacyGroupStamps(provider, acc) {
       }
       if (e.itemId === RESOURCENAME) bag.resourceName = e.status;
       else bag.etag = e.status;
-      consumed.push({ parentId: e.parentId, itemId: e.itemId });
+      consumed.push({ parentId: e.parentId, itemId: e.itemId, kind: e.kind });
     }
     if (!byParent.size) continue;
 
@@ -423,12 +423,18 @@ async function liftLegacyGroupStamps(provider, acc) {
     // Drop the consumed legacy entries from the host-owned changelog
     // regardless of whether each pair produced a groupMap entry -
     // they're never useful to the new sync code.
-    for (const { parentId, itemId } of consumed) {
+    for (const { parentId, itemId, kind } of consumed) {
+      // Legacy rows imported before entries carried a kind cannot satisfy
+      // the host's kind-required remove - and they are inert anyway (their
+      // status is a raw value, never `*_by_user`, so nothing pushes them).
+      // Skip those instead of failing the migration.
+      if (!kind) continue;
       await provider.changelogRemove({
         accountId: acc.accountId,
         folderId: folder.folderId,
         parentId,
         itemId,
+        kind,
       });
     }
 

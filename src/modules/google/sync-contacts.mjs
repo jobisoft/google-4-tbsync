@@ -107,8 +107,8 @@ export async function syncFolderContacts({
         status,
         kind,
       }),
-    removeEntry: (parentId, itemId) =>
-      notify.changelogRemove({ accountId, folderId, parentId, itemId }),
+    removeEntry: (parentId, itemId, kind) =>
+      notify.changelogRemove({ accountId, folderId, parentId, itemId, kind }),
   };
 
   try {
@@ -151,12 +151,29 @@ async function flushMaps(notify, accountId, folderId, gMap, cMap) {
 async function runFolderSync(ctx) {
   const { notify, accountId, folderId, readOnly, changelog } = ctx;
 
-  const userEntries = changelog.filter(
-    (e) =>
-      e.status === STATUS.ADDED_BY_USER ||
-      e.status === STATUS.MODIFIED_BY_USER ||
-      e.status === STATUS.DELETED_BY_USER,
-  );
+  const isUserStatus = (e) =>
+    e.status === STATUS.ADDED_BY_USER ||
+    e.status === STATUS.MODIFIED_BY_USER ||
+    e.status === STATUS.DELETED_BY_USER;
+  // A changelog row's identity is (parentId, itemId, kind), and the host
+  // refuses a kind-less removeEntry - so a row without a kind could be
+  // pushed but never cleared, re-pushing forever (a contact add would
+  // duplicate server-side on every sync). Such rows can only come from a
+  // pre-release-v5 profile (the v4 migration stamps kind on every row);
+  // park them untouched and say so, rather than half-processing them.
+  const userEntries = changelog.filter((e) => isUserStatus(e) && e.kind);
+  const parked = changelog.filter((e) => isUserStatus(e) && !e.kind).length;
+  if (parked) {
+    notify.reportEventLog({
+      level: "warning",
+      accountId,
+      folderId,
+      message:
+        `${parked} changelog entr${parked === 1 ? "y" : "ies"} without a ` +
+        `kind - left untouched (pre-release-v5 leftovers; delete and ` +
+        `re-make the edit, or resync the folder)`,
+    });
+  }
   logDebug(ctx, `changelog: ${userEntries.length} pending user entries`);
 
   // 1. Push adds + modifies.
@@ -169,7 +186,7 @@ async function runFolderSync(ctx) {
     // every sync. Mirrors the spirit of EAS-4-TbSync's
     // `revertLocalChanges` pre-step on effective-RO folders.
     for (const entry of userEntries) {
-      await ctx.removeEntry(entry.parentId, entry.itemId);
+      await ctx.removeEntry(entry.parentId, entry.itemId, entry.kind);
     }
     notify.reportEventLog({
       accountId,
@@ -320,7 +337,7 @@ async function pushAdd(ctx, entry) {
   if (!local) {
     // Card gone before we got to push it - add+del cancelled or something
     // external dropped it. Nothing to do.
-    await ctx.removeEntry(entry.parentId, entry.itemId);
+    await ctx.removeEntry(entry.parentId, entry.itemId, entry.kind);
     return "dropped";
   }
   const person = mapper.vCardToPerson(local.vCard);
@@ -332,7 +349,7 @@ async function pushAdd(ctx, entry) {
   );
   await stampLocalCard(ctx, entry.itemId, local.vCard, serverPerson);
   cMap.set(entry.itemId, serverPerson.resourceName);
-  await ctx.removeEntry(entry.parentId, entry.itemId);
+  await ctx.removeEntry(entry.parentId, entry.itemId, entry.kind);
   return "added";
 }
 
@@ -340,7 +357,7 @@ async function pushModify(ctx, entry) {
   const { accountId, cMap } = ctx;
   const local = await addressBook.getContact(entry.itemId);
   if (!local) {
-    await ctx.removeEntry(entry.parentId, entry.itemId);
+    await ctx.removeEntry(entry.parentId, entry.itemId, entry.kind);
     return "dropped";
   }
   const identity = mapper.readIdentity(local.vCard);
@@ -354,7 +371,7 @@ async function pushModify(ctx, entry) {
     const serverPerson = await peopleApi.createContact(accountId, person);
     await stampLocalCard(ctx, entry.itemId, local.vCard, serverPerson);
     cMap.set(entry.itemId, serverPerson.resourceName);
-    await ctx.removeEntry(entry.parentId, entry.itemId);
+    await ctx.removeEntry(entry.parentId, entry.itemId, entry.kind);
     return "added";
   }
   let vCard = local.vCard;
@@ -398,7 +415,7 @@ async function pushModify(ctx, entry) {
     );
     await stampLocalCard(ctx, entry.itemId, vCard, serverPerson);
     cMap.set(entry.itemId, serverPerson.resourceName);
-    await ctx.removeEntry(entry.parentId, entry.itemId);
+    await ctx.removeEntry(entry.parentId, entry.itemId, entry.kind);
     return "updated";
   } catch (err) {
     if (err?.code === PUSH_ERR.CONFLICT) {
@@ -406,7 +423,7 @@ async function pushModify(ctx, entry) {
         ctx,
         `push.modify ${identity.resourceName} - CONFLICT, dropping (pull will reconcile)`,
       );
-      await ctx.removeEntry(entry.parentId, entry.itemId);
+      await ctx.removeEntry(entry.parentId, entry.itemId, entry.kind);
       return "conflict";
     }
     if (err?.code === PUSH_ERR.NOT_FOUND) {
@@ -422,7 +439,7 @@ async function pushModify(ctx, entry) {
       );
       await addressBook.deleteContact(entry.itemId);
       cMap.remove(entry.itemId);
-      await ctx.removeEntry(entry.parentId, entry.itemId);
+      await ctx.removeEntry(entry.parentId, entry.itemId, entry.kind);
       return "deleted";
     }
     throw err;
@@ -693,7 +710,7 @@ async function runPushDeletePass(ctx, userEntries) {
         ctx,
         `push.delete ${entry.itemId} - no resourceName on file, dropping`,
       );
-      await ctx.removeEntry(entry.parentId, entry.itemId);
+      await ctx.removeEntry(entry.parentId, entry.itemId, entry.kind);
       continue;
     }
     // No "is it still on the server?" pre-check: this pass now runs before
@@ -704,12 +721,12 @@ async function runPushDeletePass(ctx, userEntries) {
       logDebug(ctx, `push.delete ${resourceName}`);
       await peopleApi.deleteContact(accountId, resourceName);
       cMap.remove(entry.itemId);
-      await ctx.removeEntry(entry.parentId, entry.itemId);
+      await ctx.removeEntry(entry.parentId, entry.itemId, entry.kind);
       deleted++;
     } catch (err) {
       if (err?.code === PUSH_ERR.NOT_FOUND) {
         cMap.remove(entry.itemId);
-        await ctx.removeEntry(entry.parentId, entry.itemId);
+        await ctx.removeEntry(entry.parentId, entry.itemId, entry.kind);
         deleted++;
         continue;
       }
@@ -944,7 +961,7 @@ async function pushGroupAdd(ctx, entry) {
   // entry.itemId is the local mailing-list UID.
   const list = await addressBook.getMailingList(entry.itemId);
   if (!list) {
-    await ctx.removeEntry(entry.parentId, entry.itemId);
+    await ctx.removeEntry(entry.parentId, entry.itemId, entry.kind);
     return "dropped";
   }
   logDebug(ctx, `push.group.add ${list.name}`);
@@ -956,7 +973,7 @@ async function pushGroupAdd(ctx, entry) {
     etag: created.etag,
     groupType: created.groupType,
   });
-  await ctx.removeEntry(entry.parentId, entry.itemId);
+  await ctx.removeEntry(entry.parentId, entry.itemId, entry.kind);
   return "added";
 }
 
@@ -975,7 +992,7 @@ async function pushGroupModify(ctx, entry) {
     resourceName = entry.itemId;
     mapping = gMap.get(resourceName);
     if (!mapping) {
-      await ctx.removeEntry(entry.parentId, entry.itemId);
+      await ctx.removeEntry(entry.parentId, entry.itemId, entry.kind);
       return "dropped";
     }
     listId = mapping.mailingListId;
@@ -983,7 +1000,7 @@ async function pushGroupModify(ctx, entry) {
     listId = entry.itemId;
     mapping = gMap.getByListId(listId);
     if (!mapping) {
-      await ctx.removeEntry(entry.parentId, entry.itemId);
+      await ctx.removeEntry(entry.parentId, entry.itemId, entry.kind);
       return "dropped";
     }
     resourceName = mapping.resourceName;
@@ -991,12 +1008,12 @@ async function pushGroupModify(ctx, entry) {
   if (mapping.groupType === SYSTEM_GROUP) {
     // System groups can't be renamed via the People API; just clear
     // the changelog entry so the account doesn't sit in needs-sync.
-    await ctx.removeEntry(entry.parentId, entry.itemId);
+    await ctx.removeEntry(entry.parentId, entry.itemId, entry.kind);
     return "skipped";
   }
   const list = await addressBook.getMailingList(listId);
   if (!list) {
-    await ctx.removeEntry(entry.parentId, entry.itemId);
+    await ctx.removeEntry(entry.parentId, entry.itemId, entry.kind);
     return "dropped";
   }
   logDebug(ctx, `push.group.modify ${resourceName}`);
@@ -1013,7 +1030,7 @@ async function pushGroupModify(ctx, entry) {
     etag: updatedGroup.etag,
     groupType: updatedGroup.groupType ?? mapping.groupType,
   });
-  await ctx.removeEntry(entry.parentId, entry.itemId);
+  await ctx.removeEntry(entry.parentId, entry.itemId, entry.kind);
   return "updated";
 }
 
@@ -1041,25 +1058,25 @@ async function runGroupPushDeletePass(ctx, userEntries) {
         ctx,
         `push.group.delete ${entry.itemId} - no group mapping on file, dropping`,
       );
-      await ctx.removeEntry(entry.parentId, entry.itemId);
+      await ctx.removeEntry(entry.parentId, entry.itemId, entry.kind);
       continue;
     }
     if (mapping.groupType === SYSTEM_GROUP) {
       // Can't delete system groups via API; just forget the mapping.
       gMap.remove(mapping.resourceName);
-      await ctx.removeEntry(entry.parentId, entry.itemId);
+      await ctx.removeEntry(entry.parentId, entry.itemId, entry.kind);
       continue;
     }
     try {
       logDebug(ctx, `push.group.delete ${mapping.resourceName}`);
       await peopleApi.deleteContactGroup(accountId, mapping.resourceName);
       gMap.remove(mapping.resourceName);
-      await ctx.removeEntry(entry.parentId, entry.itemId);
+      await ctx.removeEntry(entry.parentId, entry.itemId, entry.kind);
       deleted++;
     } catch (err) {
       if (err?.code === PUSH_ERR.NOT_FOUND) {
         gMap.remove(mapping.resourceName);
-        await ctx.removeEntry(entry.parentId, entry.itemId);
+        await ctx.removeEntry(entry.parentId, entry.itemId, entry.kind);
         deleted++;
         continue;
       }
@@ -1076,10 +1093,11 @@ async function runGroupPushDeletePass(ctx, userEntries) {
 
 // ── Helpers ──────────────────────────────────────────────────────────────
 
-/** Decide whether a changelog entry refers to a contact or a mailing
- *  list (group). Prefers the watcher-supplied `kind`; falls back to the
- *  `contactGroups/…` resource-name shape for entries from migrated
- *  profiles that lack `kind`. */
+/** Kind classifiers. Every entry carries a watcher-supplied `kind` -
+ *  runFolderSync parks the kind-less leftovers a pre-release-v5 profile
+ *  could hold. (Migrated rows may still carry a `contactGroups/…`
+ *  resource name as their itemId VALUE - `pushGroupModify` handles that
+ *  shape - but their kind is always present.) */
 function isMembershipEntry(entry) {
   return entry.kind === "membership";
 }
@@ -1112,7 +1130,7 @@ async function runMembershipPushPass(ctx, userEntries, memberMap) {
         `push.member ${entry.parentId}/${entry.itemId} - ` +
           `${!mapping ? "list" : "contact"} not on the server, dropping`,
       );
-      await ctx.removeEntry(entry.parentId, entry.itemId);
+      await ctx.removeEntry(entry.parentId, entry.itemId, entry.kind);
       continue;
     }
     let bucket = byGroup.get(mapping.resourceName);
@@ -1152,12 +1170,12 @@ async function runMembershipPushPass(ctx, userEntries, memberMap) {
         for (const rn of bucket.remove) set.delete(rn);
       }
       for (const entry of bucket.entries) {
-        await ctx.removeEntry(entry.parentId, entry.itemId);
+        await ctx.removeEntry(entry.parentId, entry.itemId, entry.kind);
       }
     } catch (err) {
       if (err?.code === PUSH_ERR.NOT_FOUND) {
         for (const entry of bucket.entries) {
-          await ctx.removeEntry(entry.parentId, entry.itemId);
+          await ctx.removeEntry(entry.parentId, entry.itemId, entry.kind);
         }
         continue;
       }
@@ -1174,14 +1192,9 @@ async function runMembershipPushPass(ctx, userEntries, memberMap) {
 }
 
 function isContactEntry(entry) {
-  if (entry.kind === "list") return false;
-  if (entry.kind === "membership") return false;
-  if (entry.kind === "contact") return true;
-  if (
-    typeof entry.itemId === "string" &&
-    entry.itemId.startsWith("contactGroups/")
-  ) {
-    return false;
-  }
-  return true;
+  // Every entry reaching this carries a kind - runFolderSync parks
+  // kind-less rows up front, and the host stamps kind on all v4-migrated
+  // rows - so the old resource-name-shape fallback is gone with the
+  // profiles that needed it.
+  return entry.kind === "contact";
 }
