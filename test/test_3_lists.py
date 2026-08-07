@@ -69,3 +69,26 @@ def t_3_4(s):
         "the list is back after a clean re-pull, so the delete never left "
         "this machine",
     )
+
+
+@test("3.5", "rename a list, sync - the new name reaches Google and survives")
+def t_3_5(s):
+    _writable(s)
+    ok("lists.create", name=NAME)
+    s.sync()
+    lst = s.find_list(NAME)
+    harness.true(lst is not None, "setup list did not reach Google")
+    renamed = f"{NAME} renamed"
+    ok("lists.update", id=lst["id"], name=renamed)
+    s.sync()
+    s.rebind()
+    harness.true(
+        s.find_list(renamed) is not None,
+        "the rename did not survive a clean re-pull - it never reached "
+        "Google, or the pull restored the old name",
+    )
+    harness.true(s.find_list(NAME) is None, "the old name still exists")
+    lst2 = s.find_list(renamed)
+    ok("lists.remove", id=lst2["id"])
+    s.sync()
+

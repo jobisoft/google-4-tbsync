@@ -120,3 +120,63 @@ def t_7_4(s):
     )
     ok("contacts.remove", id=card2["id"])
     s.sync()
+
+def _png_data_uri(r, g, b):
+    """A 1x1 PNG in the given color - two calls give two distinct, valid
+    images, which is all a replacement test needs."""
+    import base64, struct, zlib
+
+    def chunk(tag, data):
+        c = tag + data
+        return struct.pack(">I", len(data)) + c + struct.pack(
+            ">I", zlib.crc32(c) & 0xFFFFFFFF
+        )
+
+    ihdr = struct.pack(">IIBBBBB", 1, 1, 8, 2, 0, 0, 0)
+    idat = zlib.compress(b"\x00" + bytes((r, g, b)))
+    png = (
+        b"\x89PNG\r\n\x1a\n"
+        + chunk(b"IHDR", ihdr)
+        + chunk(b"IDAT", idat)
+        + chunk(b"IEND", b"")
+    )
+    return "data:image/png;base64," + base64.b64encode(png).decode()
+
+
+@test("7.5", "replace the photo - the new image is uploaded, not skipped")
+def t_7_5(s):
+    _writable(s)
+    slug = "fotowechsel"
+    ok(
+        "contacts.create",
+        vCard=probes.card(slug, extra=(f"PHOTO;VALUE=URI:{_png_data_uri(255, 0, 0)}",)),
+    )
+    s.sync()
+    card = s.find_card(probes.email_of(slug))
+    harness.true(card is not None, "setup card did not reach Google")
+    before = [
+        l for l in s.unfold(s.vcard(card)) if l.upper().startswith("X-GOOGLE-PHOTO-HASH")
+    ]
+    harness.true(before, "no hash stamp after the first upload")
+
+    unfolded = s.unfold(s.vcard(card))
+    swapped = []
+    for line in unfolded:
+        if line.upper().startswith("PHOTO"):
+            swapped.append(f"PHOTO;VALUE=URI:{_png_data_uri(0, 0, 255)}")
+        else:
+            swapped.append(line)
+    ok("contacts.update", id=card["id"], vCard="\r\n".join(swapped) + "\r\n")
+    s.sync()
+    card2 = s.find_card(probes.email_of(slug))
+    after = [
+        l for l in s.unfold(s.vcard(card2)) if l.upper().startswith("X-GOOGLE-PHOTO-HASH")
+    ]
+    harness.true(
+        after and after != before,
+        "the hash stamp did not change - the replacement photo was never "
+        "uploaded (the hash comparison thinks nothing changed)",
+    )
+    ok("contacts.remove", id=card2["id"])
+    s.sync()
+

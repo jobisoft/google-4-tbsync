@@ -106,7 +106,38 @@ def t_6_3(s):
     )
 
 
-@test("6.4", "delete the card, sync - gone and staying gone")
+@test("6.4", "field removal - cleared fields stay cleared on Google")
+def t_6_4(s):
+    # The class of bug the EAS suite found server-side (omitted elements
+    # keep their server copy): Google's updateContact should clear any
+    # masked field the person omits - this is the proof.
+    _writable(s)
+    card = s.find_card(ANCHOR)
+    harness.true(card is not None, "6.3 must have left the card in place")
+    cleared = ("NICKNAME", "X-CUSTOM2", "ROLE", "RELATED", "CALURI", "BDAY")
+    kept = [
+        line
+        for line in s.unfold(s.vcard(card))
+        if not line.upper().startswith(cleared)
+    ]
+    ok("contacts.update", id=card["id"], vCard="\r\n".join(kept) + "\r\n")
+    s.sync()
+    s.rebind()
+    body = _unfolded(s, s.find_card(ANCHOR))
+    survivors = [
+        f
+        for f in cleared
+        if re.search(rf"^{f}[^:\r\n]*:.", body, re.M | re.I)
+    ]
+    harness.eq(
+        survivors,
+        [],
+        "locally removed fields came back from Google - either missing from "
+        f"the update mask or restored by the pull; the card was:\n{body}",
+    )
+
+
+@test("6.5", "delete the card, sync - gone and staying gone")
 def t_6_4(s):
     _writable(s)
     card = s.find_card(ANCHOR)
