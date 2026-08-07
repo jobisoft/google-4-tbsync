@@ -357,16 +357,46 @@ async function pushModify(ctx, entry) {
     await ctx.removeEntry(entry.parentId, entry.itemId);
     return "added";
   }
-  const person = mapper.vCardToPerson(local.vCard);
+  let vCard = local.vCard;
+  let person = mapper.vCardToPerson(vCard);
   logDebug(ctx, `push.modify ${identity.resourceName}`);
   try {
+    if (identity.syncRev < mapper.SYNC_REVISION) {
+      // The card predates some field families; pushing it verbatim would
+      // clear them on Google. Clean-pull the server Person first, merge
+      // those families into the card - local changes win - save it, and
+      // push the upgraded card instead. Happens once per old card.
+      logDebug(
+        ctx,
+        `push.modify ${identity.resourceName} - card revision ` +
+          `${identity.syncRev} < ${mapper.SYNC_REVISION}, merging server state`,
+      );
+      const serverNow = await peopleApi.getContact(
+        accountId,
+        identity.resourceName,
+      );
+      ({ vCard, person } = mapper.upgradeVCard(
+        local.vCard,
+        serverNow,
+        identity.syncRev,
+      ));
+      await ctx.markServer(
+        entry.parentId,
+        entry.itemId,
+        STATUS.MODIFIED_BY_SERVER,
+        "contact",
+      );
+      await addressBook.updateContact(entry.itemId, vCard);
+    }
     const serverPerson = await peopleApi.updateContact(
       accountId,
       identity.resourceName,
       person,
+      // Deliberately the card's etag, not `serverNow`'s: conflict
+      // detection for the fields the card did know stays unchanged.
       identity.etag,
     );
-    await stampLocalCard(ctx, entry.itemId, local.vCard, serverPerson);
+    await stampLocalCard(ctx, entry.itemId, vCard, serverPerson);
     cMap.set(entry.itemId, serverPerson.resourceName);
     await ctx.removeEntry(entry.parentId, entry.itemId);
     return "updated";
@@ -476,12 +506,16 @@ async function stampLocalCard(ctx, contactId, originalVCard, serverPerson) {
     originalVCard,
     serverPerson,
   );
-  const stamped = mapper.stampPhotoState(
-    mapper.stampIdentity(originalVCard, {
-      resourceName: person.resourceName ?? serverPerson.resourceName,
-      etag: person.etag,
-    }),
-    photoState,
+  // The revision stamp rides along too, so push-created cards (add and
+  // late-add) come out current and never trigger the old-card merge.
+  const stamped = mapper.stampRevision(
+    mapper.stampPhotoState(
+      mapper.stampIdentity(originalVCard, {
+        resourceName: person.resourceName ?? serverPerson.resourceName,
+        etag: person.etag,
+      }),
+      photoState,
+    ),
   );
   await ctx.markServer(
     ctx.targetID,

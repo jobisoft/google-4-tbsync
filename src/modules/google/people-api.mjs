@@ -96,6 +96,14 @@ export async function listAllConnections(accountId) {
   return all;
 }
 
+/** Fetch a single Person. Used by the pre-push upgrade of below-revision
+ *  cards; 404 → PUSH_ERR.NOT_FOUND via the shared mapping, so the caller's
+ *  gone-server-side branch applies. */
+export async function getContact(accountId, resourceName) {
+  const params = new URLSearchParams({ personFields: PULL_FIELDS });
+  return await fetchWithAuthRetry(accountId, `${BASE}/${resourceName}?${params}`);
+}
+
 /** Create a contact. Returns the stored Person with `resourceName` and `etag`. */
 export async function createContact(accountId, person) {
   const params = new URLSearchParams({ personFields: PULL_FIELDS });

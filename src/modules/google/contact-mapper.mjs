@@ -20,6 +20,16 @@ const X_ETAG = "x-google-etag";
 // push: different hash, upload).
 const X_PHOTO_URL = "x-google-photo-url";
 const X_PHOTO_HASH = "x-google-photo-hash";
+// The mapper revision that last round-tripped the card. A card below the
+// current revision predates some field families; pushing it verbatim would
+// clear those families on Google (a field in the update mask but absent
+// from the person is cleared server-side). Absence of the stamp means
+// revision 1 - every card written before this property existed.
+const X_SYNC_REV = "x-google-sync-rev";
+
+/** Bump whenever the mapper learns new field families, and record what the
+ *  new revision introduced in `REVISION_FAMILIES` below. */
+export const SYNC_REVISION = 2;
 
 // ── Public API ───────────────────────────────────────────────────────────
 
@@ -54,6 +64,8 @@ export function personToVCard(person, uid, { photo } = {}) {
   if (person.resourceName)
     comp.addPropertyWithValue(X_RESOURCENAME, person.resourceName);
   if (person.etag) comp.addPropertyWithValue(X_ETAG, person.etag);
+  // A rebuilt card reflects everything the current mapper knows.
+  comp.addPropertyWithValue(X_SYNC_REV, String(SYNC_REVISION));
   return comp.toString();
 }
 
@@ -279,9 +291,12 @@ export function readIdentity(vCard) {
   const resourceName = comp.getFirstPropertyValue(X_RESOURCENAME);
   if (!resourceName) return null;
   const etag = comp.getFirstPropertyValue(X_ETAG);
+  const rev = parseInt(comp.getFirstPropertyValue(X_SYNC_REV), 10);
   return {
     resourceName: stringOf(resourceName),
     etag: etag != null ? stringOf(etag) : null,
+    // Absent or garbled means the card predates the stamp: revision 1.
+    syncRev: Number.isInteger(rev) && rev > 0 ? rev : 1,
   };
 }
 
@@ -294,6 +309,128 @@ export function stampIdentity(vCard, { resourceName, etag }) {
   if (resourceName) comp.addPropertyWithValue(X_RESOURCENAME, resourceName);
   if (etag) comp.addPropertyWithValue(X_ETAG, etag);
   return comp.toString();
+}
+
+// ── Sync revision ────────────────────────────────────────────────────────
+//
+// What each mapper revision introduced. When a below-revision card is about
+// to be pushed, the sync clean-pulls the server Person first and merges
+// exactly these families into the card - local changes win - so a card that
+// simply never knew a family cannot clear it on Google. Families the card's
+// revision already knew are left alone: absence there is a deliberate
+// removal and must keep clearing.
+
+const REVISION_FAMILIES = {
+  2: [
+    {
+      field: "userDefined",
+      props: CUSTOM_SLOTS,
+      write: writeCustomFields,
+      // Positional overlay over the four slots (the same projection the
+      // slot mapping uses everywhere): a locally filled slot wins its
+      // position, server entries fill the holes, and the server tail
+      // beyond the slots survives in the pushed person (the card cannot
+      // carry it, `writeCustomFields` projects to four slots).
+      merge(comp, server) {
+        const out = [];
+        CUSTOM_SLOTS.forEach((slot, i) => {
+          const v = comp.getFirstPropertyValue(slot);
+          if (v) out.push({ key: `Custom${i + 1}`, value: stringOf(v) });
+          else if (server[i]?.value) out.push(server[i]);
+        });
+        out.push(...server.slice(CUSTOM_SLOTS.length));
+        return out;
+      },
+    },
+    {
+      field: "genders",
+      props: ["gender"],
+      write: writeGender,
+      merge(comp, server) {
+        const local = readGender(comp);
+        return local ? [local] : server;
+      },
+    },
+    {
+      field: "occupations",
+      props: ["role"],
+      write: writeRole,
+      merge(comp, server) {
+        const role = comp.getFirstPropertyValue("role");
+        return role ? [{ value: stringOf(role) }] : server;
+      },
+    },
+    {
+      field: "relations",
+      props: ["related"],
+      write: writeRelations,
+      merge(comp, server) {
+        const local = readRelations(comp);
+        const key = (r) => `${r.person} ${r.type ?? ""}`;
+        const seen = new Set(local.map(key));
+        return [
+          ...local,
+          ...server.filter((r) => r?.person && !seen.has(key(r))),
+        ];
+      },
+    },
+    {
+      field: "calendarUrls",
+      props: ["caluri"],
+      write: writeCalendarUrls,
+      merge(comp, server) {
+        const local = readCalendarUrls(comp);
+        const seen = new Set(local.map((c) => c.url));
+        return [
+          ...local,
+          ...server.filter((c) => c?.url && !seen.has(c.url)),
+        ];
+      },
+    },
+  ],
+};
+
+/** Replace the revision stamp with the current one, leaving everything
+ *  else untouched. */
+export function stampRevision(vCard) {
+  const comp = parseVCard(vCard);
+  if (!comp) return vCard;
+  comp.removeAllProperties(X_SYNC_REV);
+  comp.addPropertyWithValue(X_SYNC_REV, String(SYNC_REVISION));
+  return comp.toString();
+}
+
+/** Bring a below-revision card up to the current revision before a push:
+ *  merge the server Person's values for every family the card's revision
+ *  did not know (local changes win), stamp it current, and return both the
+ *  upgraded vCard and the Person to push. The Person is returned separately
+ *  because some merged values do not fit the card - the userDefined tail
+ *  beyond the four slots exists only server-side and must still ride in
+ *  the push, or the mask would clear it. */
+export function upgradeVCard(vCard, serverPerson, cardRev) {
+  const comp = parseVCard(vCard);
+  if (!comp) return { vCard, person: vCardToPerson(vCard) };
+
+  const overrides = {};
+  for (const [rev, families] of Object.entries(REVISION_FAMILIES)) {
+    if (Number(rev) <= cardRev) continue;
+    for (const family of families) {
+      const merged = family.merge(comp, serverPerson[family.field] ?? []);
+      for (const prop of family.props) comp.removeAllProperties(prop);
+      family.write(comp, { [family.field]: merged });
+      overrides[family.field] = merged;
+    }
+  }
+  comp.removeAllProperties(X_SYNC_REV);
+  comp.addPropertyWithValue(X_SYNC_REV, String(SYNC_REVISION));
+
+  const upgraded = comp.toString();
+  const person = vCardToPerson(upgraded);
+  for (const [field, merged] of Object.entries(overrides)) {
+    if (merged.length) person[field] = merged;
+    else delete person[field];
+  }
+  return { vCard: upgraded, person };
 }
 
 // ── vCard plumbing ───────────────────────────────────────────────────────
