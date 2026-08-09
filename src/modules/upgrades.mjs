@@ -34,9 +34,12 @@ import * as mapper from "./google/contact-mapper.mjs";
 import { stringifyError } from "./errors.mjs";
 import * as oauth from "./google/oauth.mjs";
 import { localQueue } from "../vendor/tbsync/change-queue.mjs";
-import { isUserEntry } from "../vendor/tbsync/changelog-core.mjs";
+import {
+  isUserEntry,
+  SERVER_TAG_STATUSES,
+} from "../vendor/tbsync/changelog-core.mjs";
 
-const STATUS_MODIFIED_BY_SERVER = "modified_by_server";
+const STATUS_MODIFIED_BY_SERVER = SERVER_TAG_STATUSES[1];
 
 /* ── Provider-local storage schema ──────────────────────────────────── */
 
@@ -333,9 +336,12 @@ async function liftLegacyStamps(provider, acc) {
       if (!card?.vCard) continue;
       if (mapper.readIdentity(card.vCard)?.resourceName === resourceName)
         continue;
-      await provider.changelogMarkServerWrite({
+      await localQueue({
         accountId: acc.accountId,
         folderId: folder.folderId,
+        sessionId: folder.sessionId,
+        observed: true,
+      }).markServerWrite({
         parentId: folder.targetID,
         itemId: contactId,
         status: STATUS_MODIFIED_BY_SERVER,
@@ -432,13 +438,12 @@ async function liftLegacyGroupStamps(provider, acc) {
       // status is a raw value, never `*_by_user`, so nothing pushes them).
       // Skip those instead of failing the migration.
       if (!kind) continue;
-      await provider.changelogRemove({
+      await localQueue({
         accountId: acc.accountId,
         folderId: folder.folderId,
-        parentId,
-        itemId,
-        kind,
-      });
+        sessionId: folder.sessionId,
+        observed: true,
+      }).remove({ parentId, itemId, kind });
     }
 
     provider.reportEventLog({
@@ -567,16 +572,11 @@ async function adoptHostChangelogs(provider) {
         });
         adopted++;
       }
-      for (const e of entries) {
-        if (!e.kind) continue;
-        await provider.changelogRemove({
-          accountId,
-          folderId: folder.folderId,
-          parentId: e.parentId,
-          itemId: e.itemId,
-          kind: e.kind,
-        });
-      }
+      await provider.updateFolder({
+        accountId,
+        folderId: folder.folderId,
+        patch: { changelog: [] },
+      });
       provider.reportEventLog({
         level: "info",
         accountId,

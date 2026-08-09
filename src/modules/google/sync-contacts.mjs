@@ -28,6 +28,7 @@ import {
   localQueue,
   rememberBindings,
 } from "../../vendor/tbsync/change-queue.mjs";
+import { SERVER_TAG_STATUSES } from "../../vendor/tbsync/changelog-core.mjs";
 import { GroupMap } from "../group-map.mjs";
 import { ContactMap } from "../contact-map.mjs";
 import { stringifyError, PUSH_ERR } from "../errors.mjs";
@@ -36,9 +37,9 @@ const STATUS = {
   ADDED_BY_USER: "added_by_user",
   MODIFIED_BY_USER: "modified_by_user",
   DELETED_BY_USER: "deleted_by_user",
-  ADDED_BY_SERVER: "added_by_server",
-  MODIFIED_BY_SERVER: "modified_by_server",
-  DELETED_BY_SERVER: "deleted_by_server",
+  ADDED_BY_SERVER: SERVER_TAG_STATUSES[0],
+  MODIFIED_BY_SERVER: SERVER_TAG_STATUSES[1],
+  DELETED_BY_SERVER: SERVER_TAG_STATUSES[2],
 };
 const SYSTEM_GROUP = "SYSTEM_CONTACT_GROUP";
 
