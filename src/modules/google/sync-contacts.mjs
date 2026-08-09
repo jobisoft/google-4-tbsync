@@ -14,6 +14,11 @@
  * reads exactly like an item the book has never seen, so a pull-first delete
  * gets undone by the very pass that should have confirmed it.
  *
+ * Ordering alone is not quite enough, because the People API is only
+ * eventually consistent: it can still list an item it has just accepted a
+ * delete for. So each pull also ignores whatever this same sync deleted -
+ * see `deletedThisSync`.
+ *
  * Contact groups and their memberships both sync bidirectionally.
  * Every local write is preceded by a `markServerWrite` pre-tag so
  * the host's observer suppresses the resulting TB event. Writes are serial
@@ -126,6 +131,20 @@ export async function syncFolderContacts({
     cMap,
     changelog,
     queue,
+    // Resource names this sync has already deleted from the server. The
+    // People API is read-after-write eventual: a `connections` or
+    // `contactGroups` list issued seconds after an accepted delete can
+    // still carry the thing that was deleted. The pull passes run inside
+    // exactly that window, and to them a server item with no local
+    // counterpart is indistinguishable from one the book has never seen -
+    // so they re-create what the user just removed. Remembering what we
+    // deleted is what tells those two apart.
+    //
+    // Per sync run, deliberately: the lag has always closed well before
+    // the next sync. If one ever outlives a run, the pull re-creates and
+    // the run after that removes it again - which is the behaviour this
+    // replaces, so nothing gets worse.
+    deletedThisSync: { contacts: new Set(), groups: new Set() },
     markServer: (parentId, itemId, status, kind) =>
       queue.markServerWrite({ parentId, itemId, status, kind }),
     removeEntry: (parentId, itemId, kind) =>
@@ -627,6 +646,17 @@ async function runPullPass(ctx) {
       itemsDone++;
       continue;
     }
+    if (ctx.deletedThisSync.contacts.has(resourceName)) {
+      // A stale listing naming a contact this same sync deleted. Not added
+      // to `serverResourceNames` either: that set says what the server
+      // holds, and this is the one thing we know it no longer does.
+      logDebug(
+        ctx,
+        `pull: ignoring ${resourceName}, deleted earlier this sync`,
+      );
+      itemsDone++;
+      continue;
+    }
     serverResourceNames.add(resourceName);
     indexMemberships(memberMap, resourceName, person.memberships);
 
@@ -741,11 +771,15 @@ async function runPushDeletePass(ctx, userEntries) {
     try {
       logDebug(ctx, `push.delete ${resourceName}`);
       await peopleApi.deleteContact(accountId, resourceName);
+      ctx.deletedThisSync.contacts.add(resourceName);
       cMap.remove(entry.itemId);
       await ctx.removeEntry(entry.parentId, entry.itemId, entry.kind);
       deleted++;
     } catch (err) {
       if (err?.code === PUSH_ERR.NOT_FOUND) {
+        // Gone already, and a listing taken before it went can still
+        // name it - the same window as an accepted delete.
+        ctx.deletedThisSync.contacts.add(resourceName);
         cMap.remove(entry.itemId);
         await ctx.removeEntry(entry.parentId, entry.itemId, entry.kind);
         deleted++;
@@ -772,11 +806,20 @@ async function runGroupPullPass(ctx, byResourceName, memberMap) {
 
   const serverGroups = await peopleApi.listAllContactGroups(accountId);
   const eligible = serverGroups.filter(
-    (g) => includeSystemGroups || g.groupType !== SYSTEM_GROUP,
+    (g) =>
+      (includeSystemGroups || g.groupType !== SYSTEM_GROUP) &&
+      // A stale listing naming a group this same sync deleted. Its gMap
+      // mapping is already gone, so without this the loop below reads it
+      // as a group the book has never seen and re-creates the list.
+      !ctx.deletedThisSync.groups.has(g.resourceName),
   );
+  const stale = serverGroups.filter((g) =>
+    ctx.deletedThisSync.groups.has(g.resourceName),
+  ).length;
   logDebug(
     ctx,
-    `groups: server returned ${serverGroups.length} (${eligible.length} after system-group filter)`,
+    `groups: server returned ${serverGroups.length} (${eligible.length} after ` +
+      `filtering system groups${stale ? ` and ${stale} deleted earlier this sync` : ""})`,
   );
 
   const localLists = await addressBook.listMailingLists(targetID);
@@ -1091,11 +1134,15 @@ async function runGroupPushDeletePass(ctx, userEntries) {
     try {
       logDebug(ctx, `push.group.delete ${mapping.resourceName}`);
       await peopleApi.deleteContactGroup(accountId, mapping.resourceName);
+      ctx.deletedThisSync.groups.add(mapping.resourceName);
       gMap.remove(mapping.resourceName);
       await ctx.removeEntry(entry.parentId, entry.itemId, entry.kind);
       deleted++;
     } catch (err) {
       if (err?.code === PUSH_ERR.NOT_FOUND) {
+        // Gone already, and a listing taken before it went can still
+        // name it - the same window as an accepted delete.
+        ctx.deletedThisSync.groups.add(mapping.resourceName);
         gMap.remove(mapping.resourceName);
         await ctx.removeEntry(entry.parentId, entry.itemId, entry.kind);
         deleted++;

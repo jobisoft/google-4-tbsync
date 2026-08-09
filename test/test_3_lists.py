@@ -8,6 +8,14 @@ changelog and a clean-looking sync over a list that is still on Google.
 
 3.3 is that assertion, and it has to survive a *second* sync, because the
 first is where the pull would put the list back.
+
+Two separate things make it pass. The delete is pushed before the pull, so
+the pull reads a server that already agrees with us; and the pull ignores
+what this same sync deleted, because Google's `contactGroups` listing is
+eventually consistent and can still name a group whose deletion it has
+already accepted. The second of those is a race, so a failure here need not
+reproduce - look for `push.group.delete` in the Event Log before concluding
+the delete was never sent.
 """
 
 import harness
