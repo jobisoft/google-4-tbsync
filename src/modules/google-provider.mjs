@@ -21,7 +21,7 @@ import {
   TbSyncProviderImplementation,
 } from "../vendor/tbsync/provider.mjs";
 import * as oauth from "./google/oauth.mjs";
-import * as addressBook from "./address-book.mjs";
+import * as addressBook from "../vendor/tbsync/address-book.mjs";
 import { syncFolderContacts } from "./google/sync-contacts.mjs";
 import { runStartupMigrations } from "./upgrades.mjs";
 import {
@@ -29,7 +29,7 @@ import {
   rememberBindings,
   sweep,
 } from "../vendor/tbsync/change-queue.mjs";
-import { installContactsObserver } from "../vendor/tbsync/contacts-observer.mjs";
+
 import { setSyncSignalResolver } from "./google/people-api.mjs";
 
 export class GoogleProvider extends TbSyncProviderImplementation {
@@ -85,7 +85,7 @@ export class GoogleProvider extends TbSyncProviderImplementation {
     // ended. Then watch the books - after the reconcile, so the bindings the
     // observer resolves against are current before the first event lands.
     await this.#reconcileFolderSessions();
-    installContactsObserver({
+    addressBook.installContactsObserver({
       provider: this,
       report: (args) => this.reportEventLog(args),
     });

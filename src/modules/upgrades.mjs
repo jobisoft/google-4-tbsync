@@ -29,7 +29,7 @@
  * every step below has to be idempotent.
  */
 
-import * as addressBook from "./address-book.mjs";
+import * as addressBook from "../vendor/tbsync/address-book.mjs";
 import * as mapper from "./google/contact-mapper.mjs";
 import { stringifyError } from "./errors.mjs";
 import * as oauth from "./google/oauth.mjs";

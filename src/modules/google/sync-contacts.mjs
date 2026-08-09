@@ -23,7 +23,7 @@
 import { ok, warning } from "../../vendor/tbsync/provider.mjs";
 import * as peopleApi from "./people-api.mjs";
 import * as mapper from "./contact-mapper.mjs";
-import * as addressBook from "../address-book.mjs";
+import * as addressBook from "../../vendor/tbsync/address-book.mjs";
 import {
   localQueue,
   rememberBindings,
