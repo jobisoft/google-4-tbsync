@@ -543,13 +543,15 @@ async function adoptHostChangelogs(provider) {
       const entries = Array.isArray(folder.changelog) ? folder.changelog : [];
       if (!entries.length) continue;
       if (!folder.sessionId) {
-        provider.reportEventLog({
-          level: "warning",
-          accountId,
-          folderId: folder.folderId,
-          message: `[upgrade] cannot adopt ${entries.length} queued edit(s): the folder has no session`,
-        });
-        continue;
+        // Continuing here and letting the ladder stamp the schema would
+        // strand these rows forever - the ladder never looks back. Throw:
+        // the rung stays unstamped and the adoption retries on the next
+        // start, when the host has minted the sessions. Observed for real
+        // on 10 Aug 2026 during migration testing.
+        throw new Error(
+          `cannot adopt ${entries.length} queued edit(s) of folder ` +
+            `${folder.folderId}: the folder has no session id yet`,
+        );
       }
       const queue = localQueue({
         accountId,
