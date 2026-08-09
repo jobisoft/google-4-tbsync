@@ -1,13 +1,13 @@
 """3. Mailing lists.
 
-A list deletion used to be lost outright: the pull re-created the locally
-deleted list, and because the group map holds a single entry per group the
-re-create overwrote its mailingListId - so the delete pass then looked up the
-id the user had actually deleted, found nothing, and dropped the entry
-without a word. The changelog drained and the sync looked clean.
+A locally deleted list must stay deleted. The failure this guards is silent:
+the group map holds a single entry per group, so a pull that re-creates the
+list overwrites its mailingListId, the delete pass then looks up an id that
+no longer resolves, and the entry is dropped without a word - a drained
+changelog and a clean-looking sync over a list that is still on Google.
 
-3.3 is that bug's assertion. It has to survive a *second* sync, because the
-first one is where the pull would put the list back.
+3.3 is that assertion, and it has to survive a *second* sync, because the
+first is where the pull would put the list back.
 """
 
 import harness

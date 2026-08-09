@@ -1,9 +1,9 @@
 """2. Contact round trip - create, modify, delete.
 
-The delete steps exist because of a real bug: deletes were pushed *after* the
-pull, so the pull re-created the very card the user had just deleted and it
-sat in the address book until the next sync noticed the server no longer had
-it. 2.4 is the assertion that would have caught it.
+The delete steps carry the weight here. A delete pushed *after* the pull
+lets the pull re-create the very card the user just deleted, and it then
+sits in the address book until some later sync notices the server does not
+have it. 2.4 is the assertion that catches that.
 
 Every step ends with a clean re-pull where local state could otherwise pass
 for a successful push.

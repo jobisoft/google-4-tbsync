@@ -1,12 +1,12 @@
 """4. Mailing-list membership.
 
-Adding a contact to a list used to survive only until the next sync: nothing
-recorded the change, so the pull reconciled the book back to the server and
-the membership vanished. Memberships were server->local by construction.
+Putting a contact into a list has to be recorded like any other edit, or the
+next pull reconciles the book back to the server and the membership vanishes
+- the direction memberships travel by construction is server->local.
 
-4.4 is the other half of that fix. The provider applies the server's
-memberships locally, and if those writes are not pre-tagged they come back as
-pending user edits and are pushed again on every sync, forever.
+4.4 covers the other direction. The provider applies the server's
+memberships locally, and unless those writes are pre-tagged they come back
+as pending user edits and are pushed again on every sync, forever.
 """
 
 import harness
