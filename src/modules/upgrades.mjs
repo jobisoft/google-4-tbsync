@@ -35,6 +35,7 @@ import { stringifyError } from "./errors.mjs";
 import * as oauth from "./google/oauth.mjs";
 import { localQueue } from "../vendor/tbsync/change-queue.mjs";
 import {
+  CHANGELOG_KINDS,
   isUserEntry,
   SERVER_TAG_STATUSES,
 } from "../vendor/tbsync/changelog-core.mjs";
@@ -361,7 +362,6 @@ async function liftLegacyStamps(provider, acc) {
       message: `[upgrade] lifted ${lifted}/${stamps.length} legacy X-GOOGLE-RESOURCENAME stamp(s) onto vCards`,
     });
   }
-
 }
 
 /** Mailing-list parallel of `liftLegacyStamps`. Legacy stamped each
@@ -396,8 +396,7 @@ async function liftLegacyGroupStamps(provider, acc) {
     const consumed = [];
     for (const e of incoming) {
       if (e?.itemId !== RESOURCENAME && e?.itemId !== ETAG) continue;
-      if (typeof e.parentId !== "string" || !e.parentId.includes("#"))
-        continue;
+      if (typeof e.parentId !== "string" || !e.parentId.includes("#")) continue;
       let bag = byParent.get(e.parentId);
       if (!bag) {
         bag = {};
@@ -453,7 +452,6 @@ async function liftLegacyGroupStamps(provider, acc) {
       message: `[upgrade] lifted ${lifted}/${byParent.size} legacy mailing-list stamp(s) into folder.custom.groupMap (${consumed.length} legacy entries removed from folder.changelog)`,
     });
   }
-
 }
 
 /** Push `account.custom.readOnlyMode` down onto every folder's
@@ -478,7 +476,6 @@ async function mirrorReadOnlyModeToFolders(provider, acc) {
       patch: { readOnly: desired },
     });
   }
-
 }
 
 /** Backfill `account.custom.authenticatedUserEmail` when the account has
@@ -518,7 +515,6 @@ async function backfillAuthenticatedUserEmail(provider, acc) {
       message: `[upgrade] backfill authenticatedUserEmail failed: ${stringifyError(err)}`,
     });
   }
-
 }
 
 /** The op that produced each user status - `record` speaks ops, a stored row
@@ -562,8 +558,17 @@ async function adoptHostChangelogs(provider) {
         observed: true,
       });
       let adopted = 0;
+      let refused = 0;
       for (const e of entries) {
-        if (!isUserEntry(e?.status) || !e.kind) continue;
+        if (!isUserEntry(e?.status)) continue;
+        // `record` throws on a kind outside CHANGELOG_KINDS, and one
+        // malformed inbox row (kind-less, or a kind nothing recognises)
+        // must not abort the whole migration - skip it, count it, and
+        // let the summary line below name the loss.
+        if (!CHANGELOG_KINDS.includes(e.kind)) {
+          refused++;
+          continue;
+        }
         await queue.record({
           parentId: e.parentId,
           itemId: e.itemId,
@@ -578,10 +583,14 @@ async function adoptHostChangelogs(provider) {
         patch: { changelog: [] },
       });
       provider.reportEventLog({
-        level: "info",
+        level: refused ? "warning" : "info",
         accountId,
         folderId: folder.folderId,
-        message: `[upgrade] adopted ${adopted} queued edit(s) from the host`,
+        message:
+          `[upgrade] adopted ${adopted} queued edit(s) from the host` +
+          (refused
+            ? `; refused ${refused} with a missing or unknown changelog kind`
+            : ""),
       });
     }
   }

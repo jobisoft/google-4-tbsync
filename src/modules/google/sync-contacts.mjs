@@ -48,6 +48,14 @@ const STATUS = {
 };
 const SYSTEM_GROUP = "SYSTEM_CONTACT_GROUP";
 
+// The kinds this sync can route to a pass. Folder-local vocabulary, a
+// subset of the vendored CHANGELOG_KINDS: `event`/`task` are valid rows
+// globally but have no pass in a contacts sync, and anything outside this
+// list is skipped out loud in runFolderSync rather than misrouted.
+// (`list-by-name` is absent on purpose - it exists only as a pre-tag, and
+// pre-tags are not user entries.)
+const ROUTED_KINDS = ["contact", "list", "membership"];
+
 // ── Entry point ─────────────────────────────────────────────────────────
 
 /** Push a debug-level entry into the host's session event log. The provider
@@ -201,7 +209,9 @@ async function runFolderSync(ctx) {
   // duplicate server-side on every sync). Such rows can only come from a
   // pre-release-v5 profile (the v4 migration stamps kind on every row);
   // park them untouched and say so, rather than half-processing them.
-  const userEntries = changelog.filter((e) => isUserStatus(e) && e.kind);
+  const routable = changelog.filter(
+    (e) => isUserStatus(e) && e.kind && ROUTED_KINDS.includes(e.kind),
+  );
   const parked = changelog.filter((e) => isUserStatus(e) && !e.kind).length;
   if (parked) {
     notify.reportEventLog({
@@ -214,6 +224,25 @@ async function runFolderSync(ctx) {
         `re-make the edit, or resync the folder)`,
     });
   }
+  // An entry whose kind this sync does not route - a typo, or a kind that
+  // belongs to another resource. Deliberately folder-local, NOT a check
+  // against the global kind list: `event` is a perfectly valid kind that
+  // still has no pass here, and with the positive selection below it would
+  // otherwise sit in the queue forever. Warned per row and removed, same
+  // as EAS's mismatched-kind skip: dropped once, out loud.
+  for (const e of changelog) {
+    if (!isUserStatus(e) || !e.kind || ROUTED_KINDS.includes(e.kind)) continue;
+    notify.reportEventLog({
+      level: "warning",
+      accountId,
+      folderId,
+      message:
+        `skipping a queued edit of "${e.itemId}": its kind "${e.kind}" is ` +
+        `not one this contacts sync routes (${ROUTED_KINDS.join(", ")})`,
+    });
+    await ctx.removeEntry(e.parentId, e.itemId, e.kind);
+  }
+  const userEntries = routable;
   logDebug(ctx, `changelog: ${userEntries.length} pending user entries`);
 
   // 1. Push adds + modifies.
@@ -990,8 +1019,7 @@ async function applyMemberships(ctx, byResourceName, memberMap) {
 async function runGroupPushAddModifyPass(ctx, userEntries) {
   const groupEntries = userEntries.filter(
     (e) =>
-      !isContactEntry(e) &&
-      !isMembershipEntry(e) &&
+      isGroupEntry(e) &&
       (e.status === STATUS.ADDED_BY_USER ||
         e.status === STATUS.MODIFIED_BY_USER),
   );
@@ -1103,10 +1131,7 @@ async function pushGroupModify(ctx, entry) {
 async function runGroupPushDeletePass(ctx, userEntries) {
   const { accountId, gMap } = ctx;
   const deletions = userEntries.filter(
-    (e) =>
-      !isContactEntry(e) &&
-      !isMembershipEntry(e) &&
-      e.status === STATUS.DELETED_BY_USER,
+    (e) => isGroupEntry(e) && e.status === STATUS.DELETED_BY_USER,
   );
   if (!deletions.length) return { deleted: 0 };
 
@@ -1161,13 +1186,22 @@ async function runGroupPushDeletePass(ctx, userEntries) {
 
 // ── Helpers ──────────────────────────────────────────────────────────────
 
-/** Kind classifiers. Every entry carries a watcher-supplied `kind` -
- *  runFolderSync parks the kind-less leftovers a pre-release-v5 profile
- *  could hold. (Migrated rows may still carry a `contactGroups/…`
- *  resource name as their itemId VALUE - `pushGroupModify` handles that
- *  shape - but their kind is always present.) */
+/** Kind classifiers - one per ROUTED_KINDS, and every pass selects with
+ *  its own, positively. Selecting a pass's entries by *excluding* the
+ *  other classifiers looked equivalent and was not: an entry with an
+ *  unroutable kind matched every exclusion, landed in the group passes,
+ *  and `pushGroupModify` dropped it without a log line. runFolderSync now
+ *  removes such entries out loud before the passes run, and each pass
+ *  takes only what is provably its own. (Migrated rows may still carry a
+ *  `contactGroups/…` resource name as their itemId VALUE -
+ *  `pushGroupModify` handles that shape - but their kind is always
+ *  present.) */
 function isMembershipEntry(entry) {
   return entry.kind === "membership";
+}
+
+function isGroupEntry(entry) {
+  return entry.kind === "list";
 }
 
 // ── Membership push ──────────────────────────────────────────────────────
