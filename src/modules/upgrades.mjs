@@ -33,6 +33,8 @@ import * as addressBook from "./address-book.mjs";
 import * as mapper from "./google/contact-mapper.mjs";
 import { stringifyError } from "./errors.mjs";
 import * as oauth from "./google/oauth.mjs";
+import { localQueue } from "../vendor/tbsync/change-queue.mjs";
+import { isUserEntry } from "../vendor/tbsync/changelog-core.mjs";
 
 const STATUS_MODIFIED_BY_SERVER = "modified_by_server";
 
@@ -45,7 +47,7 @@ const SCHEMA_KEY = "schemaVersion";
  *  actually changes. Also independent of any other provider's number: a
  *  `2` here and a `2` in EAS-4-TbSync describe different storages and must
  *  never be compared. */
-const SCHEMA_VERSION = 3;
+const SCHEMA_VERSION = 4;
 
 /** Steps that raise storage from the previous version to the keyed one,
  *  applied in ascending order. `name` appears in the event log so a
@@ -54,6 +56,7 @@ const SCHEMA_VERSION = 3;
 const MIGRATIONS = {
   2: { name: "lift-legacy-prefs", run: liftLegacyPrefs },
   3: { name: "repair-unconverted-accounts", run: repairUnconvertedAccounts },
+  4: { name: "adopt-host-changelogs", run: adoptHostChangelogs },
 };
 
 /** The legacy add-on's single global pref, and where it lands.
@@ -511,4 +514,75 @@ async function backfillAuthenticatedUserEmail(provider, acc) {
     });
   }
 
+}
+
+/** The op that produced each user status - `record` speaks ops, a stored row
+ *  states the status it reached. Replaying the op onto an empty queue
+ *  reproduces the row, which is what makes the import idempotent. */
+const OP_FOR_STATUS = {
+  added_by_user: "created",
+  modified_by_user: "updated",
+  deleted_by_user: "deleted",
+};
+
+/** Rung 4. Take over any edits the host is still holding for us, into the
+ *  local queue keyed by the folder's binding.
+ *
+ *  A host folder row can carry queued edits - unsynced work of the user's,
+ *  which has to end up somewhere we will read it.
+ *
+ *  Import first, remove second. A crash in between leaves an entry in both
+ *  places, and the next run re-imports it onto a queue that already folds
+ *  duplicates by identity, so the repeat is a no-op rather than a second
+ *  copy. The other order would lose entries outright. */
+async function adoptHostChangelogs(provider) {
+  for (const { accountId } of await provider.listAccounts()) {
+    const { folders = [] } = (await provider.getAccount(accountId)) ?? {};
+    for (const folder of folders) {
+      const entries = Array.isArray(folder.changelog) ? folder.changelog : [];
+      if (!entries.length) continue;
+      if (!folder.sessionId) {
+        provider.reportEventLog({
+          level: "warning",
+          accountId,
+          folderId: folder.folderId,
+          message: `[upgrade] cannot adopt ${entries.length} queued edit(s): the folder has no session`,
+        });
+        continue;
+      }
+      const queue = localQueue({
+        accountId,
+        folderId: folder.folderId,
+        sessionId: folder.sessionId,
+        observed: true,
+      });
+      let adopted = 0;
+      for (const e of entries) {
+        if (!isUserEntry(e?.status) || !e.kind) continue;
+        await queue.record({
+          parentId: e.parentId,
+          itemId: e.itemId,
+          kind: e.kind,
+          op: OP_FOR_STATUS[e.status],
+        });
+        adopted++;
+      }
+      for (const e of entries) {
+        if (!e.kind) continue;
+        await provider.changelogRemove({
+          accountId,
+          folderId: folder.folderId,
+          parentId: e.parentId,
+          itemId: e.itemId,
+          kind: e.kind,
+        });
+      }
+      provider.reportEventLog({
+        level: "info",
+        accountId,
+        folderId: folder.folderId,
+        message: `[upgrade] adopted ${adopted} queued edit(s) from the host`,
+      });
+    }
+  }
 }

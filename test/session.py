@@ -70,11 +70,24 @@ class Session:
         raise AssertionError(f"folder {self.contacts} has vanished")
 
     def changelog(self):
-        """Pending entries, read from the folder row - the only place the
-        changelog exists. There is no `getChangelog` verb, and a helper that
-        called one anyway returned [] on failure, which is indistinguishable
-        from a drained queue."""
-        return self.folder().get("changelog") or []
+        """Pending entries, asked of whoever owns the queue.
+
+        The provider owns it: it watches the address book itself and keeps
+        the queue in its own storage, so the folder row's `changelog` is
+        permanently empty. Reading the row would report "nothing pending"
+        for a book holding a dozen unpushed edits - and every assertion that
+        the queue drained would pass without ever being tested.
+
+        `getChangelog` asks the provider and raises when it cannot. It must
+        never answer [] on failure: that is indistinguishable from an empty
+        queue, and would turn the one breakage these assertions exist to
+        catch into a pass.
+        """
+        return ok(
+            "getChangelog",
+            accountId=self.account_id,
+            folderId=self.contacts,
+        )["entries"]
 
     def status(self):
         return self.folder()["status"]

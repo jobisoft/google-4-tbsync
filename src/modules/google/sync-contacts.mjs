@@ -1,7 +1,7 @@
 /**
  * Bidirectional sync between a Thunderbird address book and the
  * authenticated user's Google Contacts. Flow:
- *   1. Push adds + modifies from the host's changelog to Google.
+ *   1. Push adds + modifies from our own change queue to Google.
  *   2. Push deletes.
  *   3. Pull all server contacts; reconcile local.
  *   4. Groups: mirror of the contact flow, via `groupMap`.
@@ -15,7 +15,7 @@
  * gets undone by the very pass that should have confirmed it.
  *
  * Contact groups and their memberships both sync bidirectionally.
- * Every local write is preceded by `notify.changelogMarkServerWrite` so
+ * Every local write is preceded by a `markServerWrite` pre-tag so
  * the host's observer suppresses the resulting TB event. Writes are serial
  * for monotonic progress.
  */
@@ -24,6 +24,10 @@ import { ok, warning } from "../../vendor/tbsync/provider.mjs";
 import * as peopleApi from "./people-api.mjs";
 import * as mapper from "./contact-mapper.mjs";
 import * as addressBook from "../address-book.mjs";
+import {
+  localQueue,
+  rememberBindings,
+} from "../../vendor/tbsync/change-queue.mjs";
 import { GroupMap } from "../group-map.mjs";
 import { ContactMap } from "../contact-map.mjs";
 import { stringifyError, PUSH_ERR } from "../errors.mjs";
@@ -80,14 +84,36 @@ export async function syncFolderContacts({
     !!folder?.downloadOnly;
   const includeSystemGroups = !!account?.custom?.includeSystemContactGroups;
 
-  // Host-owned changelog and the in-memory provider maps (flushed at end).
-  const changelog = Array.isArray(folder?.changelog) ? folder.changelog : [];
+  // Our own queue for this binding, plus the in-memory provider maps
+  // (flushed at end). The queue is keyed by the session the host names, so a
+  // folder that has been unbound and rebound never sees the old one's edits.
+  const queue = localQueue({
+    accountId,
+    folderId,
+    sessionId: folder?.sessionId,
+    observed: true,
+  });
+  // Bank the binding while the row is in hand: an address-book event gives
+  // the observer a book id and nothing else, and the host may be gone by
+  // the time the user edits a card.
+  if (folder?.sessionId && targetID) {
+    await rememberBindings([
+      {
+        targetID,
+        accountId,
+        folderId,
+        sessionId: folder.sessionId,
+        targetType: folder.targetType,
+      },
+    ]).catch(() => {});
+  }
+  const changelog = await queue.entries();
   const gMap = new GroupMap(folder?.custom.groupMap);
   const cMap = new ContactMap(folder?.custom.contactMap);
 
   // Pre-tag helper: every messenger.contacts.* / messenger.mailingLists.*
-  // call we make must be preceded by a *_by_server entry so the host
-  // observer drops the resulting TB event as self-inflicted.
+  // call we make must be preceded by a *_by_server entry, so the observer
+  // drops the resulting Thunderbird event as self-inflicted.
   const ctx = {
     accountId,
     folderId,
@@ -98,17 +124,11 @@ export async function syncFolderContacts({
     gMap,
     cMap,
     changelog,
+    queue,
     markServer: (parentId, itemId, status, kind) =>
-      notify.changelogMarkServerWrite({
-        accountId,
-        folderId,
-        parentId,
-        itemId,
-        status,
-        kind,
-      }),
+      queue.markServerWrite({ parentId, itemId, status, kind }),
     removeEntry: (parentId, itemId, kind) =>
-      notify.changelogRemove({ accountId, folderId, parentId, itemId, kind }),
+      queue.remove({ parentId, itemId, kind }),
   };
 
   try {

@@ -24,6 +24,12 @@ import * as oauth from "./google/oauth.mjs";
 import * as addressBook from "./address-book.mjs";
 import { syncFolderContacts } from "./google/sync-contacts.mjs";
 import { runStartupMigrations } from "./upgrades.mjs";
+import {
+  localQueue,
+  rememberBindings,
+  sweep,
+} from "../vendor/tbsync/change-queue.mjs";
+import { installContactsObserver } from "../vendor/tbsync/contacts-observer.mjs";
 import { setSyncSignalResolver } from "./google/people-api.mjs";
 
 export class GoogleProvider extends TbSyncProviderImplementation {
@@ -74,6 +80,89 @@ export class GoogleProvider extends TbSyncProviderImplementation {
     // as a reconnect and nothing else.
     await runStartupMigrations(this);
     await this.primeStartupState();
+    // Line our own storage up with the bindings the host names: learn where
+    // each address book belongs, and drop the queues of bindings that have
+    // ended. Then watch the books - after the reconcile, so the bindings the
+    // observer resolves against are current before the first event lands.
+    await this.#reconcileFolderSessions();
+    installContactsObserver({
+      provider: this,
+      report: (args) => this.reportEventLog(args),
+    });
+  }
+
+  /** Bank which folder each address book belongs to, and sweep the queues of
+   *  bindings the host no longer names.
+   *
+   *  An address-book event carries a book id and nothing else, and the
+   *  observer must resolve it without asking the host - the host may be gone
+   *  by the time the user edits a card. Sweeping is the whole teardown path
+   *  for what we store: the host ends a binding by minting a new session id
+   *  and telling nobody, because Disconnect and Remove have to work while
+   *  this add-on is broken or uninstalled.
+   *
+   *  Reads every account before deciding anything: a partial answer would
+   *  sweep live queues away, so any failure abandons the pass. */
+  async #reconcileFolderSessions() {
+    const live = new Set();
+    const bindings = [];
+    try {
+      for (const { accountId } of await this.listAccounts()) {
+        const { folders = [] } = (await this.getAccount(accountId)) ?? {};
+        for (const f of folders) {
+          if (!f?.sessionId) continue;
+          live.add(f.sessionId);
+          if (f.targetID) {
+            bindings.push({
+              targetID: f.targetID,
+              accountId,
+              folderId: f.folderId,
+              sessionId: f.sessionId,
+              targetType: f.targetType,
+            });
+          }
+        }
+      }
+    } catch (err) {
+      this.reportEventLog({
+        level: "debug",
+        message: `[queue] could not read folder sessions; reconcile skipped: ${err?.message ?? String(err)}`,
+      });
+      return;
+    }
+    try {
+      await rememberBindings(bindings);
+      for (const d of await sweep(live)) {
+        this.reportEventLog({
+          level: d.entries > 0 ? "info" : "debug",
+          accountId: d.accountId ?? undefined,
+          folderId: d.folderId ?? undefined,
+          message:
+            `[queue] dropped the change queue of a binding that no longer ` +
+            `exists (${d.entries} pending edit(s) went with it)`,
+        });
+      }
+    } catch (err) {
+      this.reportEventLog({
+        level: "warning",
+        message: `[queue] reconcile failed: ${err?.message ?? String(err)}`,
+      });
+    }
+  }
+
+  /** The pending edits we hold for a folder. Read-only, and the only way
+   *  anyone outside this add-on can see the queue - the folder row's own
+   *  changelog stays empty. */
+  async onGetChangelog({ accountId, folderId }) {
+    const { folders = [] } = (await this.getAccount(accountId)) ?? {};
+    const folder = folders.find((f) => f.folderId === folderId);
+    if (!folder?.sessionId) return null;
+    return localQueue({
+      accountId,
+      folderId,
+      sessionId: folder.sessionId,
+      observed: true,
+    }).entries();
   }
 
   // ── Sync ───────────────────────────────────────────────────────────────
