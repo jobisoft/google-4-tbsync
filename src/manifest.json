@@ -22,9 +22,9 @@
     "storage",
     "identity",
     "addressBooks",
-    "notifications",
     "https://accounts.google.com/*",
     "https://oauth2.googleapis.com/*",
+    "https://www.googleapis.com/*",
     "https://people.googleapis.com/*"
   ],
   "background": {

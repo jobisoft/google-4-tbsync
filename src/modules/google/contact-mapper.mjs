@@ -366,7 +366,7 @@ const REVISION_FAMILIES = {
       write: writeRelations,
       merge(comp, server) {
         const local = readRelations(comp);
-        const key = (r) => `${r.person} ${r.type ?? ""}`;
+        const key = (r) => `${r.person}\u0000${r.type ?? ""}`;
         const seen = new Set(local.map(key));
         return [
           ...local,
