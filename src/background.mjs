@@ -9,10 +9,10 @@ import { stringifyError } from "./modules/errors.mjs";
  * runtime.onMessage traffic (from setup.html / config.html) to the
  * appropriate provider method.
  *
- * The provider carries no persistent storage. The host owns the account
- * and folder rows (including OAuth secrets, groupMap, contactMap, and
- * the changelog). The host also runs the address-book observer; the
- * provider is a pure consumer of the host's changelog queue.
+ * The host owns the account and folder rows, including OAuth secrets,
+ * groupMap and contactMap. The changelog is ours: pending edits live in
+ * this add-on's own storage, and we watch our own address book for them -
+ * so an edit is recorded whether or not the host is alive to hear it.
  */
 
 const provider = new GoogleProvider();

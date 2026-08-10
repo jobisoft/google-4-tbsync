@@ -21,7 +21,7 @@
  *
  * Contact groups and their memberships both sync bidirectionally.
  * Every local write is preceded by a `markServerWrite` pre-tag so
- * the host's observer suppresses the resulting TB event. Writes are serial
+ * our own observer suppresses the resulting TB event. Writes are serial
  * for monotonic progress.
  */
 
@@ -582,7 +582,7 @@ async function syncPhotoForPush(ctx, localVCard, serverPerson) {
 }
 
 /** Stamp the local card with `{resourceName, etag}` from the server.
- *  Writes via the host's observer-aware pre-tag so the stamp-update
+ *  Writes via the observer-aware pre-tag so the stamp-update
  *  doesn't echo back as a user edit. Also the moment the photo crosses:
  *  the card is being rewritten anyway, so the photo bookkeeping rides
  *  along in the same write. */

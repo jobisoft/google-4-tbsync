@@ -5,9 +5,10 @@
  * pulls its context from the host at the top of each on* hook via
  * `this.getAccount(accountId)`, reads user-config, OAuth credentials and
  * the refresh token from `account.custom.*`, and writes state back via
- * UPDATE_ACCOUNT / UPDATE_FOLDER RPCs. The provider has no persistent
- * storage of its own - even the changelog and the contact-group map
- * live on the host's folder rows.
+ * UPDATE_ACCOUNT / UPDATE_FOLDER RPCs. The contact-group map lives on
+ * the host's folder rows; the changelog does not - pending edits are
+ * kept in this add-on's own storage, which is why `onGetChangelog`
+ * answers from there rather than from the row.
  *
  * `authenticateAndCreateAccount` and `saveAccountFromConfig` are plain
  * methods triggered by runtime.onMessage from setup.html / config.html.
@@ -563,7 +564,8 @@ export class GoogleProvider extends TbSyncProviderImplementation {
   /** Re-prime the in-memory OAuth auth cache for every account on startup
    *  from host-stored credentials. Fired by the base class from
    *  `onConnectedToHost` (first port-open + every reconnect). Safe to run
-   *  multiple times. Book observation is host-owned. */
+   *  multiple times. We observe our own address book - see
+   *  `installContactsObserver` below. */
   async primeStartupState() {
     const accounts = await this.listAccounts();
     for (const acc of accounts) {
