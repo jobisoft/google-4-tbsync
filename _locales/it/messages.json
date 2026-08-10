@@ -1,51 +1,131 @@
 {
-    "extensionName": {
-        "message": "Google-4-TbSync"
-    },
-    "extensionDescription": {
-        "message": "Questo add-on provider aggiunge funzionalità di sincronizzazione con Google a TbSync. Al momento sono gestiti solo i contatti ed i gruppi di contatti, tramite Google's People API."
-    },
-
-    "menu.name": {
-        "message": "Google's People API"
-    },
-
-    "add.account.title": {
-        "message": "Inserisci le informazioni per il nuovo account"
-    },
-    "add.title": {
-        "message": "Aggiunta di un account Google a TbSync"
-    },
-
-    "manager.tabs.accountsettings": {
-        "message": "Impostazioni dell'account"
-    },
-    "manager.tabs.syncsettings": {
-        "message": "Opzioni"
-    },
-
-    "pref.accountName": {
-        "message": "Nome dell'account"
-    },
-    "pref.checkConnection": {
-        "message": "Controlla la connessione"
-    },
-    "pref.clientID": {
-        "message": "ID client"
-    },
-    "pref.clientSecret": {
-        "message": "Chiave segreta client"
-    },
-    "pref.includeSystemContactGroups": {
-        "message": "Includi i gruppi di contatti di sistema"
-    },
-    "pref.readOnlyMode": {
-        "message": "Modalità sola-lettura"
-    },
-    "pref.useFakeEmailAddresses": {
-        "message": "Usa indirizzi email fittizi"
-    },
-    "pref.verboseLogging": {
-        "message": "Log dettagliato"
+  "extensionName": {
+    "message": "Google-4-TbSync"
+  },
+  "extensionDescription": {
+    "message": "Componente aggiuntivo provider per TbSync che sincronizza i contatti Google con Thunderbird."
+  },
+  "setup.title": {
+    "message": "Aggiungi un account Google"
+  },
+  "setup.intro": {
+    "message": "Per connettersi a un account Google, fornisci un ID client OAuth e un segreto creati nella console di Google Cloud. Specifica un'etichetta per identificare il nuovo account in TbSync."
+  },
+  "setup.credentialsHelpLink": {
+    "message": "Come creare le tue credenziali della Google Cloud Console"
+  },
+  "setup.accountName": {
+    "message": "Etichetta account"
+  },
+  "setup.clientID": {
+    "message": "ID client"
+  },
+  "setup.clientSecret": {
+    "message": "Segreto client"
+  },
+  "setup.authButton": {
+    "message": "Accedi con Google"
+  },
+  "setup.cancelButton": {
+    "message": "Annulla"
+  },
+  "setup.redirectHint": {
+    "message": "L'URL di reindirizzamento di questo componente aggiuntivo deve essere aggiunto una sola volta alla configurazione del client OAuth per consentire al componente di comunicare con esso."
+  },
+  "setup.copyRedirect": {
+    "message": "Copia URL di reindirizzamento"
+  },
+  "setup.copied": {
+    "message": "Copiato"
+  },
+  "setup.error.copyFailed": {
+    "message": "Copia non riuscita: $ERROR$",
+    "placeholders": {
+      "ERROR": {
+        "content": "$1",
+        "example": "permission denied"
+      }
     }
+  },
+  "setup.error.accountNameRequired": {
+    "message": "Inserisci un nome per l'account."
+  },
+  "setup.error.credentialsRequired": {
+    "message": "Inserisci sia l'ID client sia il segreto client."
+  },
+  "setup.error.missingToken": {
+    "message": "Token di configurazione mancante. Apri questa finestra tramite TbSync."
+  },
+  "setup.error.signInFailed": {
+    "message": "Accesso non riuscito"
+  },
+  "config.title": {
+    "message": "Impostazioni account Google"
+  },
+  "config.label": {
+    "message": "Etichetta account"
+  },
+  "config.email": {
+    "message": "Account Google"
+  },
+  "config.clientId": {
+    "message": "ID client OAuth"
+  },
+  "config.readOnlyMode": {
+    "message": "Sola lettura (non inviare le modifiche locali a Google)"
+  },
+  "config.includeSystemContactGroups": {
+    "message": "Includi gruppi di sistema (Speciali, Contattati di frequente, …)"
+  },
+  "config.readOnlyBanner": {
+    "message": "Per evitare errori di sincronizzazione, le impostazioni non possono essere modificate mentre l'account è attivo."
+  },
+  "config.save": {
+    "message": "Salva"
+  },
+  "config.cancel": {
+    "message": "Annulla"
+  },
+  "config.close": {
+    "message": "Chiudi"
+  },
+  "config.error.missingAccountId": {
+    "message": "Identificatore account mancante."
+  },
+  "config.error.loadFailed": {
+    "message": "Caricamento dell'account non riuscito."
+  },
+  "config.error.accountNameRequired": {
+    "message": "Il nome dell'account è obbligatorio."
+  },
+  "config.error.saveFailed": {
+    "message": "Salvataggio non riuscito"
+  },
+  "setup.clientType": {
+    "message": "Tipo di client OAuth"
+  },
+  "setup.clientType.desktop": {
+    "message": "Client OAuth desktop"
+  },
+  "setup.clientType.desktop.hint": {
+    "message": "Metodo legacy. Deprecato da Google. I client esistenti potrebbero continuare a funzionare."
+  },
+  "setup.clientType.web": {
+    "message": "Client OAuth web"
+  },
+  "setup.clientType.web.hint": {
+    "message": "Metodo moderno. Richiede l'aggiunta dell'URL di reindirizzamento di questo componente aggiuntivo agli URI di reindirizzamento autorizzati del client OAuth."
+  },
+  "config.clientType": {
+    "message": "Tipo di client OAuth"
+  },
+  "config.clientSecret": {
+    "message": "Segreto del client OAuth"
+  },
+  "config.clientSecret.placeholder": {
+    "message": "Lasciare vuoto per mantenere il segreto attuale"
+  },
+  "config.error.clientIdRequired": {
+    "message": "L'ID client è obbligatorio."
+  }
 }

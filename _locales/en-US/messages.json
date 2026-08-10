@@ -1,51 +1,128 @@
 {
-    "extensionName": {
-        "message": "Google-4-TbSync"
-    },
-    "extensionDescription": {
-        "message": "This provider add-on adds Google synchronization capabilities to TbSync. Only contacts and contact groups are currently managed, using Google's People API."
-    },
-
-    "menu.name": {
-        "message": "Google's People API"
-    },
-
-    "add.account.title": {
-        "message": "Enter the information for the new account"
-    },
-    "add.title": {
-        "message": "Adding a Google account to TbSync"
-    },
-
-    "manager.tabs.accountsettings": {
-        "message": "Account settings"
-    },
-    "manager.tabs.syncsettings": {
-        "message": "Options"
-    },
-
-    "pref.accountName": {
-        "message": "Account name"
-    },
-    "pref.checkConnection": {
-        "message": "Check connection"
-    },
-    "pref.clientID": {
-        "message": "Client ID"
-    },
-    "pref.clientSecret": {
-        "message": "Client secret"
-    },
-    "pref.includeSystemContactGroups": {
-        "message": "Include system contact groups"
-    },
-    "pref.readOnlyMode": {
-        "message": "Read-only mode"
-    },
-    "pref.useFakeEmailAddresses": {
-        "message": "Use fake email addresses"
-    },
-    "pref.verboseLogging": {
-        "message": "Verbose logging"
+  "extensionName": {
+    "message": "Google-4-TbSync"
+  },
+  "extensionDescription": {
+    "message": "Provider add-on for TbSync that synchronizes Google Contacts with Thunderbird."
+  },
+  "setup.title": {
+    "message": "Add a Google account"
+  },
+  "setup.intro": {
+    "message": "To connect to a Google account, provide an OAuth client ID and secret you created in the Google Cloud console. Specify an account label to identify the new account in TbSync."
+  },
+  "setup.credentialsHelpLink": {
+    "message": "How to create your Google Cloud Console credentials"
+  },
+  "setup.accountName": {
+    "message": "Account label"
+  },
+  "setup.clientType": {
+    "message": "OAuth client type"
+  },
+  "setup.clientType.desktop": {
+    "message": "Desktop OAuth Client"
+  },
+  "setup.clientType.desktop.hint": {
+    "message": "Legacy flow. Deprecated by Google. Existing clients may continue to work."
+  },
+  "setup.clientType.web": {
+    "message": "Web OAuth Client"
+  },
+  "setup.clientType.web.hint": {
+    "message": "Modern flow. Requires this add-on's redirect URL to be added to your OAuth client's Authorized redirect URIs."
+  },
+  "setup.clientID": {
+    "message": "Client ID"
+  },
+  "setup.clientSecret": {
+    "message": "Client secret"
+  },
+  "setup.authButton": {
+    "message": "Sign in with Google"
+  },
+  "setup.cancelButton": {
+    "message": "Cancel"
+  },
+  "setup.redirectHint": {
+    "message": "The redirect URL of this add-on needs to be added once to the OAuth client configuration to allow the add-on to communicate with it."
+  },
+  "setup.copyRedirect": {
+    "message": "Copy redirect URL"
+  },
+  "setup.copied": {
+    "message": "Copied"
+  },
+  "setup.error.copyFailed": {
+    "message": "Copy failed: $ERROR$",
+    "placeholders": {
+      "ERROR": { "content": "$1", "example": "permission denied" }
     }
+  },
+  "setup.error.accountNameRequired": {
+    "message": "Please enter an account name."
+  },
+  "setup.error.credentialsRequired": {
+    "message": "Please enter both the Client ID and the Client secret."
+  },
+  "setup.error.missingToken": {
+    "message": "Missing setup token. Open this window through TbSync."
+  },
+  "setup.error.signInFailed": {
+    "message": "Sign-in failed"
+  },
+  "config.title": {
+    "message": "Google account settings"
+  },
+  "config.label": {
+    "message": "Account label"
+  },
+  "config.email": {
+    "message": "Google account"
+  },
+  "config.clientType": {
+    "message": "OAuth client type"
+  },
+  "config.clientId": {
+    "message": "OAuth Client ID"
+  },
+  "config.clientSecret": {
+    "message": "OAuth Client secret"
+  },
+  "config.clientSecret.placeholder": {
+    "message": "Leave blank to keep the existing secret"
+  },
+  "config.error.clientIdRequired": {
+    "message": "Client ID is required."
+  },
+  "config.readOnlyMode": {
+    "message": "Read-only (do not push local changes to Google)"
+  },
+  "config.includeSystemContactGroups": {
+    "message": "Include system groups (Starred, Most Contacted, …)"
+  },
+  "config.readOnlyBanner": {
+    "message": "To prevent synchronization errors, settings cannot be edited while the account is enabled."
+  },
+  "config.save": {
+    "message": "Save"
+  },
+  "config.cancel": {
+    "message": "Cancel"
+  },
+  "config.close": {
+    "message": "Close"
+  },
+  "config.error.missingAccountId": {
+    "message": "Missing account identifier."
+  },
+  "config.error.loadFailed": {
+    "message": "Failed to load account."
+  },
+  "config.error.accountNameRequired": {
+    "message": "Account name is required."
+  },
+  "config.error.saveFailed": {
+    "message": "Save failed"
+  }
 }

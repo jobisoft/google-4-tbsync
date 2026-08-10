@@ -1,0 +1,131 @@
+{
+  "extensionName": {
+    "message": "Google-4-TbSync"
+  },
+  "extensionDescription": {
+    "message": "Google 연락처를 Thunderbird와 동기화하는 TbSync용 공급자 부가기능입니다."
+  },
+  "setup.title": {
+    "message": "Google 계정 추가"
+  },
+  "setup.intro": {
+    "message": "Google 계정에 연결하려면 Google Cloud 콘솔에서 만든 OAuth 클라이언트 ID와 비밀번호를 입력하세요. TbSync에서 새 계정을 식별할 수 있도록 계정 라벨도 지정하세요."
+  },
+  "setup.credentialsHelpLink": {
+    "message": "Google Cloud Console 자격 증명 만드는 방법"
+  },
+  "setup.accountName": {
+    "message": "계정 라벨"
+  },
+  "setup.clientID": {
+    "message": "클라이언트 ID"
+  },
+  "setup.clientSecret": {
+    "message": "클라이언트 비밀번호"
+  },
+  "setup.authButton": {
+    "message": "Google로 로그인"
+  },
+  "setup.cancelButton": {
+    "message": "취소"
+  },
+  "setup.redirectHint": {
+    "message": "이 부가 기능이 클라이언트와 통신할 수 있도록 리디렉션 URL을 OAuth 클라이언트 구성에 한 번 추가해야 합니다."
+  },
+  "setup.copyRedirect": {
+    "message": "리디렉션 URL 복사"
+  },
+  "setup.copied": {
+    "message": "복사됨"
+  },
+  "setup.error.copyFailed": {
+    "message": "복사 실패: $ERROR$",
+    "placeholders": {
+      "ERROR": {
+        "content": "$1",
+        "example": "permission denied"
+      }
+    }
+  },
+  "setup.error.accountNameRequired": {
+    "message": "계정 이름을 입력하세요."
+  },
+  "setup.error.credentialsRequired": {
+    "message": "클라이언트 ID와 클라이언트 비밀번호를 모두 입력하세요."
+  },
+  "setup.error.missingToken": {
+    "message": "설정 토큰이 없습니다. TbSync를 통해 이 창을 여세요."
+  },
+  "setup.error.signInFailed": {
+    "message": "로그인 실패"
+  },
+  "config.title": {
+    "message": "Google 계정 설정"
+  },
+  "config.label": {
+    "message": "계정 라벨"
+  },
+  "config.email": {
+    "message": "Google 계정"
+  },
+  "config.clientId": {
+    "message": "OAuth 클라이언트 ID"
+  },
+  "config.readOnlyMode": {
+    "message": "읽기 전용 (로컬 변경 사항을 Google에 전송하지 않음)"
+  },
+  "config.includeSystemContactGroups": {
+    "message": "시스템 그룹 포함 (별표 표시, 자주 연락한 사람 등)"
+  },
+  "config.readOnlyBanner": {
+    "message": "동기화 오류를 방지하기 위해 계정이 활성화된 동안에는 설정을 편집할 수 없습니다."
+  },
+  "config.save": {
+    "message": "저장"
+  },
+  "config.cancel": {
+    "message": "취소"
+  },
+  "config.close": {
+    "message": "닫기"
+  },
+  "config.error.missingAccountId": {
+    "message": "계정 식별자가 없습니다."
+  },
+  "config.error.loadFailed": {
+    "message": "계정을 불러오지 못했습니다."
+  },
+  "config.error.accountNameRequired": {
+    "message": "계정 이름은 필수입니다."
+  },
+  "config.error.saveFailed": {
+    "message": "저장 실패"
+  },
+  "setup.clientType": {
+    "message": "OAuth 클라이언트 유형"
+  },
+  "setup.clientType.desktop": {
+    "message": "데스크톱 OAuth 클라이언트"
+  },
+  "setup.clientType.desktop.hint": {
+    "message": "이전 방식. Google에서 더 이상 지원하지 않습니다. 기존 클라이언트는 계속 작동할 수 있습니다."
+  },
+  "setup.clientType.web": {
+    "message": "웹 OAuth 클라이언트"
+  },
+  "setup.clientType.web.hint": {
+    "message": "최신 방식. 이 부가 기능의 리디렉션 URL을 OAuth 클라이언트의 승인된 리디렉션 URI에 추가해야 합니다."
+  },
+  "config.clientType": {
+    "message": "OAuth 클라이언트 유형"
+  },
+  "config.clientSecret": {
+    "message": "OAuth 클라이언트 비밀번호"
+  },
+  "config.clientSecret.placeholder": {
+    "message": "기존 비밀번호를 유지하려면 비워 두세요"
+  },
+  "config.error.clientIdRequired": {
+    "message": "클라이언트 ID가 필요합니다."
+  }
+}

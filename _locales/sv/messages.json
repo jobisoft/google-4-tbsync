@@ -1,0 +1,131 @@
+{
+  "extensionName": {
+    "message": "Google-4-TbSync"
+  },
+  "extensionDescription": {
+    "message": "Leverantörstillägg för TbSync som synkroniserar Google-kontakter med Thunderbird."
+  },
+  "setup.title": {
+    "message": "Lägg till ett Google-konto"
+  },
+  "setup.intro": {
+    "message": "För att ansluta till ett Google-konto, ange ett OAuth-klient-ID och en hemlighet som du har skapat i Google Cloud-konsolen. Ange en kontoetikett för att identifiera det nya kontot i TbSync."
+  },
+  "setup.credentialsHelpLink": {
+    "message": "Så skapar du dina Google Cloud Console-uppgifter"
+  },
+  "setup.accountName": {
+    "message": "Kontoetikett"
+  },
+  "setup.clientID": {
+    "message": "Klient-ID"
+  },
+  "setup.clientSecret": {
+    "message": "Klienthemlighet"
+  },
+  "setup.authButton": {
+    "message": "Logga in med Google"
+  },
+  "setup.cancelButton": {
+    "message": "Avbryt"
+  },
+  "setup.redirectHint": {
+    "message": "Tilläggets omdirigeringswebbadress måste läggas till en gång i OAuth-klientens konfiguration för att tillägget ska kunna kommunicera med klienten."
+  },
+  "setup.copyRedirect": {
+    "message": "Kopiera omdirigerings-URL"
+  },
+  "setup.copied": {
+    "message": "Kopierad"
+  },
+  "setup.error.copyFailed": {
+    "message": "Kopiering misslyckades: $ERROR$",
+    "placeholders": {
+      "ERROR": {
+        "content": "$1",
+        "example": "permission denied"
+      }
+    }
+  },
+  "setup.error.accountNameRequired": {
+    "message": "Ange ett kontonamn."
+  },
+  "setup.error.credentialsRequired": {
+    "message": "Ange både klient-ID och klienthemlighet."
+  },
+  "setup.error.missingToken": {
+    "message": "Saknar installations-token. Öppna detta fönster via TbSync."
+  },
+  "setup.error.signInFailed": {
+    "message": "Inloggningen misslyckades"
+  },
+  "config.title": {
+    "message": "Inställningar för Google-konto"
+  },
+  "config.label": {
+    "message": "Kontoetikett"
+  },
+  "config.email": {
+    "message": "Google-konto"
+  },
+  "config.clientId": {
+    "message": "OAuth-klient-ID"
+  },
+  "config.readOnlyMode": {
+    "message": "Skrivskyddad (skicka inte lokala ändringar till Google)"
+  },
+  "config.includeSystemContactGroups": {
+    "message": "Inkludera systemgrupper (Stjärnmärkta, Mest kontaktade, …)"
+  },
+  "config.readOnlyBanner": {
+    "message": "För att undvika synkroniseringsfel kan inställningarna inte redigeras medan kontot är aktiverat."
+  },
+  "config.save": {
+    "message": "Spara"
+  },
+  "config.cancel": {
+    "message": "Avbryt"
+  },
+  "config.close": {
+    "message": "Stäng"
+  },
+  "config.error.missingAccountId": {
+    "message": "Saknar kontoidentifierare."
+  },
+  "config.error.loadFailed": {
+    "message": "Det gick inte att läsa in kontot."
+  },
+  "config.error.accountNameRequired": {
+    "message": "Kontonamn krävs."
+  },
+  "config.error.saveFailed": {
+    "message": "Det gick inte att spara"
+  },
+  "setup.clientType": {
+    "message": "Typ av OAuth-klient"
+  },
+  "setup.clientType.desktop": {
+    "message": "OAuth-klient för skrivbord"
+  },
+  "setup.clientType.desktop.hint": {
+    "message": "Äldre metod. Föråldrad enligt Google. Befintliga klienter kan fortsätta fungera."
+  },
+  "setup.clientType.web": {
+    "message": "OAuth-webbklient"
+  },
+  "setup.clientType.web.hint": {
+    "message": "Modern metod. Kräver att tilläggets omdirigeringswebbadress läggs till i OAuth-klientens auktoriserade omdirigerings-URI:er."
+  },
+  "config.clientType": {
+    "message": "Typ av OAuth-klient"
+  },
+  "config.clientSecret": {
+    "message": "OAuth-klienthemlighet"
+  },
+  "config.clientSecret.placeholder": {
+    "message": "Lämna tomt för att behålla den befintliga hemligheten"
+  },
+  "config.error.clientIdRequired": {
+    "message": "Klient-ID krävs."
+  }
+}

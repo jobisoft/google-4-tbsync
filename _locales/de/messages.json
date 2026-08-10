@@ -1,48 +1,131 @@
 {
-    "extensionName": {
-        "message": "Google-4-TbSync"
-    },
-    "extensionDescription": {
-        "message": "Dieses Add-On erweitert TbSync um Google-Synchronisierungsfunktionen. Derzeit werden nur Kontakte und Kontaktgruppen mithilfe der People-API von Google verwaltet."
-    },
-
-    "menu.name": {
-        "message": "People-API von Google"
-    },
-
-    "add.account.title": {
-        "message": "Geben Sie die Informationen für das neue Konto ein"
-    },
-    "add.title": {
-        "message": "Hinzufügen eines Google-Kontos mithilfe von TbSync"
-    },
-
-    "manager.tabs.accountsettings": {
-        "message": "Kontoeinstellungen"
-    },
-    "manager.tabs.syncsettings": {
-        "message": "Optionen"
-    },
-
-    "pref.accountName": {
-        "message": "Kontobezeichnung"
-    },
-    "pref.checkConnection": {
-        "message": "Überprüfen Sie Ihre Verbindung"
-    },
-    "pref.clientID": {
-        "message": "Client-ID"
-    },
-    "pref.clientSecret": {
-        "message": "Client-Passwort"
-    },
-    "pref.includeSystemContactGroups": {
-        "message": "Inkl. der Systemkontaktgruppen"
-    },
-    "pref.readOnlyMode": {
-        "message": "Schreibgeschützter Modus"
-    },
-    "pref.useFakeEmailAddresses": {
-        "message": "Verwende systemgenerierte (fake) e-Mail-Adressen"
+  "extensionName": {
+    "message": "Google-4-TbSync"
+  },
+  "extensionDescription": {
+    "message": "Provider-Add-on für TbSync, das Google-Kontakte mit Thunderbird synchronisiert."
+  },
+  "setup.title": {
+    "message": "Google-Konto hinzufügen"
+  },
+  "setup.intro": {
+    "message": "Um eine Verbindung mit einem Google-Konto herzustellen, geben Sie eine OAuth-Client-ID und ein Client-Schlüssel an, das Sie in der Google Cloud Console erstellt haben. Geben Sie eine Bezeichnung an, um das neue Konto in TbSync zu identifizieren."
+  },
+  "setup.credentialsHelpLink": {
+    "message": "So erstellen Sie Ihre Anmeldedaten für die Google Cloud Console"
+  },
+  "setup.accountName": {
+    "message": "Kontobezeichnung"
+  },
+  "setup.clientID": {
+    "message": "Client-ID"
+  },
+  "setup.clientSecret": {
+    "message": "Client-Schlüssel"
+  },
+  "setup.authButton": {
+    "message": "Mit Google anmelden"
+  },
+  "setup.cancelButton": {
+    "message": "Abbrechen"
+  },
+  "setup.redirectHint": {
+    "message": "Die Redirect-URL dieses Add-ons muss einmalig zur OAuth-Client-Konfiguration hinzugefügt werden, damit das Add-on mit dem Client kommunizieren kann."
+  },
+  "setup.copyRedirect": {
+    "message": "Redirect-URL kopieren"
+  },
+  "setup.copied": {
+    "message": "Kopiert"
+  },
+  "setup.error.copyFailed": {
+    "message": "Kopieren fehlgeschlagen: $ERROR$",
+    "placeholders": {
+      "ERROR": {
+        "content": "$1",
+        "example": "permission denied"
+      }
     }
+  },
+  "setup.error.accountNameRequired": {
+    "message": "Bitte geben Sie eine Kontobezeichnung ein."
+  },
+  "setup.error.credentialsRequired": {
+    "message": "Bitte geben Sie sowohl die Client-ID als auch das Client-Schlüssel ein."
+  },
+  "setup.error.missingToken": {
+    "message": "Setup-Token fehlt. Öffnen Sie dieses Fenster über TbSync."
+  },
+  "setup.error.signInFailed": {
+    "message": "Anmeldung fehlgeschlagen"
+  },
+  "config.title": {
+    "message": "Einstellungen für das Google-Konto"
+  },
+  "config.label": {
+    "message": "Kontobezeichnung"
+  },
+  "config.email": {
+    "message": "Google-Konto"
+  },
+  "config.clientId": {
+    "message": "OAuth-Client-ID"
+  },
+  "config.readOnlyMode": {
+    "message": "Nur lesen (lokale Änderungen nicht zu Google senden)"
+  },
+  "config.includeSystemContactGroups": {
+    "message": "Systemgruppen einbeziehen (Markiert, Häufige Kontakte, …)"
+  },
+  "config.readOnlyBanner": {
+    "message": "Um Synchronisationsfehler zu vermeiden, können die Einstellungen nicht geändert werden, solange das Konto aktiv ist."
+  },
+  "config.save": {
+    "message": "Speichern"
+  },
+  "config.cancel": {
+    "message": "Abbrechen"
+  },
+  "config.close": {
+    "message": "Schließen"
+  },
+  "config.error.missingAccountId": {
+    "message": "Kontokennung fehlt."
+  },
+  "config.error.loadFailed": {
+    "message": "Konto konnte nicht geladen werden."
+  },
+  "config.error.accountNameRequired": {
+    "message": "Kontobezeichnung ist erforderlich."
+  },
+  "config.error.saveFailed": {
+    "message": "Speichern fehlgeschlagen"
+  },
+  "setup.clientType": {
+    "message": "OAuth-Client-Typ"
+  },
+  "setup.clientType.desktop": {
+    "message": "Desktop-OAuth-Client"
+  },
+  "setup.clientType.desktop.hint": {
+    "message": "Veraltete Methode. Von Google nicht mehr unterstützt. Bestehende Clients funktionieren möglicherweise weiterhin."
+  },
+  "setup.clientType.web": {
+    "message": "Web-OAuth-Client"
+  },
+  "setup.clientType.web.hint": {
+    "message": "Moderne Methode. Erfordert das Hinzufügen der Redirect-URL dieses Add-ons zu den autorisierten Redirect-URLs Ihres OAuth-Clients."
+  },
+  "config.clientType": {
+    "message": "OAuth-Client-Typ"
+  },
+  "config.clientSecret": {
+    "message": "OAuth-Client-Schlüssel"
+  },
+  "config.clientSecret.placeholder": {
+    "message": "Leer lassen, um den vorhandenen Schlüssel beizubehalten"
+  },
+  "config.error.clientIdRequired": {
+    "message": "Client-ID ist erforderlich."
+  }
 }

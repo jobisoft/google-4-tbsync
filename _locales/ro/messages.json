@@ -1,0 +1,131 @@
+{
+  "extensionName": {
+    "message": "Google-4-TbSync"
+  },
+  "extensionDescription": {
+    "message": "Extensie furnizor pentru TbSync care sincronizează contactele Google cu Thunderbird."
+  },
+  "setup.title": {
+    "message": "Adaugă un cont Google"
+  },
+  "setup.intro": {
+    "message": "Pentru a vă conecta la un cont Google, furnizați un ID de client OAuth și un secret create în consola Google Cloud. Specificați o etichetă pentru a identifica noul cont în TbSync."
+  },
+  "setup.credentialsHelpLink": {
+    "message": "Cum să creați credențialele pentru Google Cloud Console"
+  },
+  "setup.accountName": {
+    "message": "Etichetă cont"
+  },
+  "setup.clientID": {
+    "message": "ID client"
+  },
+  "setup.clientSecret": {
+    "message": "Secret client"
+  },
+  "setup.authButton": {
+    "message": "Autentificare cu Google"
+  },
+  "setup.cancelButton": {
+    "message": "Anulează"
+  },
+  "setup.redirectHint": {
+    "message": "URL-ul de redirecționare al acestui supliment trebuie adăugat o singură dată în configurarea clientului OAuth pentru ca suplimentul să poată comunica cu clientul."
+  },
+  "setup.copyRedirect": {
+    "message": "Copiază URL de redirecționare"
+  },
+  "setup.copied": {
+    "message": "Copiat"
+  },
+  "setup.error.copyFailed": {
+    "message": "Copierea a eșuat: $ERROR$",
+    "placeholders": {
+      "ERROR": {
+        "content": "$1",
+        "example": "permission denied"
+      }
+    }
+  },
+  "setup.error.accountNameRequired": {
+    "message": "Introduceți un nume de cont."
+  },
+  "setup.error.credentialsRequired": {
+    "message": "Introduceți atât ID-ul clientului, cât și secretul clientului."
+  },
+  "setup.error.missingToken": {
+    "message": "Lipsește token-ul de configurare. Deschideți această fereastră prin TbSync."
+  },
+  "setup.error.signInFailed": {
+    "message": "Autentificarea a eșuat"
+  },
+  "config.title": {
+    "message": "Setări cont Google"
+  },
+  "config.label": {
+    "message": "Etichetă cont"
+  },
+  "config.email": {
+    "message": "Cont Google"
+  },
+  "config.clientId": {
+    "message": "ID client OAuth"
+  },
+  "config.readOnlyMode": {
+    "message": "Doar citire (nu trimite modificările locale către Google)"
+  },
+  "config.includeSystemContactGroups": {
+    "message": "Include grupurile de sistem (Marcate, Cel mai contactate, …)"
+  },
+  "config.readOnlyBanner": {
+    "message": "Pentru a preveni erorile de sincronizare, setările nu pot fi editate cât timp contul este activat."
+  },
+  "config.save": {
+    "message": "Salvează"
+  },
+  "config.cancel": {
+    "message": "Anulează"
+  },
+  "config.close": {
+    "message": "Închide"
+  },
+  "config.error.missingAccountId": {
+    "message": "Lipsește identificatorul contului."
+  },
+  "config.error.loadFailed": {
+    "message": "Nu s-a putut încărca contul."
+  },
+  "config.error.accountNameRequired": {
+    "message": "Numele contului este obligatoriu."
+  },
+  "config.error.saveFailed": {
+    "message": "Salvarea a eșuat"
+  },
+  "setup.clientType": {
+    "message": "Tip de client OAuth"
+  },
+  "setup.clientType.desktop": {
+    "message": "Client OAuth pentru desktop"
+  },
+  "setup.clientType.desktop.hint": {
+    "message": "Metodă moștenită. Învechită de Google. Clienții existenți pot continua să funcționeze."
+  },
+  "setup.clientType.web": {
+    "message": "Client OAuth pentru web"
+  },
+  "setup.clientType.web.hint": {
+    "message": "Metodă modernă. Necesită adăugarea URL-ului de redirecționare al acestui supliment la URI-urile de redirecționare autorizate ale clientului OAuth."
+  },
+  "config.clientType": {
+    "message": "Tip de client OAuth"
+  },
+  "config.clientSecret": {
+    "message": "Secretul clientului OAuth"
+  },
+  "config.clientSecret.placeholder": {
+    "message": "Lăsați gol pentru a păstra secretul existent"
+  },
+  "config.error.clientIdRequired": {
+    "message": "ID-ul clientului este obligatoriu."
+  }
+}

@@ -1,0 +1,131 @@
+{
+  "extensionName": {
+    "message": "Google-4-TbSync"
+  },
+  "extensionDescription": {
+    "message": "Дополнение-провайдер для TbSync, синхронизирующее контакты Google с Thunderbird."
+  },
+  "setup.title": {
+    "message": "Добавить учётную запись Google"
+  },
+  "setup.intro": {
+    "message": "Чтобы подключиться к учётной записи Google, укажите идентификатор клиента OAuth и секрет, созданные в консоли Google Cloud. Задайте метку, чтобы отличать новую учётную запись в TbSync."
+  },
+  "setup.credentialsHelpLink": {
+    "message": "Как создать свои учётные данные Google Cloud Console"
+  },
+  "setup.accountName": {
+    "message": "Метка учётной записи"
+  },
+  "setup.clientID": {
+    "message": "Идентификатор клиента"
+  },
+  "setup.clientSecret": {
+    "message": "Секрет клиента"
+  },
+  "setup.authButton": {
+    "message": "Войти через Google"
+  },
+  "setup.cancelButton": {
+    "message": "Отмена"
+  },
+  "setup.redirectHint": {
+    "message": "URL перенаправления этого дополнения нужно один раз добавить в настройки OAuth-клиента, чтобы дополнение могло обмениваться данными с клиентом."
+  },
+  "setup.copyRedirect": {
+    "message": "Копировать URL перенаправления"
+  },
+  "setup.copied": {
+    "message": "Скопировано"
+  },
+  "setup.error.copyFailed": {
+    "message": "Не удалось скопировать: $ERROR$",
+    "placeholders": {
+      "ERROR": {
+        "content": "$1",
+        "example": "permission denied"
+      }
+    }
+  },
+  "setup.error.accountNameRequired": {
+    "message": "Введите имя учётной записи."
+  },
+  "setup.error.credentialsRequired": {
+    "message": "Введите как идентификатор клиента, так и секрет клиента."
+  },
+  "setup.error.missingToken": {
+    "message": "Отсутствует токен настройки. Откройте это окно через TbSync."
+  },
+  "setup.error.signInFailed": {
+    "message": "Не удалось войти"
+  },
+  "config.title": {
+    "message": "Настройки учётной записи Google"
+  },
+  "config.label": {
+    "message": "Метка учётной записи"
+  },
+  "config.email": {
+    "message": "Учётная запись Google"
+  },
+  "config.clientId": {
+    "message": "Идентификатор клиента OAuth"
+  },
+  "config.readOnlyMode": {
+    "message": "Только чтение (не отправлять локальные изменения в Google)"
+  },
+  "config.includeSystemContactGroups": {
+    "message": "Включать системные группы (Помеченные, Часто используемые, …)"
+  },
+  "config.readOnlyBanner": {
+    "message": "Чтобы избежать ошибок синхронизации, настройки нельзя редактировать, пока учётная запись включена."
+  },
+  "config.save": {
+    "message": "Сохранить"
+  },
+  "config.cancel": {
+    "message": "Отмена"
+  },
+  "config.close": {
+    "message": "Закрыть"
+  },
+  "config.error.missingAccountId": {
+    "message": "Отсутствует идентификатор учётной записи."
+  },
+  "config.error.loadFailed": {
+    "message": "Не удалось загрузить учётную запись."
+  },
+  "config.error.accountNameRequired": {
+    "message": "Имя учётной записи обязательно."
+  },
+  "config.error.saveFailed": {
+    "message": "Не удалось сохранить"
+  },
+  "setup.clientType": {
+    "message": "Тип OAuth-клиента"
+  },
+  "setup.clientType.desktop": {
+    "message": "Настольный OAuth-клиент"
+  },
+  "setup.clientType.desktop.hint": {
+    "message": "Устаревший способ. Устарел по решению Google. Существующие клиенты могут продолжать работать."
+  },
+  "setup.clientType.web": {
+    "message": "Веб OAuth-клиент"
+  },
+  "setup.clientType.web.hint": {
+    "message": "Современный способ. Требует добавления URL перенаправления этого дополнения в список разрешённых URI перенаправления вашего OAuth-клиента."
+  },
+  "config.clientType": {
+    "message": "Тип OAuth-клиента"
+  },
+  "config.clientSecret": {
+    "message": "Секрет OAuth-клиента"
+  },
+  "config.clientSecret.placeholder": {
+    "message": "Оставьте пустым, чтобы сохранить текущий секрет"
+  },
+  "config.error.clientIdRequired": {
+    "message": "Идентификатор клиента обязателен."
+  }
+}
