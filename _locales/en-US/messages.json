@@ -1,0 +1,51 @@
+{
+    "extensionName": {
+        "message": "Google-4-TbSync"
+    },
+    "extensionDescription": {
+        "message": "This provider add-on adds Google synchronization capabilities to TbSync. Only contacts and contact groups are currently managed, using Google's People API."
+    },
+
+    "menu.name": {
+        "message": "Google's People API"
+    },
+
+    "add.account.title": {
+        "message": "Enter the information for the new account"
+    },
+    "add.title": {
+        "message": "Adding a Google account to TbSync"
+    },
+
+    "manager.tabs.accountsettings": {
+        "message": "Account settings"
+    },
+    "manager.tabs.syncsettings": {
+        "message": "Options"
+    },
+
+    "pref.accountName": {
+        "message": "Account name"
+    },
+    "pref.checkConnection": {
+        "message": "Check connection"
+    },
+    "pref.clientID": {
+        "message": "Client ID"
+    },
+    "pref.clientSecret": {
+        "message": "Client secret"
+    },
+    "pref.includeSystemContactGroups": {
+        "message": "Include system contact groups"
+    },
+    "pref.readOnlyMode": {
+        "message": "Read-only mode"
+    },
+    "pref.useFakeEmailAddresses": {
+        "message": "Use fake email addresses"
+    },
+    "pref.verboseLogging": {
+        "message": "Verbose logging"
+    }
+}
