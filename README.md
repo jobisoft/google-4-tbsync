@@ -35,7 +35,3 @@ Then install this add-on. .xpi packages are published on this repository's [rele
 
 * **Do regular backups of both your Google and Thunderbird address books.**
 * The _Read-only mode_ option is there for when you want Google to be the only side that changes.
-
-## Additional information
-
-Please refer to the [wiki](https://github.com/jobisoft/google-4-tbsync/wiki) for other useful information, including guides and user contributions.
