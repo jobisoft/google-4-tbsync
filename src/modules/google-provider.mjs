@@ -51,7 +51,7 @@ export class GoogleProvider extends TbSyncProviderImplementation {
         hasSetupPopup: true,
         hasConfigPopup: true,
       },
-      maintainerEmail: "info@marcozanon.com",
+      maintainerEmail: "john.bieling@gmx.de",
       contributorsUrl: "https://github.com/jobisoft/google-4-tbsync",
       logPrefix: "[google-4-tbsync]",
     });
