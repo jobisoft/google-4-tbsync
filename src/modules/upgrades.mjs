@@ -8,15 +8,19 @@
  * TbSync, so an imported account arrives with `clientID`, `clientSecret`,
  * `includeSystemContactGroups`, `readOnlyMode` and `refreshToken` in the
  * shape that add-on wrote, no `authenticatedUserEmail` (it never persisted
- * one), and cards whose Google identity lives in the nsIAbCard property
- * bag rather than in the vCard. Converting all of that is this module's
- * job.
+ * one). Converting the account's settings is this module's job.
+ *
+ * What it deliberately does NOT convert is the account's data: the cards in
+ * the bound address book, whose Google identity the legacy add-on kept in
+ * the nsIAbCard property bag rather than in the vCard, and any edit it had
+ * queued for them. An imported account does not sync at all until the user
+ * reconnects it, which deletes the local book and rebuilds it from Google -
+ * so converting first would be work done on a copy about to be replaced.
  *
  * Two triggers, one per kind of data, on the principle that the record of
  * a conversion belongs with the data it converted:
  *
- *   - Account `custom` and the Thunderbird resources bound to it live in
- *     the host and in the address book. Their trigger is the host's
+ *   - Account `custom` lives in the host. Its trigger is the host's
  *     `legacyMigrationPending` flag, which the host re-sets every time it
  *     re-imports - the only durable signal, since nothing about this
  *     add-on's own install history says anything about what the host did.
@@ -29,18 +33,8 @@
  * every step below has to be idempotent.
  */
 
-import * as addressBook from "../vendor/tbsync/address-book.mjs";
-import * as mapper from "./google/contact-mapper.mjs";
 import { stringifyError } from "./errors.mjs";
 import * as oauth from "./google/oauth.mjs";
-import { localQueue } from "../vendor/tbsync/change-queue.mjs";
-import {
-  CHANGELOG_KINDS,
-  isUserEntry,
-  SERVER_TAG_STATUSES,
-} from "../vendor/tbsync/changelog-core.mjs";
-
-const STATUS_MODIFIED_BY_SERVER = SERVER_TAG_STATUSES[1];
 
 /* ── Provider-local storage schema ──────────────────────────────────── */
 
@@ -60,7 +54,11 @@ const SCHEMA_VERSION = 4;
 const MIGRATIONS = {
   2: { name: "lift-legacy-prefs", run: liftLegacyPrefs },
   3: { name: "repair-unconverted-accounts", run: repairUnconvertedAccounts },
-  4: { name: "adopt-host-changelogs", run: adoptHostChangelogs },
+  // Rung 4 ran when this version still adopted the host's imported change
+  // queues. It no longer does - an imported account does not sync until it
+  // is reconnected, which replaces its resources - but the number stays
+  // spent: installations that reached 4 must not be walked over it again.
+  4: { name: "adopt-host-changelogs" },
 };
 
 /** The legacy add-on's single global pref, and where it lands.
@@ -274,8 +272,6 @@ async function convertAccount(provider, acc) {
  *  Order is the one the previous release used: the stamp lifts populate
  *  the identities the later steps and the sync path rely on. */
 async function convertAccountData(provider, acc) {
-  await liftLegacyStamps(provider, acc);
-  await liftLegacyGroupStamps(provider, acc);
   await backfillAuthenticatedUserEmail(provider, acc);
   await mirrorReadOnlyModeToFolders(provider, acc);
 }
@@ -297,159 +293,6 @@ async function liftPref(provider, { keys, validate, transform, logValue }) {
     provider.reportEventLog({
       level: "debug",
       message: `[upgrade] lifted legacy '${legacyKey}' pref${logValue(newValue)} into storage.local['${storageKey}']`,
-    });
-  }
-}
-
-/** Lift legacy `X-GOOGLE-RESOURCENAME` / `X-GOOGLE-ETAG` from each
- *  card's nsIAbCard userProperty bag onto the vCard. Idempotent (skips
- *  cards already showing the right identity in their vCard). Each
- *  update is pre-tagged with `markServerWrite("modified_by_server")` so
- *  the host's changelog watcher classifies the upcoming AB onModified
- *  event as self-inflicted and drops it - no `_by_user` entry, no
- *  spurious "needs sync" state. */
-async function liftLegacyStamps(provider, acc) {
-  const rv = await provider.getAccount(acc.accountId);
-  const folders = rv?.folders ?? [];
-  for (const folder of folders) {
-    if (!folder.targetID) continue;
-    let stamps;
-    try {
-      stamps = await browser.LegacyAbProperties.readGoogleStamps(
-        folder.targetID,
-      );
-    } catch (err) {
-      // Not knowing whether this folder holds legacy cards is not the same
-      // as knowing it doesn't. Rethrow so the account stays blocked: the
-      // sync path never reads the property bag, so proceeding would sync
-      // cards whose identity we failed to look at and duplicate every one.
-      // This is also how the eventual removal of the Experiment surfaces -
-      // as a blocked account with a reason, not silent duplication.
-      throw new Error(
-        `readGoogleStamps failed for folder ${folder.folderId}: ${stringifyError(err)}`,
-      );
-    }
-    if (!stamps.length) continue;
-
-    let lifted = 0;
-    for (const { contactId, resourceName, etag } of stamps) {
-      const card = await addressBook.getContact(contactId);
-      if (!card?.vCard) continue;
-      if (mapper.readIdentity(card.vCard)?.resourceName === resourceName)
-        continue;
-      await localQueue({
-        accountId: acc.accountId,
-        folderId: folder.folderId,
-        sessionId: folder.sessionId,
-        observed: true,
-      }).markServerWrite({
-        parentId: folder.targetID,
-        itemId: contactId,
-        status: STATUS_MODIFIED_BY_SERVER,
-        kind: "contact",
-      });
-      const stampedVCard = mapper.stampIdentity(card.vCard, {
-        resourceName,
-        etag,
-      });
-      await addressBook.updateContact(contactId, stampedVCard);
-      lifted++;
-    }
-    provider.reportEventLog({
-      level: "debug",
-      accountId: acc.accountId,
-      folderId: folder.folderId,
-      message: `[upgrade] lifted ${lifted}/${stamps.length} legacy X-GOOGLE-RESOURCENAME stamp(s) onto vCards`,
-    });
-  }
-}
-
-/** Mailing-list parallel of `liftLegacyStamps`. Legacy stamped each
- *  mailing list with `X-GOOGLE-RESOURCENAME` / `X-GOOGLE-ETAG` via the
- *  same `setProperty()` API it used for contacts, but the new sync
- *  layer keeps the server-resourceName → local-listId mapping in
- *  `folder.custom.groupMap` rather than reading it back off the
- *  mailing-list cards. Without this lift, the first sync after a
- *  migration creates a fresh duplicate of every group.
- *
- *  `groupType` is intentionally left undefined on lifted entries -
- *  the next pull pass overlays the correct value from the server. */
-async function liftLegacyGroupStamps(provider, acc) {
-  const rv = await provider.getAccount(acc.accountId);
-  const folders = rv?.folders ?? [];
-  for (const folder of folders) {
-    if (!folder.targetID) continue;
-    const incoming = Array.isArray(folder.changelog) ? folder.changelog : [];
-
-    // Legacy stored mailing-list X-GOOGLE-* in TbSync's changelog DB
-    // (mailing lists can't carry properties of their own). The
-    // migration carried those rows into folder.changelog because
-    // parentId starts with folder.targetID. Each row has:
-    //   parentId: <bookUID>#<listUID>
-    //   itemId:   "X-GOOGLE-RESOURCENAME" | "X-GOOGLE-ETAG"
-    //   status:   the actual value
-    // Group by parentId (two halves per list), build groupMap entries,
-    // and drop the consumed rows from the changelog.
-    const RESOURCENAME = "X-GOOGLE-RESOURCENAME";
-    const ETAG = "X-GOOGLE-ETAG";
-    const byParent = new Map();
-    const consumed = [];
-    for (const e of incoming) {
-      if (e?.itemId !== RESOURCENAME && e?.itemId !== ETAG) continue;
-      if (typeof e.parentId !== "string" || !e.parentId.includes("#")) continue;
-      let bag = byParent.get(e.parentId);
-      if (!bag) {
-        bag = {};
-        byParent.set(e.parentId, bag);
-      }
-      if (e.itemId === RESOURCENAME) bag.resourceName = e.status;
-      else bag.etag = e.status;
-      consumed.push({ parentId: e.parentId, itemId: e.itemId, kind: e.kind });
-    }
-    if (!byParent.size) continue;
-
-    const existing = folder.custom.groupMap ?? {};
-    const groupMap = { ...existing };
-    let lifted = 0;
-    for (const [parentId, { resourceName, etag }] of byParent) {
-      if (!resourceName) continue;
-      const mailingListId = parentId.split("#", 2)[1];
-      if (!mailingListId) continue;
-      if (groupMap[resourceName]?.mailingListId === mailingListId) continue;
-      groupMap[resourceName] = { mailingListId, etag: etag ?? null };
-      lifted++;
-    }
-
-    if (lifted) {
-      await provider.updateFolder({
-        accountId: acc.accountId,
-        folderId: folder.folderId,
-        patch: { custom: { groupMap } },
-      });
-    }
-
-    // Drop the consumed legacy entries from the host-owned changelog
-    // regardless of whether each pair produced a groupMap entry -
-    // they're never useful to the new sync code.
-    for (const { parentId, itemId, kind } of consumed) {
-      // Legacy rows imported before entries carried a kind cannot satisfy
-      // the host's kind-required remove - and they are inert anyway (their
-      // status is a raw value, never `*_by_user`, so nothing pushes them).
-      // Skip those instead of failing the migration.
-      if (!kind) continue;
-      await localQueue({
-        accountId: acc.accountId,
-        folderId: folder.folderId,
-        sessionId: folder.sessionId,
-        observed: true,
-      }).remove({ parentId, itemId, kind });
-    }
-
-    provider.reportEventLog({
-      level: "debug",
-      accountId: acc.accountId,
-      folderId: folder.folderId,
-      message: `[upgrade] lifted ${lifted}/${byParent.size} legacy mailing-list stamp(s) into folder.custom.groupMap (${consumed.length} legacy entries removed from folder.changelog)`,
     });
   }
 }
@@ -514,86 +357,5 @@ async function backfillAuthenticatedUserEmail(provider, acc) {
       accountId: acc.accountId,
       message: `[upgrade] backfill authenticatedUserEmail failed: ${stringifyError(err)}`,
     });
-  }
-}
-
-/** The op that produced each user status - `record` speaks ops, a stored row
- *  states the status it reached. Replaying the op onto an empty queue
- *  reproduces the row, which is what makes the import idempotent. */
-const OP_FOR_STATUS = {
-  added_by_user: "created",
-  modified_by_user: "updated",
-  deleted_by_user: "deleted",
-};
-
-/** Rung 4. Take over any edits the host is still holding for us, into the
- *  local queue keyed by the folder's binding.
- *
- *  A host folder row can carry queued edits - unsynced work of the user's,
- *  which has to end up somewhere we will read it.
- *
- *  Import first, remove second. A crash in between leaves an entry in both
- *  places, and the next run re-imports it onto a queue that already folds
- *  duplicates by identity, so the repeat is a no-op rather than a second
- *  copy. The other order would lose entries outright. */
-async function adoptHostChangelogs(provider) {
-  for (const { accountId } of await provider.listAccounts()) {
-    const { folders = [] } = (await provider.getAccount(accountId)) ?? {};
-    for (const folder of folders) {
-      const entries = Array.isArray(folder.changelog) ? folder.changelog : [];
-      if (!entries.length) continue;
-      if (!folder.sessionId) {
-        // Continuing here and letting the ladder stamp the schema would
-        // strand these rows forever - the ladder never looks back. Throw:
-        // the rung stays unstamped and the adoption retries on the next
-        // start, when the host has minted the sessions. Observed for real
-        // on 10 Aug 2026 during migration testing.
-        throw new Error(
-          `cannot adopt ${entries.length} queued edit(s) of folder ` +
-            `${folder.folderId}: the folder has no session id yet`,
-        );
-      }
-      const queue = localQueue({
-        accountId,
-        folderId: folder.folderId,
-        sessionId: folder.sessionId,
-        observed: true,
-      });
-      let adopted = 0;
-      let refused = 0;
-      for (const e of entries) {
-        if (!isUserEntry(e?.status)) continue;
-        // `record` throws on a kind outside CHANGELOG_KINDS, and one
-        // malformed inbox row (kind-less, or a kind nothing recognises)
-        // must not abort the whole migration - skip it, count it, and
-        // let the summary line below name the loss.
-        if (!CHANGELOG_KINDS.includes(e.kind)) {
-          refused++;
-          continue;
-        }
-        await queue.record({
-          parentId: e.parentId,
-          itemId: e.itemId,
-          kind: e.kind,
-          op: OP_FOR_STATUS[e.status],
-        });
-        adopted++;
-      }
-      await provider.updateFolder({
-        accountId,
-        folderId: folder.folderId,
-        patch: { changelog: [] },
-      });
-      provider.reportEventLog({
-        level: refused ? "warning" : "info",
-        accountId,
-        folderId: folder.folderId,
-        message:
-          `[upgrade] adopted ${adopted} queued edit(s) from the host` +
-          (refused
-            ? `; refused ${refused} with a missing or unknown changelog kind`
-            : ""),
-      });
-    }
   }
 }
