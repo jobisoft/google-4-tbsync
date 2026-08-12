@@ -161,14 +161,14 @@ export async function syncFolderContacts({
 
   try {
     const rv = await runFolderSync(ctx);
-    await flushMaps(notify, accountId, folderId, gMap, cMap);
+    await flushMaps(notify, accountId, folderId, queue, gMap, cMap);
     return rv;
   } catch (err) {
     // Best-effort flush of in-progress groupMap/contactMap so a retry can
     // pick up where we left off. Log on failure so a broken flush doesn't
     // silently accumulate drift. The host writes folder.error / account.error
     // from the thrown code; we only need to rethrow.
-    await flushMaps(notify, accountId, folderId, gMap, cMap).catch(
+    await flushMaps(notify, accountId, folderId, queue, gMap, cMap).catch(
       (flushErr) => {
         console.warn(
           "[google-4-tbsync] flushMaps during error handling failed:",
@@ -180,16 +180,22 @@ export async function syncFolderContacts({
   }
 }
 
-async function flushMaps(notify, accountId, folderId, gMap, cMap) {
+async function flushMaps(notify, accountId, folderId, queue, gMap, cMap) {
+  // How much is still queued, for the host's needs-sync badge. Reported on
+  // every finish, including the early ones: a run that pushed everything
+  // has to say so, or the folder goes on claiming those edits are waiting.
+  // Best-effort - a badge is not worth failing a sync over.
+  const patch = {};
+  const pending = await queue.count().catch(() => null);
+  if (pending !== null) patch.localChanges = pending;
+
   const customPatch = {};
   if (gMap.dirty) customPatch.groupMap = gMap.toJSON();
   if (cMap.dirty) customPatch.contactMap = cMap.toJSON();
-  if (!Object.keys(customPatch).length) return;
-  await notify.updateFolder({
-    accountId,
-    folderId,
-    patch: { custom: customPatch },
-  });
+  if (Object.keys(customPatch).length) patch.custom = customPatch;
+
+  if (!Object.keys(patch).length) return;
+  await notify.updateFolder({ accountId, folderId, patch });
   gMap.dirty = false;
   cMap.dirty = false;
 }
