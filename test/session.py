@@ -223,6 +223,76 @@ class Session:
         ]
 
 
+EVENT_LOG_MAX_WANTED = 5000
+
+
+def _widen_and_clear_event_log():
+    """Give the run a buffer big enough to hold a whole section, and start
+    it empty.
+
+    The log is a ring buffer, 500 entries by default, and every assertion
+    that reads what the add-on did reads it. Once it rolls mid-section a
+    thing that *was* logged is simply no longer there, which is
+    indistinguishable from the defect the assertion exists to catch.
+
+    Set, not checked, unlike anything the account owner chose: this is a
+    debug buffer size with no effect on what syncs, and the host restores
+    the stored default on the next Thunderbird restart.
+    """
+    snap = ok("storage.snapshot")
+    settings = dict(snap.get("tbsync.settings") or {})
+    settings["eventLogMax"] = EVENT_LOG_MAX_WANTED
+    ok("storage.restore", data={"tbsync.settings": settings})
+    ok("clearEventLog")
+
+
+def isolate(session, indent="  "):
+    """Give the section an address book with no history.
+
+    A section is meant to be a complete statement, and without this it is
+    not: it inherits whatever the last one left - cards, a queued edit, a
+    sync token - and each of those has produced a failure in the EAS suite
+    that looked like a defect and was not.
+
+    Deselecting deletes the local book and drops the provider's state with
+    it; reselecting pulls the folder fresh from Google, which is the only
+    starting point a test can describe. `rebind` already does exactly that.
+    """
+    session.rebind()
+    print(f"{indent}rebound the contacts resource")
+
+
+def drain_queues(session, tries=4, indent="  "):
+    """Start the section from a queue it can name rather than one it
+    inherited.
+
+    A section states what it creates. It does not state what it starts
+    from, and assertions about what reached Google depend on that silently:
+    one edit left owed by an earlier section rides into the next push and
+    is read as a command this section sent.
+
+    Not fatal here - the section's own assertions say what went wrong - but
+    the real reason belongs above them in the log rather than inside a
+    confusing failure.
+    """
+    owed = []
+    for _ in range(tries):
+        try:
+            owed = session.changelog()
+        except AssertionError:
+            # Not bound yet. The caller binds and syncs, which drains it.
+            return
+        if not owed:
+            return
+        print(f"{indent}draining {len(owed)} inherited edit(s)")
+        session.sync()
+    if owed:
+        print(
+            f"{indent}WARNING: still owes {len(owed)} edit(s) after {tries} "
+            f"syncs - assertions below may see work this section did not do"
+        )
+
+
 def preflight(bind=True):
     """Locate the granted Google account and return a ready Session.
 
@@ -247,6 +317,7 @@ def preflight(bind=True):
     # From here on every bridge call checks the event log; anything logged
     # before this point belongs to an earlier run.
     bridge.arm()
+    _widen_and_clear_event_log()
 
     accounts = ok("getState")["accounts"]
     granted = _granted_account(accounts)
