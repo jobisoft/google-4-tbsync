@@ -223,26 +223,15 @@ class Session:
         ]
 
 
-EVENT_LOG_MAX_WANTED = 5000
+def _clear_event_log():
+    """Start the run with an empty log.
 
+    Every assertion that reads what the add-on did reads this buffer, so a
+    section must not be able to reach entries from a previous run.
 
-def _widen_and_clear_event_log():
-    """Give the run a buffer big enough to hold a whole section, and start
-    it empty.
-
-    The log is a ring buffer, 500 entries by default, and every assertion
-    that reads what the add-on did reads it. Once it rolls mid-section a
-    thing that *was* logged is simply no longer there, which is
-    indistinguishable from the defect the assertion exists to catch.
-
-    Set, not checked, unlike anything the account owner chose: this is a
-    debug buffer size with no effect on what syncs, and the host restores
-    the stored default on the next Thunderbird restart.
+    The size is no longer set here: the host holds it as a constant of 5000,
+    the same value this used to ask for.
     """
-    snap = ok("storage.snapshot")
-    settings = dict(snap.get("tbsync.settings") or {})
-    settings["eventLogMax"] = EVENT_LOG_MAX_WANTED
-    ok("storage.restore", data={"tbsync.settings": settings})
     ok("clearEventLog")
 
 
@@ -317,7 +306,7 @@ def preflight(bind=True):
     # From here on every bridge call checks the event log; anything logged
     # before this point belongs to an earlier run.
     bridge.arm()
-    _widen_and_clear_event_log()
+    _clear_event_log()
 
     accounts = ok("getState")["accounts"]
     granted = _granted_account(accounts)
