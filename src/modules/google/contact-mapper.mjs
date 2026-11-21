@@ -687,14 +687,19 @@ function readOrganization(comp) {
 
 // ── Dates (BDAY / ANNIVERSARY) ──────────────────────────────────────────
 
+/** Write a date as a vCard DATE, the way Thunderbird's own editor does:
+ *  `19781210`, or `--0417` for a date without a year. Thunderbird's editor
+ *  hides a TEXT-typed birthday or anniversary, so the type matters. */
 function writeDate(comp, propName, date) {
-  if (!date) return;
-  const s = formatPartialDate(date);
-  if (!s) return;
-  // VALUE=text handles partial dates the default type can't serialise cleanly.
+  if (!date || (!date.year && !date.month && !date.day)) return;
+  const time = new ICAL.VCardTime({}, null, "date");
+  // Set the parts directly: the constructor turns missing ones into 0.
+  time.year = date.year || null;
+  time.month = date.month || null;
+  time.day = date.day || null;
   const p = new ICAL.Property(propName, comp);
-  p.resetType("text");
-  p.setValue(s);
+  p.resetType("date");
+  p.setValue(time);
   comp.addProperty(p);
 }
 
@@ -703,17 +708,36 @@ function readDate(comp, propName) {
   if (!p) return null;
   const raw = p.getFirstValue();
   if (!raw) return null;
-  const s = stringOf(raw).trim();
-  return parsePartialDate(s);
+  if (typeof raw === "object" && "month" in raw) {
+    // A DATE (or date-and-or-time): the library has already split it, for
+    // every partial form (`--0417`, `1978-04`, ...).
+    const date = {
+      year: raw.year || undefined,
+      month: raw.month || undefined,
+      day: raw.day || undefined,
+    };
+    return date.year || date.month || date.day ? date : null;
+  }
+  return parsePartialDate(stringOf(raw).trim());
 }
 
-/** Emit a vCard 4.0 partial date (`YYYY-MM-DD`, `--MM-DD`, `YYYY----`). */
-function formatPartialDate(date) {
-  const y = date.year ? String(date.year).padStart(4, "0") : "--";
-  const m = date.month ? String(date.month).padStart(2, "0") : "--";
-  const d = date.day ? String(date.day).padStart(2, "0") : "--";
-  if (y === "--" && m === "--" && d === "--") return null;
-  return `${y}-${m}-${d}`;
+/** Replace a TEXT-typed BDAY or ANNIVERSARY by the DATE form, which is what
+ *  Thunderbird's editor can show. Returns the new vCard, or null when
+ *  there is nothing to replace. A value that cannot be read is left as it is. */
+export function dropTextDates(vCard) {
+  const comp = parseVCard(vCard);
+  if (!comp) return null;
+  let changed = false;
+  for (const name of ["bday", "anniversary"]) {
+    const p = comp.getFirstProperty(name);
+    if (!p || p.type !== "text") continue;
+    const date = parsePartialDate(stringOf(p.getFirstValue() ?? "").trim());
+    if (!date) continue;
+    comp.removeProperty(p);
+    writeDate(comp, name, date);
+    changed = true;
+  }
+  return changed ? comp.toString() : null;
 }
 
 function parsePartialDate(s) {
@@ -724,6 +748,16 @@ function parsePartialDate(s) {
       year: y === "--" || y === "----" ? undefined : Number(y) || undefined,
       month: m === "--" ? undefined : Number(m) || undefined,
       day: d === "--" ? undefined : Number(d) || undefined,
+    };
+  }
+  // Month and day without a year: `--0417`, `--04-17`, and `---04-17`, which
+  // earlier versions of this add-on wrote.
+  const noYear = s.match(/^--(?:-)?(\d{2})-?(\d{2})$/);
+  if (noYear) {
+    return {
+      year: undefined,
+      month: Number(noYear[1]),
+      day: Number(noYear[2]),
     };
   }
   const compact = s.match(/^(\d{4})(\d{2})(\d{2})$/);

@@ -725,7 +725,22 @@ async function runPullPass(ctx) {
       await addressBook.updateContact(existing.id, vCard);
       updated++;
     } else {
-      skipped++;
+      // Unchanged on the server. A card an earlier version wrote with a
+      // TEXT-typed birthday or anniversary is rewritten once, from itself,
+      // as a DATE: Thunderbird's editor cannot show the TEXT form.
+      const fixed = mapper.dropTextDates(existing.vCard);
+      if (fixed) {
+        await ctx.markServer(
+          targetID,
+          existing.id,
+          STATUS.MODIFIED_BY_SERVER,
+          "contact",
+        );
+        await addressBook.updateContact(existing.id, fixed);
+        updated++;
+      } else {
+        skipped++;
+      }
     }
     itemsDone++;
     notify.reportProgress({ accountId, folderId, itemsDone, itemsTotal });
